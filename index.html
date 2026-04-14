@@ -324,6 +324,7 @@ async function cargarProductos(page) {
   const qs = 'per_page=100&include_stock=1&include_images=1&page=' + page;
   const data = await fetchProxy('/productos/obtener', { qs });
   const items = Array.isArray(data) ? data : (data.data || data.products || data.items || []);
+  if (items.length > 0) console.log('[BDI] producto[0]:', JSON.stringify(items[0], null, 2));
   allProducts = items;
   currentPage = page;
   totalPages = data.meta ? (data.meta.last_page || data.meta.total_pages || 1) : (items.length === 100 ? page + 1 : page);
