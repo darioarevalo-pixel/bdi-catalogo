@@ -142,6 +142,10 @@
   .spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.4); border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block; vertical-align: middle; margin-right: 6px; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
+  .variant-select { width: 100%; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 12px; background: var(--surface); color: var(--text); outline: none; cursor: pointer; margin-bottom: 6px; }
+  .variant-select:focus { border-color: var(--accent); }
+  .variant-select.required { border-color: var(--danger); }
+
   @media (max-width: 700px) {
     .sidebar { display: none; }
     .cart-drawer { width: 100%; right: -100%; }
@@ -324,7 +328,6 @@ async function cargarProductos(page) {
   const qs = 'per_page=100&include_stock=1&include_images=1&include_variants=1&page=' + page;
   const data = await fetchProxy('/productos/obtener', { qs });
   const items = Array.isArray(data) ? data : (data.data || data.products || data.items || []);
-  if (items.length > 0) console.log('[BDI] producto[0] con variantes:', JSON.stringify(items[0], null, 2));
   allProducts = items;
   currentPage = page;
   totalPages = data.meta ? (data.meta.last_page || data.meta.total_pages || 1) : (items.length === 100 ? page + 1 : page);
@@ -341,6 +344,24 @@ function actualizarStats() {
 function getStock(p) {
   const v = p.stock_total ?? p.stock ?? p.available_quantity ?? null;
   return v !== null ? parseInt(v) : null;
+}
+
+function getStockVariante(v) {
+  if (!v.stock_por_tienda || !v.stock_por_tienda.length) return null;
+  return v.stock_por_tienda.reduce((s, t) => s + (t.stock_disponible || 0), 0);
+}
+
+function updateVariantUI(id) {
+  const sel = $('var-' + id);
+  const badge = $('sb-' + id);
+  if (!sel || !badge) return;
+  const opt = sel.options[sel.selectedIndex];
+  sel.classList.remove('required');
+  if (!opt || !opt.value) return;
+  const stock = parseInt(opt.dataset.stock);
+  if (stock === 0) { badge.className = 'stock-badge out'; badge.textContent = 'Sin stock'; }
+  else if (stock <= 5) { badge.className = 'stock-badge low'; badge.textContent = 'Últimas ' + stock; }
+  else { badge.className = 'stock-badge ok'; badge.textContent = 'Stock: ' + stock; }
 }
 
 function getPrecio(p) {
@@ -404,30 +425,41 @@ function renderProductos() {
     const precio = getPrecio(p);
     const stock = getStock(p);
     const img = getImagen(p);
-    const inCart = !!cart[id];
+    const variantes = p.variantes || [];
     let stockClass = 'ok', stockText = '';
     if (stock === null) { stockClass = 'ok'; stockText = 'Disponible'; }
     else if (stock === 0) { stockClass = 'out'; stockText = 'Sin stock'; }
     else if (stock <= 5) { stockClass = 'low'; stockText = 'Últimas ' + stock; }
     else { stockClass = 'ok'; stockText = 'Stock: ' + stock; }
+    const variantSelect = variantes.length > 0
+      ? '<select class="variant-select" id="var-' + id + '" onchange="updateVariantUI(\'' + id + '\')">' +
+          '<option value="">— Seleccioná el modelo —</option>' +
+          variantes.map(v => {
+            const vs = getStockVariante(v);
+            const label = v.size + (vs !== null ? ' (' + vs + ' disp.)' : '');
+            return '<option value="' + v.size_id + '" data-stock="' + (vs||0) + '" data-name="' + v.size.replace(/"/g,'&quot;') + '">' + label + '</option>';
+          }).join('') +
+        '</select>'
+      : '';
     return '<div class="product-card">' +
       '<div class="product-img-wrap">' +
         (img ? '<img src="' + img + '" alt="' + nombre + '" loading="lazy" onerror="this.parentNode.innerHTML=\'<div class=\\\'no-img\\\'>Sin imagen</div>\'">' : '<div class="no-img">Sin imagen</div>') +
-        '<span class="stock-badge ' + stockClass + '">' + stockText + '</span>' +
+        '<span class="stock-badge ' + stockClass + '" id="sb-' + id + '">' + stockText + '</span>' +
       '</div>' +
       '<div class="product-body">' +
         '<div class="product-name">' + nombre + '</div>' +
         (cod ? '<div class="product-code">' + cod + '</div>' : '') +
         '<div class="product-price">' + formatPrecio(precio) + '</div>' +
       '</div>' +
+      (variantSelect ? '<div style="padding: 0 12px;">' + variantSelect + '</div>' : '') +
       '<div class="product-actions">' +
         '<div class="qty-wrap">' +
           '<button class="qty-btn" onclick="chQty(\'' + id + '\',-1)">−</button>' +
           '<input class="qty-num" type="number" id="q-' + id + '" value="1" min="1" />' +
           '<button class="qty-btn" onclick="chQty(\'' + id + '\',1)">+</button>' +
         '</div>' +
-        '<button class="btn-add ' + (inCart ? 'in-cart' : '') + '" onclick="addCart(\'' + id + '\',\'' + nombre.replace(/'/g,"\\'") + '\',' + precio + ',\'' + (img||'') + '\')">' +
-          (inCart ? '✓ Agregado' : 'Agregar') +
+        '<button class="btn-add" onclick="addCart(\'' + id + '\',\'' + nombre.replace(/'/g,"\\'") + '\',' + precio + ',\'' + (img||'') + '\')">' +
+          'Agregar' +
         '</button>' +
       '</div>' +
     '</div>';
@@ -444,10 +476,24 @@ function chQty(id, d) {
 
 function addCart(id, nombre, precio, img) {
   const qty = parseInt($('q-' + id)?.value || 1);
-  if (cart[id]) cart[id].qty += qty;
-  else cart[id] = { id, nombre, precio, qty, img };
+  const prod = allProducts.find(p => String(p.id || p.product_id) === String(id));
+  const variantes = prod?.variantes || [];
+  let sizeId = null, varNombre = '';
+  if (variantes.length > 0) {
+    const sel = $('var-' + id);
+    if (!sel || !sel.value) {
+      sel && sel.classList.add('required');
+      showToast('Seleccioná el modelo primero', 'error');
+      return;
+    }
+    sizeId = parseInt(sel.value);
+    varNombre = sel.options[sel.selectedIndex]?.dataset.name || '';
+  }
+  const key = sizeId ? id + '-' + sizeId : id;
+  if (cart[key]) cart[key].qty += qty;
+  else cart[key] = { id: parseInt(id), nombre, varNombre, precio, qty, sizeId, img };
   updateCartUI();
-  showToast(nombre + ' agregado al pedido', 'success');
+  showToast((varNombre ? varNombre + ' · ' : '') + nombre + ' agregado', 'success');
   renderProductos();
 }
 
@@ -482,10 +528,10 @@ function renderCartItems() {
       '</div>' +
       '<div class="cart-item-info">' +
         '<div class="cart-item-name">' + i.nombre + '</div>' +
-        '<div class="cart-item-meta">x' + i.qty + ' · ' + formatPrecio(i.precio) + ' c/u</div>' +
+        '<div class="cart-item-meta">' + (i.varNombre ? i.varNombre + ' · ' : '') + 'x' + i.qty + ' · ' + formatPrecio(i.precio) + ' c/u</div>' +
       '</div>' +
       '<div class="cart-item-price">' + formatPrecio(i.precio * i.qty) + '</div>' +
-      '<button class="cart-item-del" onclick="removeCart(\'' + i.id + '\')">×</button>' +
+      '<button class="cart-item-del" onclick="removeCart(\'' + (i.sizeId ? i.id + '-' + i.sizeId : i.id) + '\')">×</button>' +
     '</div>'
   ).join('');
 }
@@ -518,7 +564,7 @@ async function confirmarPedido() {
     integration_id: 'bdi_' + Date.now(),
     discount_inventory: true,
     comment: [clientName, contact, obs].filter(Boolean).join(' — '),
-    items: items.map(i => ({ product_id: parseInt(i.id), quantity: i.qty, unit_price: i.precio }))
+    items: items.map(i => ({ product_id: i.id, ...(i.sizeId ? { size_id: i.sizeId } : {}), quantity: i.qty, unit_price: i.precio }))
   };
   const btn = $('btn-confirmar');
   btn.innerHTML = '<span class="spinner"></span>Enviando...';
