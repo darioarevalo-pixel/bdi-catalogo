@@ -321,10 +321,9 @@ async function cargarReferencias() {
 }
 
 async function cargarProductos(page) {
-  const qs = 'per_page=100&include_stock=1&page=' + page;
+  const qs = 'per_page=100&include_stock=1&include_images=1&page=' + page;
   const data = await fetchProxy('/productos/obtener', { qs });
   const items = Array.isArray(data) ? data : (data.data || data.products || data.items || []);
-  if (items.length > 0) console.log('[BDI] Campos del primer producto:', Object.keys(items[0]), items[0]);
   allProducts = items;
   currentPage = page;
   totalPages = data.meta ? (data.meta.last_page || data.meta.total_pages || 1) : (items.length === 100 ? page + 1 : page);
@@ -344,7 +343,9 @@ function getStock(p) {
 }
 
 function getPrecio(p) {
-  return parseFloat(p.wholesaler_price || p.retailer_price || p.price || p.precio_mayorista || p.precio || 0);
+  const w = parseFloat(p.wholesaler_price || 0);
+  const r = parseFloat(p.retailer_price || p.price || p.precio_mayorista || p.precio || 0);
+  return w > 0 ? w : r;
 }
 
 function getImagen(p) {
