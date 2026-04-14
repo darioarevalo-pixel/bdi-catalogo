@@ -321,9 +321,10 @@ async function cargarReferencias() {
 }
 
 async function cargarProductos(page) {
-  const qs = 'per_page=100&include_stock=1&include_variants=1&page=' + page;
+  const qs = 'per_page=100&include_stock=1&page=' + page;
   const data = await fetchProxy('/productos/obtener', { qs });
   const items = Array.isArray(data) ? data : (data.data || data.products || data.items || []);
+  if (items.length > 0) console.log('[BDI] Campos del primer producto:', Object.keys(items[0]), items[0]);
   allProducts = items;
   currentPage = page;
   totalPages = data.meta ? (data.meta.last_page || data.meta.total_pages || 1) : (items.length === 100 ? page + 1 : page);
@@ -347,7 +348,20 @@ function getPrecio(p) {
 }
 
 function getImagen(p) {
-  return p.image_url || p.image || p.photo || (p.images && (p.images[0]?.url || p.images[0]?.src)) || null;
+  // Intentamos todos los campos conocidos de Gestión Nube y variantes comunes
+  if (p.image_url) return p.image_url;
+  if (p.imagen_url) return p.imagen_url;
+  if (p.imagen) return p.imagen;
+  if (p.image) return p.image;
+  if (p.photo) return p.photo;
+  if (p.foto) return p.foto;
+  if (Array.isArray(p.images) && p.images.length)
+    return p.images[0]?.url || p.images[0]?.src || p.images[0]?.path || p.images[0] || null;
+  if (Array.isArray(p.imagenes) && p.imagenes.length)
+    return p.imagenes[0]?.url || p.imagenes[0]?.src || p.imagenes[0]?.ruta || p.imagenes[0]?.path || p.imagenes[0] || null;
+  if (p.fotos && p.fotos.length)
+    return p.fotos[0]?.url || p.fotos[0]?.src || p.fotos[0] || null;
+  return null;
 }
 
 function formatPrecio(n) {
@@ -389,7 +403,6 @@ function renderProductos() {
     const stock = getStock(p);
     const img = getImagen(p);
     const inCart = !!cart[id];
-    const sizeId = p.size_id || (p.variantes && p.variantes[0]?.size_id) || null;
     let stockClass = 'ok', stockText = '';
     if (stock === null) { stockClass = 'ok'; stockText = 'Disponible'; }
     else if (stock === 0) { stockClass = 'out'; stockText = 'Sin stock'; }
@@ -411,7 +424,7 @@ function renderProductos() {
           '<input class="qty-num" type="number" id="q-' + id + '" value="1" min="1" />' +
           '<button class="qty-btn" onclick="chQty(\'' + id + '\',1)">+</button>' +
         '</div>' +
-        '<button class="btn-add ' + (inCart ? 'in-cart' : '') + '" onclick="addCart(\'' + id + '\',\'' + nombre.replace(/'/g,"\\'") + '\',' + precio + ',' + (sizeId||'null') + ',\'' + (img||'') + '\')">' +
+        '<button class="btn-add ' + (inCart ? 'in-cart' : '') + '" onclick="addCart(\'' + id + '\',\'' + nombre.replace(/'/g,"\\'") + '\',' + precio + ',\'' + (img||'') + '\')">' +
           (inCart ? '✓ Agregado' : 'Agregar') +
         '</button>' +
       '</div>' +
@@ -427,10 +440,10 @@ function chQty(id, d) {
   el.value = v;
 }
 
-function addCart(id, nombre, precio, sizeId, img) {
+function addCart(id, nombre, precio, img) {
   const qty = parseInt($('q-' + id)?.value || 1);
   if (cart[id]) cart[id].qty += qty;
-  else cart[id] = { id, nombre, precio, qty, sizeId, img };
+  else cart[id] = { id, nombre, precio, qty, img };
   updateCartUI();
   showToast(nombre + ' agregado al pedido', 'success');
   renderProductos();
@@ -503,7 +516,7 @@ async function confirmarPedido() {
     integration_id: 'bdi_' + Date.now(),
     discount_inventory: true,
     comment: [clientName, contact, obs].filter(Boolean).join(' — '),
-    items: items.map(i => ({ product_id: parseInt(i.id), size_id: i.sizeId || null, quantity: i.qty, unit_price: i.precio }))
+    items: items.map(i => ({ product_id: parseInt(i.id), quantity: i.qty, unit_price: i.precio }))
   };
   const btn = $('btn-confirmar');
   btn.innerHTML = '<span class="spinner"></span>Enviando...';
