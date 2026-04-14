@@ -142,9 +142,22 @@
   .spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.4); border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block; vertical-align: middle; margin-right: 6px; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  .variant-select { width: 100%; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 12px; background: var(--surface); color: var(--text); outline: none; cursor: pointer; margin-bottom: 6px; }
-  .variant-select:focus { border-color: var(--accent); }
-  .variant-select.required { border-color: var(--danger); }
+  .variant-rows { padding: 0 10px 8px; display: flex; flex-direction: column; gap: 3px; max-height: 210px; overflow-y: auto; }
+  .variant-row { display: flex; align-items: center; gap: 6px; padding: 5px 7px; border-radius: var(--radius-sm); background: var(--bg); }
+  .variant-row.out { opacity: 0.5; }
+  .variant-row-name { flex: 1; font-size: 12px; color: var(--text); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .variant-row-stock { font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 20px; white-space: nowrap; flex-shrink: 0; }
+  .variant-row-stock.ok { background: var(--accent-light); color: var(--accent-text); }
+  .variant-row-stock.low { background: var(--warning-light); color: var(--warning); }
+  .variant-row-stock.out { background: var(--danger-light); color: var(--danger); }
+  .vqty-wrap { display: flex; align-items: center; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); overflow: hidden; flex-shrink: 0; }
+  .vqty-btn { width: 22px; height: 24px; border: none; background: var(--bg); cursor: pointer; font-size: 14px; color: var(--text-muted); display: flex; align-items: center; justify-content: center; transition: background 0.1s; }
+  .vqty-btn:hover { background: var(--border); }
+  .vqty-num { width: 26px; text-align: center; border: none; border-left: 1px solid var(--border); border-right: 1px solid var(--border); font-family: 'DM Mono', monospace; font-size: 11px; background: var(--surface); color: var(--text); height: 24px; outline: none; }
+  .btn-add-v { width: 26px; height: 26px; border-radius: var(--radius-sm); font-size: 15px; font-weight: 600; cursor: pointer; border: 1px solid var(--accent); background: transparent; color: var(--accent); transition: background 0.15s, color 0.15s; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+  .btn-add-v:hover:not(:disabled) { background: var(--accent); color: white; }
+  .btn-add-v.in-cart { background: var(--accent); color: white; }
+  .btn-add-v:disabled { opacity: 0.3; cursor: default; border-color: var(--border-strong); }
 
   @media (max-width: 700px) {
     .sidebar { display: none; }
@@ -351,17 +364,17 @@ function getStockVariante(v) {
   return v.stock_por_tienda.reduce((s, t) => s + (t.stock_disponible || 0), 0);
 }
 
-function updateVariantUI(id) {
-  const sel = $('var-' + id);
-  const badge = $('sb-' + id);
-  if (!sel || !badge) return;
-  const opt = sel.options[sel.selectedIndex];
-  sel.classList.remove('required');
-  if (!opt || !opt.value) return;
-  const stock = parseInt(opt.dataset.stock);
-  if (stock === 0) { badge.className = 'stock-badge out'; badge.textContent = 'Sin stock'; }
-  else if (stock <= 5) { badge.className = 'stock-badge low'; badge.textContent = 'Últimas ' + stock; }
-  else { badge.className = 'stock-badge ok'; badge.textContent = 'Stock: ' + stock; }
+function stockClass(stock) {
+  if (stock === null) return 'ok';
+  if (stock === 0) return 'out';
+  if (stock <= 5) return 'low';
+  return 'ok';
+}
+function stockText(stock) {
+  if (stock === null) return 'Disponible';
+  if (stock === 0) return 'Sin stock';
+  if (stock <= 5) return 'Últimas ' + stock;
+  return stock + ' disp.';
 }
 
 function getPrecio(p) {
@@ -426,42 +439,55 @@ function renderProductos() {
     const stock = getStock(p);
     const img = getImagen(p);
     const variantes = p.variantes || [];
-    let stockClass = 'ok', stockText = '';
-    if (stock === null) { stockClass = 'ok'; stockText = 'Disponible'; }
-    else if (stock === 0) { stockClass = 'out'; stockText = 'Sin stock'; }
-    else if (stock <= 5) { stockClass = 'low'; stockText = 'Últimas ' + stock; }
-    else { stockClass = 'ok'; stockText = 'Stock: ' + stock; }
-    const variantSelect = variantes.length > 0
-      ? '<select class="variant-select" id="var-' + id + '" onchange="updateVariantUI(\'' + id + '\')">' +
-          '<option value="">— Seleccioná el modelo —</option>' +
+    const sc = stockClass(stock), st = stockText(stock);
+    const imgEsc = (img||'').replace(/'/g,"\\'");
+    const nomEsc = nombre.replace(/'/g,"\\'");
+
+    const variantRows = variantes.length > 0
+      ? '<div class="variant-rows">' +
           variantes.map(v => {
             const vs = getStockVariante(v);
-            const label = v.size + (vs !== null ? ' (' + vs + ' disp.)' : '');
-            return '<option value="' + v.size_id + '" data-stock="' + (vs||0) + '" data-name="' + v.size.replace(/"/g,'&quot;') + '">' + label + '</option>';
+            const vkey = id + '-' + v.size_id;
+            const inCart = !!cart[vkey];
+            const sinStock = vs !== null && vs === 0;
+            const vnEsc = v.size.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+            return '<div class="variant-row' + (sinStock ? ' out' : '') + '">' +
+              '<span class="variant-row-name">' + v.size + '</span>' +
+              '<span class="variant-row-stock ' + stockClass(vs) + '">' + stockText(vs) + '</span>' +
+              '<div class="vqty-wrap">' +
+                '<button class="vqty-btn" onclick="chQty(\'' + vkey + '\',-1)">−</button>' +
+                '<input class="vqty-num" type="number" id="q-' + vkey + '" value="1" min="1" />' +
+                '<button class="vqty-btn" onclick="chQty(\'' + vkey + '\',1)">+</button>' +
+              '</div>' +
+              '<button class="btn-add-v' + (inCart ? ' in-cart' : '') + '" ' + (sinStock ? 'disabled' : '') +
+                ' onclick="addCartVariant(\'' + id + '\',\'' + nomEsc + '\',' + precio + ',' + v.size_id + ',\'' + vnEsc + '\',\'' + imgEsc + '\')">' +
+                (inCart ? '✓' : '+') +
+              '</button>' +
+            '</div>';
           }).join('') +
-        '</select>'
-      : '';
+        '</div>'
+      : '<div class="product-actions">' +
+          '<div class="qty-wrap">' +
+            '<button class="qty-btn" onclick="chQty(\'' + id + '\',-1)">−</button>' +
+            '<input class="qty-num" type="number" id="q-' + id + '" value="1" min="1" />' +
+            '<button class="qty-btn" onclick="chQty(\'' + id + '\',1)">+</button>' +
+          '</div>' +
+          '<button class="btn-add' + (cart[id] ? ' in-cart' : '') + '" onclick="addCart(\'' + id + '\',\'' + nomEsc + '\',' + precio + ',\'' + imgEsc + '\')">' +
+            (cart[id] ? '✓ Agregado' : 'Agregar') +
+          '</button>' +
+        '</div>';
+
     return '<div class="product-card">' +
       '<div class="product-img-wrap">' +
         (img ? '<img src="' + img + '" alt="' + nombre + '" loading="lazy" onerror="this.parentNode.innerHTML=\'<div class=\\\'no-img\\\'>Sin imagen</div>\'">' : '<div class="no-img">Sin imagen</div>') +
-        '<span class="stock-badge ' + stockClass + '" id="sb-' + id + '">' + stockText + '</span>' +
+        '<span class="stock-badge ' + sc + '">' + st + '</span>' +
       '</div>' +
       '<div class="product-body">' +
         '<div class="product-name">' + nombre + '</div>' +
         (cod ? '<div class="product-code">' + cod + '</div>' : '') +
         '<div class="product-price">' + formatPrecio(precio) + '</div>' +
       '</div>' +
-      (variantSelect ? '<div style="padding: 0 12px;">' + variantSelect + '</div>' : '') +
-      '<div class="product-actions">' +
-        '<div class="qty-wrap">' +
-          '<button class="qty-btn" onclick="chQty(\'' + id + '\',-1)">−</button>' +
-          '<input class="qty-num" type="number" id="q-' + id + '" value="1" min="1" />' +
-          '<button class="qty-btn" onclick="chQty(\'' + id + '\',1)">+</button>' +
-        '</div>' +
-        '<button class="btn-add" onclick="addCart(\'' + id + '\',\'' + nombre.replace(/'/g,"\\'") + '\',' + precio + ',\'' + (img||'') + '\')">' +
-          'Agregar' +
-        '</button>' +
-      '</div>' +
+      variantRows +
     '</div>';
   }).join('');
 }
@@ -476,24 +502,20 @@ function chQty(id, d) {
 
 function addCart(id, nombre, precio, img) {
   const qty = parseInt($('q-' + id)?.value || 1);
-  const prod = allProducts.find(p => String(p.id || p.product_id) === String(id));
-  const variantes = prod?.variantes || [];
-  let sizeId = null, varNombre = '';
-  if (variantes.length > 0) {
-    const sel = $('var-' + id);
-    if (!sel || !sel.value) {
-      sel && sel.classList.add('required');
-      showToast('Seleccioná el modelo primero', 'error');
-      return;
-    }
-    sizeId = parseInt(sel.value);
-    varNombre = sel.options[sel.selectedIndex]?.dataset.name || '';
-  }
-  const key = sizeId ? id + '-' + sizeId : id;
+  if (cart[id]) cart[id].qty += qty;
+  else cart[id] = { id: parseInt(id), nombre, varNombre: '', precio, qty, sizeId: null, img };
+  updateCartUI();
+  showToast(nombre + ' agregado', 'success');
+  renderProductos();
+}
+
+function addCartVariant(id, nombre, precio, sizeId, varNombre, img) {
+  const key = id + '-' + sizeId;
+  const qty = parseInt($('q-' + key)?.value || 1);
   if (cart[key]) cart[key].qty += qty;
   else cart[key] = { id: parseInt(id), nombre, varNombre, precio, qty, sizeId, img };
   updateCartUI();
-  showToast((varNombre ? varNombre + ' · ' : '') + nombre + ' agregado', 'success');
+  showToast(varNombre + ' · ' + nombre + ' agregado', 'success');
   renderProductos();
 }
 
