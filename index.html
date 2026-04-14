@@ -292,7 +292,7 @@ async function fetchProxy(path, opts={}) {
 }
 
 async function conectar() {
-  TOKEN = $('api-token').value.trim();
+  TOKEN = $('api-token').value.trim().replace(/[^\x20-\x7E]/g, '');
   if (!TOKEN) { showToast('Ingresá el token primero', 'error'); return; }
   $('btn-conectar').innerHTML = '<span class="spinner"></span>Conectando...';
   $('btn-conectar').disabled = true;
