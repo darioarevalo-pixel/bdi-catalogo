@@ -145,7 +145,7 @@
   .variant-rows { padding: 0 10px 8px; display: flex; flex-direction: column; gap: 3px; max-height: 210px; overflow-y: auto; }
   .variant-row { display: flex; align-items: center; gap: 6px; padding: 5px 7px; border-radius: var(--radius-sm); background: var(--bg); }
   .variant-row.out { opacity: 0.5; }
-  .variant-row-name { flex: 1; font-size: 12px; color: var(--text); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .variant-row-name { flex: 1; font-size: 12px; color: var(--text); min-width: 0; word-break: break-word; }
   .variant-row-stock { font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 20px; white-space: nowrap; flex-shrink: 0; }
   .variant-row-stock.ok { background: var(--accent-light); color: var(--accent-text); }
   .variant-row-stock.low { background: var(--warning-light); color: var(--warning); }
@@ -439,6 +439,7 @@ function renderProductos() {
     const stock = getStock(p);
     const img = getImagen(p);
     const variantes = p.variantes || [];
+    if (variantes.length > 0 && !window._loggedVariant) { window._loggedVariant = true; console.log('[BDI] variante[0]:', JSON.stringify(variantes[0])); }
     const sc = stockClass(stock), st = stockText(stock);
     const imgEsc = (img||'').replace(/'/g,"\\'");
     const nomEsc = nombre.replace(/'/g,"\\'");
