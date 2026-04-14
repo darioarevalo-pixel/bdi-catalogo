@@ -324,7 +324,11 @@ async function cargarProductos(page) {
   const qs = 'per_page=100&include_stock=1&include_images=1&page=' + page;
   const data = await fetchProxy('/productos/obtener', { qs });
   const items = Array.isArray(data) ? data : (data.data || data.products || data.items || []);
-  if (items.length > 0) console.log('[BDI] producto[0]:', JSON.stringify(items[0], null, 2));
+  if (items.length > 0) {
+    console.log('[BDI] producto[0] (lista):', JSON.stringify(items[0], null, 2));
+    fetchProxy('/productos/' + items[0].id).then(d => console.log('[BDI] producto[0] (detalle):', JSON.stringify(d, null, 2))).catch(e => console.log('[BDI] detalle error:', e.message));
+    fetchProxy('/productos/obtener/' + items[0].id).then(d => console.log('[BDI] producto[0] (obtener/id):', JSON.stringify(d, null, 2))).catch(e => console.log('[BDI] obtener/id error:', e.message));
+  }
   allProducts = items;
   currentPage = page;
   totalPages = data.meta ? (data.meta.last_page || data.meta.total_pages || 1) : (items.length === 100 ? page + 1 : page);
