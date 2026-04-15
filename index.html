@@ -76,8 +76,8 @@
   .search-icon { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--text-hint); font-size: 15px; pointer-events: none; }
   .sort-select { padding: 9px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; background: var(--surface); color: var(--text); outline: none; cursor: pointer; }
 
-  .products-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(195px, 1fr)); gap: 12px; }
-  .product-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; transition: box-shadow 0.15s; height: 320px; }
+  .products-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(195px, 1fr)); gap: 12px; align-items: stretch; }
+  .product-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; transition: box-shadow 0.15s; }
   .product-card:hover { box-shadow: var(--shadow); }
   .product-img-wrap { width: 100%; height: 160px; flex-shrink: 0; background: var(--bg); overflow: hidden; display: flex; align-items: center; justify-content: center; position: relative; }
   .product-img-wrap img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.2s; }
@@ -85,7 +85,7 @@
   .no-img { font-size: 11px; color: var(--text-hint); text-align: center; }
   .product-body { padding: 12px 12px 8px; display: flex; flex-direction: column; gap: 3px; flex: 1; overflow: hidden; }
   .product-cat { font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; flex-shrink: 0; }
-  .product-name { font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.3; text-transform: uppercase; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .product-name { font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.3; text-transform: uppercase; }
   .product-code { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-hint); flex-shrink: 0; }
   .product-price { font-size: 17px; font-weight: 700; color: var(--accent); padding-top: 4px; flex-shrink: 0; margin-top: auto; }
   .product-card-footer { padding: 0 12px 12px; flex-shrink: 0; }
