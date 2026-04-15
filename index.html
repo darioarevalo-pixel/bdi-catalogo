@@ -657,6 +657,23 @@ function cerrarCarrito() {
   $('cart-drawer').classList.remove('open');
 }
 
+async function buscarOCrearCliente(nombre, contacto) {
+  try {
+    const res = await fetchProxy('/clientes/obtener', { qs: 'q=' + encodeURIComponent(nombre) });
+    const lista = Array.isArray(res) ? res : (res.data || res.clients || res.items || []);
+    const encontrado = lista.find(c => (c.name || c.nombre || '').toLowerCase() === nombre.toLowerCase());
+    if (encontrado) return encontrado.id || encontrado.client_id;
+  } catch(e) {}
+  try {
+    const nuevo = await fetchProxy('/clientes/registrar', {
+      method: 'POST',
+      body: { name: nombre, phone: contacto || '', source: 'catalogo_mayorista' }
+    });
+    return nuevo.id || nuevo.client_id || null;
+  } catch(e) {}
+  return null;
+}
+
 async function confirmarPedido() {
   const items = Object.values(cart);
   if (!items.length) { showToast('El pedido está vacío', 'error'); return; }
@@ -664,29 +681,35 @@ async function confirmarPedido() {
   if (!clientName) { showToast('Ingresá el nombre del cliente', 'error'); return; }
   const obs = $('client-obs').value.trim();
   const contact = $('client-contact').value.trim();
-  const canales = references?.canales || [];
-  const tipos = references?.tipos_venta || [];
-  const monedas = references?.monedas || [];
-  const channelId = (canales.find(c => c.name === 'Mayorista') || canales[0])?.id || 10;
-  const saleTypeId = (tipos.find(t => t.name === 'Mayorista') || tipos[0])?.id || 6;
-  const currencyId = (monedas.find(m => m.label === 'ARS') || monedas.find(m => m.name === 'Pesos') || monedas[monedas.length - 1])?.id || 1;
-  const storeId = references?.configuracion?.default_store_id || 13307;
-  const body = {
-    channel_id: channelId,
-    sale_type_id: saleTypeId,
-    currency_id: currencyId,
-    store_id: storeId,
-    state_id: 1,
-    integration_source: 'catalogo_mayorista_bdi',
-    integration_id: 'bdi_' + Date.now(),
-    discount_inventory: true,
-    comment: [clientName, contact, obs].filter(Boolean).join(' — '),
-    items: items.map(i => ({ product_id: i.id, ...(i.sizeId ? { size_id: i.sizeId } : {}), quantity: i.qty, unit_price: i.precio }))
-  };
+
   const btn = $('btn-confirmar');
   btn.innerHTML = '<span class="spinner"></span>Enviando...';
   btn.disabled = true;
+
   try {
+    const clientId = await buscarOCrearCliente(clientName, contact);
+    if (!clientId) throw new Error('No se pudo registrar el cliente');
+
+    const canales = references?.canales || [];
+    const tipos = references?.tipos_venta || [];
+    const monedas = references?.monedas || [];
+    const channelId = (canales.find(c => c.name === 'Mayorista') || canales[0])?.id || 10;
+    const saleTypeId = (tipos.find(t => t.name === 'Mayorista') || tipos[0])?.id || 6;
+    const currencyId = (monedas.find(m => m.label === 'ARS') || monedas.find(m => m.name === 'Pesos') || monedas[monedas.length - 1])?.id || 1;
+    const storeId = references?.configuracion?.default_store_id || 13307;
+
+    const body = {
+      client_id: clientId,
+      channel_id: channelId,
+      sale_type_id: saleTypeId,
+      currency_id: currencyId,
+      store_id: storeId,
+      sale_state_id: 1,
+      discount_inventory: true,
+      comments: [contact, obs].filter(Boolean).join(' — '),
+      items: items.map(i => ({ product_id: i.id, ...(i.sizeId ? { size_id: i.sizeId } : {}), quantity: i.qty, unit_price: i.precio }))
+    };
+
     const data = await fetchProxy('/ventas', { method: 'POST', body });
     const pedidoId = data.id || data.sale_id || data.number || 'OK';
     cart = {};
@@ -695,7 +718,7 @@ async function confirmarPedido() {
     showToast('Pedido #' + pedidoId + ' creado correctamente', 'success', 4000);
     renderProductos();
   } catch(e) {
-    showToast('Error al crear el pedido: ' + e.message, 'error', 4000);
+    showToast('Error: ' + e.message, 'error', 4000);
   }
   btn.innerHTML = 'Confirmar pedido';
   btn.disabled = false;
