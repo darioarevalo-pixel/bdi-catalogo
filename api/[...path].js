@@ -16,9 +16,10 @@ module.exports = async (req, res) => {
 
   const parts = Array.isArray(req.query.path) ? req.query.path : [req.query.path];
   const pathStr = '/' + parts.join('/');
-  const qs = new URLSearchParams(req.query);
-  qs.delete('path');
+  const qsObj = Object.fromEntries(Object.entries(req.query).filter(([k]) => k !== 'path'));
+  const qs = new URLSearchParams(qsObj);
   const url = API_BASE + pathStr + (qs.toString() ? '?' + qs.toString() : '');
+  console.log('[proxy] url:', url);
 
   try {
     const opts = {
@@ -30,6 +31,7 @@ module.exports = async (req, res) => {
     }
     const r = await fetch(url, opts);
     const data = await r.text();
+    console.log('[proxy] status:', r.status);
     res.status(r.status).setHeader('Content-Type', 'application/json').send(data);
   } catch (e) {
     res.status(500).json({ error: e.message });
