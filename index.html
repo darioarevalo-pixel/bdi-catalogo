@@ -169,7 +169,7 @@
   .vqty-btn.plus { background: var(--accent); color: white; }
   .vqty-btn.plus:hover { opacity: 0.85; }
   .vqty-btn:disabled { opacity: 0.3; cursor: default; }
-  .vqty-num { width: 28px; text-align: center; border: 1px solid var(--border-strong); border-radius: 4px; font-family: 'DM Mono', monospace; font-size: 11px; background: var(--surface); color: var(--text); height: 24px; outline: none; }
+  .vqty-num { width: 28px; text-align: center; border: 1px solid var(--border-strong); border-radius: 4px; font-family: 'DM Mono', monospace; font-size: 11px; background: var(--surface); color: var(--text); height: 24px; outline: none; padding: 0; }
 
   @media (max-width: 700px) {
     .sidebar { display: none; }
@@ -197,20 +197,6 @@
 
 <div class="layout">
   <aside class="sidebar">
-    <div class="sidebar-section" id="filtros-section" style="display:none">
-      <div class="sidebar-label">Filtros</div>
-      <div class="filter-group">
-        <button class="filter-btn active" id="f-todos" onclick="setFiltro('todos')">Todos los productos</button>
-        <button class="filter-btn" id="f-stock" onclick="setFiltro('stock')">Solo con stock</button>
-      </div>
-    </div>
-    <div class="sidebar-section" id="stats-section" style="display:none">
-      <div class="sidebar-label">Resumen</div>
-      <div class="stats-grid">
-        <div class="stat-card"><div class="val" id="stat-total">0</div><div class="lbl">Productos</div></div>
-        <div class="stat-card"><div class="val" id="stat-stock">0</div><div class="lbl">Con stock</div></div>
-      </div>
-    </div>
   </aside>
 
   <main class="main">
@@ -317,8 +303,6 @@ async function conectar() {
     await cargarProductos();
     $('conn-dot').className = 'conn-dot ok';
     $('conn-label').textContent = allProducts.length + ' productos';
-    $('filtros-section').style.display = 'block';
-    $('stats-section').style.display = 'block';
     $('toolbar').style.display = 'block';
   } catch(e) {
     $('conn-dot').className = 'conn-dot err';
@@ -371,15 +355,10 @@ async function cargarProductos() {
   }
 
   allProducts = all;
-  actualizarStats();
   renderCatPills();
   renderProductos();
 }
 
-function actualizarStats() {
-  $('stat-total').textContent = allProducts.length;
-  $('stat-stock').textContent = allProducts.filter(p => { const s = getStock(p); return s === null || s > 0; }).length;
-}
 
 function getStock(p) {
   const v = p.stock_total ?? p.stock ?? p.available_quantity ?? null;
@@ -441,12 +420,6 @@ function formatPrecio(n) {
   return '$' + Math.round(n).toLocaleString('es-AR');
 }
 
-function setFiltro(f) {
-  filtro = f;
-  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-  $('f-' + f).classList.add('active');
-  renderProductos();
-}
 
 function renderProductos() {
   const q = ($('search-input')?.value || '').toLowerCase();
