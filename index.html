@@ -658,6 +658,44 @@ function cerrarCarrito() {
 }
 
 
+async function verificarStock() {
+  const cartItems = Object.values(cart);
+  const productIds = [...new Set(cartItems.map(i => i.id))];
+  const freshProducts = {};
+
+  for (const pid of productIds) {
+    try {
+      const data = await fetchProxy('/productos/obtener', {
+        qs: 'include_stock=1&include_variants=1&per_page=1&id=' + pid
+      });
+      const raw = Array.isArray(data) ? data : (data.data || data.products || data.items || []);
+      const p = raw.find(p => (p.id || p.product_id) == pid);
+      if (p) freshProducts[pid] = p;
+    } catch(e) {}
+  }
+
+  const problemas = [];
+  for (const item of cartItems) {
+    const p = freshProducts[item.id];
+    if (!p) continue;
+    if (item.sizeId) {
+      const variant = (p.variantes || []).find(v => v.size_id == item.sizeId);
+      if (variant) {
+        const stock = getStockVariante(variant) ?? null;
+        if (stock !== null && stock < item.qty) {
+          problemas.push({ nombre: item.nombre, variante: item.varNombre, pedido: item.qty, disponible: stock });
+        }
+      }
+    } else {
+      const stock = getStock(p);
+      if (stock !== null && stock < item.qty) {
+        problemas.push({ nombre: item.nombre, variante: null, pedido: item.qty, disponible: stock });
+      }
+    }
+  }
+  return problemas;
+}
+
 async function confirmarPedido() {
   const items = Object.values(cart);
   if (!items.length) { showToast('El pedido está vacío', 'error'); return; }
@@ -667,6 +705,35 @@ async function confirmarPedido() {
   const contact = $('client-contact').value.trim();
 
   const btn = $('btn-confirmar');
+  btn.innerHTML = '<span class="spinner"></span>Verificando stock...';
+  btn.disabled = true;
+
+  const problemas = await verificarStock();
+  if (problemas.length > 0) {
+    const lista = problemas.map(p =>
+      '• ' + p.nombre + (p.variante ? ' (' + p.variante + ')' : '') +
+      ': pediste ' + p.pedido + ', quedan ' + p.disponible
+    ).join('\n');
+    const continuar = confirm('Algunos productos no tienen stock suficiente:\n\n' + lista + '\n\n¿Querés confirmar el pedido igual con las cantidades disponibles?');
+    if (!continuar) {
+      btn.innerHTML = 'Confirmar pedido';
+      btn.disabled = false;
+      return;
+    }
+    // Ajustar cantidades al stock disponible
+    for (const prob of problemas) {
+      const key = Object.keys(cart).find(k => {
+        const i = cart[k];
+        return i.nombre === prob.nombre && (!prob.variante || i.varNombre === prob.variante);
+      });
+      if (key) {
+        if (prob.disponible === 0) delete cart[key];
+        else cart[key].qty = prob.disponible;
+      }
+    }
+    updateCartUI();
+  }
+
   btn.innerHTML = '<span class="spinner"></span>Enviando...';
   btn.disabled = true;
 
