@@ -383,6 +383,8 @@ function getStock(p) {
 
 function getStockVariante(v) {
   if (!v.stock_por_tienda || !v.stock_por_tienda.length) return null;
+  const tienda = v.stock_por_tienda.find(t => t.store_name === 'Deposito Minorista');
+  if (tienda) return tienda.stock_disponible || 0;
   return v.stock_por_tienda.reduce((s, t) => s + (t.stock_disponible || 0), 0);
 }
 
