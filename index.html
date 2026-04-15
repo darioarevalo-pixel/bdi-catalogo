@@ -83,26 +83,49 @@
   .product-img-wrap img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.2s; }
   .product-card:hover .product-img-wrap img { transform: scale(1.03); }
   .no-img { font-size: 11px; color: var(--text-hint); text-align: center; }
-  .stock-badge { position: absolute; top: 8px; right: 8px; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 20px; }
-  .stock-badge.ok { background: var(--stock-ok-bg); color: var(--stock-ok); }
-  .stock-badge.low { background: var(--warning-light); color: var(--warning); }
-  .stock-badge.out { background: var(--danger-light); color: var(--danger); }
-  .product-body { padding: 12px 12px 8px; display: flex; flex-direction: column; gap: 3px; }
+  .product-body { padding: 12px 12px 10px; display: flex; flex-direction: column; gap: 3px; }
   .product-cat { font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
   .product-name { font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.3; text-transform: uppercase; }
   .product-code { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-hint); }
   .product-price { font-size: 17px; font-weight: 700; color: var(--accent); padding-top: 4px; }
-  .product-actions { display: flex; align-items: center; gap: 6px; padding: 0 12px 12px; }
-  .qty-wrap { display: flex; align-items: center; gap: 4px; }
-  .qty-btn { width: 28px; height: 28px; border: none; border-radius: 50%; cursor: pointer; font-size: 18px; font-weight: 300; display: flex; align-items: center; justify-content: center; font-family: inherit; transition: opacity 0.1s; line-height: 1; }
-  .qty-btn.minus { background: var(--border); color: var(--text-muted); }
-  .qty-btn.minus:hover { background: var(--border-strong); }
-  .qty-btn.plus { background: var(--accent); color: white; }
-  .qty-btn.plus:hover { opacity: 0.85; }
-  .qty-num { width: 36px; text-align: center; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: 'DM Mono', monospace; font-size: 13px; background: var(--surface); color: var(--text); height: 28px; outline: none; }
-  .btn-add { flex: 1; padding: 0 10px; height: 30px; border-radius: var(--radius-sm); font-family: inherit; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--accent); background: transparent; color: var(--accent); transition: background 0.15s, color 0.15s; white-space: nowrap; }
-  .btn-add:hover { background: var(--accent); color: white; }
-  .btn-add.in-cart { background: var(--accent); color: white; border-color: var(--accent); }
+  .product-card-footer { padding: 0 12px 12px; }
+  .btn-ver { width: 100%; padding: 7px; border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer; border: 1.5px solid var(--border-strong); background: transparent; color: var(--text-muted); transition: border-color 0.15s, color 0.15s; }
+  .btn-ver:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Modal de producto */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 300; align-items: center; justify-content: center; padding: 1rem; }
+  .modal-overlay.open { display: flex; }
+  .modal-box { background: var(--surface); border-radius: var(--radius); width: 100%; max-width: 520px; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+  .modal-img-wrap { width: 100%; height: 240px; background: var(--bg); display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden; }
+  .modal-img-wrap img { width: 100%; height: 100%; object-fit: cover; }
+  .modal-no-img { font-size: 12px; color: var(--text-hint); }
+  .modal-scroll { flex: 1; overflow-y: auto; }
+  .modal-info { padding: 1.25rem 1.25rem 0; }
+  .modal-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 4px; }
+  .modal-cat { font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .modal-title { font-size: 17px; font-weight: 700; color: var(--text); text-transform: uppercase; line-height: 1.3; }
+  .modal-code { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-hint); margin-top: 2px; }
+  .modal-price { font-size: 24px; font-weight: 700; color: var(--accent); margin-top: 8px; }
+  .modal-desc { font-size: 13px; color: var(--text-muted); line-height: 1.6; margin: 12px 1.25rem; padding-top: 12px; border-top: 1px solid var(--border); }
+  .modal-variants-label { font-size: 11px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; color: var(--text-hint); padding: 0 1.25rem; margin-top: 12px; margin-bottom: 4px; border-top: 1px solid var(--border); padding-top: 12px; }
+  .modal-variant-rows { padding: 0 1rem 1rem; display: flex; flex-direction: column; gap: 4px; }
+  .modal-variant-row { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: var(--radius-sm); border: 1px solid var(--border); }
+  .modal-variant-row:hover { border-color: var(--border-strong); background: var(--bg); }
+  .modal-variant-info { flex: 1; min-width: 0; }
+  .modal-variant-name { font-size: 13px; font-weight: 500; color: var(--text); }
+  .modal-variant-stock { font-size: 11px; font-weight: 500; margin-top: 1px; }
+  .modal-variant-stock.ok { color: var(--stock-ok); }
+  .modal-variant-stock.low { color: var(--warning); }
+  .modal-vqty-wrap { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+  .modal-vqty-btn { width: 28px; height: 28px; border: none; border-radius: 50%; cursor: pointer; font-size: 18px; font-weight: 300; display: flex; align-items: center; justify-content: center; line-height: 1; transition: opacity 0.1s; }
+  .modal-vqty-btn.minus { background: var(--border-strong); color: var(--text-muted); }
+  .modal-vqty-btn.minus:hover { background: #B0B7C0; }
+  .modal-vqty-btn.plus { background: var(--accent); color: white; }
+  .modal-vqty-btn.plus:hover { opacity: 0.85; }
+  .modal-vqty-num { width: 34px; text-align: center; border: 1px solid var(--border-strong); border-radius: 4px; font-family: 'DM Mono', monospace; font-size: 13px; background: var(--surface); color: var(--text); height: 28px; outline: none; padding: 0; }
+  .modal-no-variants { padding: 0 1.25rem 1rem; display: flex; align-items: center; gap: 8px; }
+  .modal-close { width: 32px; height: 32px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); cursor: pointer; font-size: 18px; color: var(--text-muted); display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.12s; }
+  .modal-close:hover { background: var(--bg); }
 
   .state-msg { grid-column: 1 / -1; text-align: center; padding: 4rem 2rem; color: var(--text-muted); }
   .state-msg .icon { font-size: 2rem; margin-bottom: 0.75rem; }
@@ -149,23 +172,6 @@
   .spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.4); border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block; vertical-align: middle; margin-right: 6px; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  .variant-label { font-size: 11px; color: var(--text-muted); padding: 0 10px 2px; }
-  .variant-rows { padding: 0 8px 8px; display: flex; flex-direction: column; gap: 1px; }
-  .variant-row { display: flex; align-items: center; gap: 6px; padding: 3px 4px; border-radius: var(--radius-sm); }
-  .variant-row:hover { background: var(--bg); }
-  .variant-row-info { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; }
-  .variant-row-name { font-size: 12px; font-weight: 500; color: var(--text); white-space: nowrap; }
-  .variant-row-stock { font-size: 10px; color: var(--stock-ok); font-weight: 500; white-space: nowrap; }
-  .variant-row-stock.out { color: var(--danger); }
-  .variant-row-stock.low { color: var(--warning); }
-  .vqty-wrap { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
-  .vqty-btn { width: 20px; height: 20px; border: none; border-radius: 50%; cursor: pointer; font-size: 15px; font-weight: 300; display: flex; align-items: center; justify-content: center; line-height: 1; transition: opacity 0.1s; }
-  .vqty-btn.minus { background: var(--border-strong); color: var(--text-muted); }
-  .vqty-btn.minus:hover { background: #B0B7C0; }
-  .vqty-btn.plus { background: var(--accent); color: white; }
-  .vqty-btn.plus:hover { opacity: 0.85; }
-  .vqty-btn:disabled { opacity: 0.3; cursor: default; }
-  .vqty-num { width: 26px; text-align: center; border: 1px solid var(--border-strong); border-radius: 4px; font-family: 'DM Mono', monospace; font-size: 11px; background: var(--surface); color: var(--text); height: 20px; outline: none; padding: 0; }
 
   @media (max-width: 700px) {
     .sidebar { display: none; }
@@ -217,6 +223,27 @@
       </div>
     </div>
   </main>
+</div>
+
+<div class="modal-overlay" id="modal-overlay" onclick="cerrarModal(event)">
+  <div class="modal-box" id="modal-box">
+    <div class="modal-img-wrap" id="modal-img-wrap"></div>
+    <div class="modal-scroll">
+      <div class="modal-info">
+        <div class="modal-top">
+          <div>
+            <div class="modal-cat" id="modal-cat"></div>
+            <div class="modal-title" id="modal-title"></div>
+            <div class="modal-code" id="modal-code"></div>
+          </div>
+          <button class="modal-close" onclick="cerrarModal()">×</button>
+        </div>
+        <div class="modal-price" id="modal-price"></div>
+      </div>
+      <div class="modal-desc" id="modal-desc" style="display:none"></div>
+      <div id="modal-variants-wrap"></div>
+    </div>
+  </div>
 </div>
 
 <div class="overlay" id="overlay" onclick="cerrarCarrito()"></div>
@@ -442,51 +469,10 @@ function renderProductos() {
     const nombre = p.name || p.nombre || p.product_name || 'Sin nombre';
     const cod = p.code || p.sku || p.codigo || '';
     const precio = getPrecio(p);
-    const stock = getStock(p);
     const img = getImagen(p);
-    const variantes = p.variantes || [];
-    const sc = stockClass(stock), st = stockText(stock);
-    const imgEsc = (img||'').replace(/'/g,"\\'");
-    const nomEsc = nombre.replace(/'/g,"\\'");
-
     const cat = p.category || '';
-    const variantesConStock = variantes.filter(v => {
-      const vs = getStockVariante(v);
-      return vs === null || vs > 0;
-    });
-    const variantRows = variantesConStock.length > 0
-      ? '<div class="variant-label">Variantes:</div>' +
-        '<div class="variant-rows">' +
-          variantesConStock.map(v => {
-            const vs = getStockVariante(v);
-            const vkey = id + '-' + v.size_id;
-            const vnEsc = v.size.replace(/'/g,"\\'").replace(/"/g,'&quot;');
-            const pocasUnidades = vs !== null && vs < 10;
-            const sClass = pocasUnidades ? 'low' : 'ok';
-            const sTxt = pocasUnidades ? 'Últimas ' + vs + 'u' : 'Disponible';
-            const maxAttr = vs !== null ? ' max="' + vs + '"' : '';
-            return '<div class="variant-row">' +
-              '<div class="variant-row-info">' +
-                '<div class="variant-row-name">' + v.size + '</div>' +
-                '<div class="variant-row-stock ' + sClass + '">' + sTxt + '</div>' +
-              '</div>' +
-              '<div class="vqty-wrap">' +
-                '<button class="vqty-btn minus" onclick="chQty(\'' + vkey + '\',-1)">−</button>' +
-                '<input class="vqty-num" type="number" id="q-' + vkey + '" value="1" min="1"' + maxAttr + ' />' +
-                '<button class="vqty-btn plus" onclick="addCartVariant(\'' + id + '\',\'' + nomEsc + '\',' + precio + ',' + v.size_id + ',\'' + vnEsc + '\',\'' + imgEsc + '\')">+</button>' +
-              '</div>' +
-            '</div>';
-          }).join('') +
-        '</div>'
-      : '<div class="product-actions">' +
-          '<div class="qty-wrap">' +
-            '<button class="qty-btn minus" onclick="chQty(\'' + id + '\',-1)">−</button>' +
-            '<input class="qty-num" type="number" id="q-' + id + '" value="1" min="1" />' +
-            '<button class="qty-btn plus" onclick="addCart(\'' + id + '\',\'' + nomEsc + '\',' + precio + ',\'' + imgEsc + '\')">+</button>' +
-          '</div>' +
-        '</div>';
 
-    return '<div class="product-card">' +
+    return '<div class="product-card" onclick="abrirModal(' + id + ')" style="cursor:pointer">' +
       '<div class="product-img-wrap">' +
         (img ? '<img src="' + img + '" alt="' + nombre + '" loading="lazy" onerror="this.parentNode.innerHTML=\'<div class=\\\'no-img\\\'>Sin imagen</div>\'">' : '<div class="no-img">Sin imagen</div>') +
       '</div>' +
@@ -496,7 +482,7 @@ function renderProductos() {
         (cod ? '<div class="product-code">' + cod + '</div>' : '') +
         '<div class="product-price">' + formatPrecio(precio) + '</div>' +
       '</div>' +
-      variantRows +
+      '<div class="product-card-footer"><button class="btn-ver" onclick="abrirModal(' + id + ');event.stopPropagation()">Ver producto</button></div>' +
     '</div>';
   }).join('');
 }
@@ -509,6 +495,96 @@ function chQty(id, d) {
   const max = el.max ? parseInt(el.max) : null;
   if (max !== null && v > max) v = max;
   el.value = v;
+}
+
+function abrirModal(id) {
+  const p = allProducts.find(x => (x.id || x.product_id) == id);
+  if (!p) return;
+
+  const nombre = p.name || p.nombre || p.product_name || 'Sin nombre';
+  const cod = p.code || p.sku || p.codigo || '';
+  const precio = getPrecio(p);
+  const img = getImagen(p);
+  const cat = p.category || '';
+  const desc = getDescripcion(p);
+  const variantes = (p.variantes || []).filter(v => {
+    const vs = getStockVariante(v);
+    return vs === null || vs > 0;
+  });
+  const nomEsc = nombre.replace(/'/g,"\\'");
+  const imgEsc = (img||'').replace(/'/g,"\\'");
+
+  // Imagen
+  $('modal-img-wrap').innerHTML = img
+    ? '<img src="' + img + '" alt="' + nombre + '" onerror="this.parentNode.innerHTML=\'<div class=\\\'modal-no-img\\\'>Sin imagen</div>\'">'
+    : '<div class="modal-no-img">Sin imagen</div>';
+
+  // Info
+  $('modal-cat').textContent = cat;
+  $('modal-cat').style.display = cat ? 'block' : 'none';
+  $('modal-title').textContent = nombre;
+  $('modal-code').textContent = cod;
+  $('modal-code').style.display = cod ? 'block' : 'none';
+  $('modal-price').textContent = formatPrecio(precio);
+
+  // Descripción
+  if (desc) {
+    $('modal-desc').textContent = desc;
+    $('modal-desc').style.display = 'block';
+  } else {
+    $('modal-desc').style.display = 'none';
+  }
+
+  // Variantes
+  const wrap = $('modal-variants-wrap');
+  if (variantes.length > 0) {
+    wrap.innerHTML =
+      '<div class="modal-variants-label">Modelos disponibles</div>' +
+      '<div class="modal-variant-rows">' +
+        variantes.map(v => {
+          const vs = getStockVariante(v);
+          const vkey = 'm-' + id + '-' + v.size_id;
+          const vnEsc = v.size.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+          const pocas = vs !== null && vs < 10;
+          const sClass = pocas ? 'low' : 'ok';
+          const sTxt = pocas ? 'Últimas ' + vs + 'u' : 'Disponible';
+          const maxAttr = vs !== null ? ' max="' + vs + '"' : '';
+          return '<div class="modal-variant-row">' +
+            '<div class="modal-variant-info">' +
+              '<div class="modal-variant-name">' + v.size + '</div>' +
+              '<div class="modal-variant-stock ' + sClass + '">' + sTxt + '</div>' +
+            '</div>' +
+            '<div class="modal-vqty-wrap">' +
+              '<button class="modal-vqty-btn minus" onclick="chQty(\'' + vkey + '\',-1)">−</button>' +
+              '<input class="modal-vqty-num" type="number" id="q-' + vkey + '" value="1" min="1"' + maxAttr + ' />' +
+              '<button class="modal-vqty-btn plus" onclick="addCartVariant(\'' + id + '\',\'' + nomEsc + '\',' + precio + ',' + v.size_id + ',\'' + vnEsc + '\',\'' + imgEsc + '\')">+</button>' +
+            '</div>' +
+          '</div>';
+        }).join('') +
+      '</div>';
+  } else {
+    const qkey = 'm-' + id;
+    wrap.innerHTML =
+      '<div class="modal-no-variants">' +
+        '<button class="modal-vqty-btn minus" onclick="chQty(\'' + qkey + '\',-1)">−</button>' +
+        '<input class="modal-vqty-num" type="number" id="q-' + qkey + '" value="1" min="1" style="margin:0 6px" />' +
+        '<button class="modal-vqty-btn plus" onclick="addCart(\'' + id + '\',\'' + nomEsc + '\',' + precio + ',\'' + imgEsc + '\')">+</button>' +
+        '<span style="font-size:13px;color:var(--text-muted);margin-left:8px">Agregar al pedido</span>' +
+      '</div>';
+  }
+
+  $('modal-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function cerrarModal(e) {
+  if (e && e.target !== $('modal-overlay')) return;
+  $('modal-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function getDescripcion(p) {
+  return p.description || p.descripcion || p.details || p.detalle || '';
 }
 
 function addCart(id, nombre, precio, img) {
