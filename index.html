@@ -237,7 +237,6 @@
         <h3>Cargando catálogo...</h3>
       </div>
     </div>
-    <div class="pager" id="pager"></div>
   </main>
 </div>
 
@@ -281,8 +280,6 @@ let allProducts = [];
 let cart = {};
 let filtro = 'todos';
 let categoria = 'todas';
-let currentPage = 1;
-let totalPages = 1;
 let references = null;
 
 function $(id) { return document.getElementById(id); }
@@ -318,7 +315,7 @@ async function fetchProxy(path, opts={}) {
 async function conectar() {
   try {
     await cargarReferencias();
-    await cargarProductos(1);
+    await cargarProductos();
     $('conn-dot').className = 'conn-dot ok';
     $('conn-label').textContent = allProducts.length + ' productos';
     $('filtros-section').style.display = 'block';
@@ -352,24 +349,32 @@ function setCategoria(c) {
   renderProductos();
 }
 
-async function cargarProductos(page) {
-  const qs = 'per_page=100&include_stock=1&include_images=1&include_variants=1&page=' + page;
-  const data = await fetchProxy('/productos/obtener', { qs });
-  const raw = Array.isArray(data) ? data : (data.data || data.products || data.items || []);
+async function cargarProductos() {
   const seen = new Set();
-  const items = raw.filter(p => {
-    const id = p.id || p.product_id;
-    if (seen.has(id) || p.active === 0) return false;
-    seen.add(id);
-    return getPrecio(p) > 0;
-  });
-  allProducts = items;
-  currentPage = page;
-  totalPages = data.meta ? (data.meta.last_page || data.meta.total_pages || 1) : (items.length === 100 ? page + 1 : page);
+  let all = [];
+  let page = 1;
+
+  while (true) {
+    const qs = 'per_page=100&include_stock=1&include_images=1&include_variants=1&page=' + page;
+    const data = await fetchProxy('/productos/obtener', { qs });
+    const raw = Array.isArray(data) ? data : (data.data || data.products || data.items || []);
+
+    for (const p of raw) {
+      const id = p.id || p.product_id;
+      if (seen.has(id) || p.active === 0 || getPrecio(p) <= 0) continue;
+      seen.add(id);
+      all.push(p);
+    }
+
+    const lastPage = data.meta ? (data.meta.last_page || data.meta.total_pages || 1) : 1;
+    if (page >= lastPage || raw.length < 100) break;
+    page++;
+  }
+
+  allProducts = all;
   actualizarStats();
   renderCatPills();
   renderProductos();
-  renderPager();
 }
 
 function actualizarStats() {
@@ -642,22 +647,6 @@ async function confirmarPedido() {
   btn.disabled = false;
 }
 
-function renderPager() {
-  const p = $('pager');
-  if (totalPages <= 1) { p.innerHTML = ''; return; }
-  p.innerHTML =
-    '<button onclick="irPag(' + (currentPage-1) + ')" ' + (currentPage===1?'disabled':'') + '>← Anterior</button>' +
-    '<span>Página ' + currentPage + ' de ' + totalPages + '</span>' +
-    '<button onclick="irPag(' + (currentPage+1) + ')" ' + (currentPage>=totalPages?'disabled':'') + '>Siguiente →</button>';
-}
-
-async function irPag(n) {
-  if (n < 1 || n > totalPages) return;
-  setStatus('Cargando página ' + n + '...', 'loading');
-  await cargarProductos(n);
-  setStatus(allProducts.length + ' productos — Página ' + n, 'ok');
-  window.scrollTo(0, 0);
-}
 </script>
 </body>
 </html>
