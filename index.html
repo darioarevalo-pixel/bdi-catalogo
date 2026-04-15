@@ -664,13 +664,19 @@ async function confirmarPedido() {
   if (!clientName) { showToast('Ingresá el nombre del cliente', 'error'); return; }
   const obs = $('client-obs').value.trim();
   const contact = $('client-contact').value.trim();
-  const channelId = references?.canales?.[0]?.id || references?.channels?.[0]?.id || 1;
-  const saleTypeId = references?.tipos_venta?.[0]?.id || references?.sale_types?.[0]?.id || 1;
-  const currencyId = references?.monedas?.[0]?.id || references?.currencies?.[0]?.id || 1;
+  const canales = references?.canales || [];
+  const tipos = references?.tipos_venta || [];
+  const monedas = references?.monedas || [];
+  const channelId = (canales.find(c => c.name === 'Mayorista') || canales[0])?.id || 10;
+  const saleTypeId = (tipos.find(t => t.name === 'Mayorista') || tipos[0])?.id || 6;
+  const currencyId = (monedas.find(m => m.label === 'ARS') || monedas.find(m => m.name === 'Pesos') || monedas[monedas.length - 1])?.id || 1;
+  const storeId = references?.configuracion?.default_store_id || 13307;
   const body = {
     channel_id: channelId,
     sale_type_id: saleTypeId,
     currency_id: currencyId,
+    store_id: storeId,
+    state_id: 1,
     integration_source: 'catalogo_mayorista_bdi',
     integration_id: 'bdi_' + Date.now(),
     discount_inventory: true,
