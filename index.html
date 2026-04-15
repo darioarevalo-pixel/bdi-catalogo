@@ -354,7 +354,14 @@ function setCategoria(c) {
 async function cargarProductos(page) {
   const qs = 'per_page=100&include_stock=1&include_images=1&include_variants=1&page=' + page;
   const data = await fetchProxy('/productos/obtener', { qs });
-  const items = Array.isArray(data) ? data : (data.data || data.products || data.items || []);
+  const raw = Array.isArray(data) ? data : (data.data || data.products || data.items || []);
+  const seen = new Set();
+  const items = raw.filter(p => {
+    const id = p.id || p.product_id;
+    if (seen.has(id) || p.active === 0) return false;
+    seen.add(id);
+    return true;
+  });
   allProducts = items;
   currentPage = page;
   totalPages = data.meta ? (data.meta.last_page || data.meta.total_pages || 1) : (items.length === 100 ? page + 1 : page);
