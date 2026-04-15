@@ -108,7 +108,12 @@
   .modal-price { font-size: 24px; font-weight: 700; color: var(--accent); margin-top: 8px; }
   .modal-desc { font-size: 13px; color: var(--text-muted); line-height: 1.6; margin: 12px 1.25rem; padding-top: 12px; border-top: 1px solid var(--border); }
   .modal-variants-label { font-size: 11px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; color: var(--text-hint); padding: 0 1.25rem; margin-top: 12px; margin-bottom: 4px; border-top: 1px solid var(--border); padding-top: 12px; }
+  .modal-variants-label.no-border { border-top: none; padding-top: 0; margin-top: 8px; }
   .modal-variant-rows { padding: 0 1rem 1rem; display: flex; flex-direction: column; gap: 4px; }
+  .vdim-pills { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 1.25rem 4px; }
+  .vdim-pill { padding: 5px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; letter-spacing: 0.3px; cursor: pointer; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text-muted); transition: all 0.15s; font-family: inherit; }
+  .vdim-pill:hover { border-color: var(--accent); color: var(--accent); }
+  .vdim-pill.active { background: var(--accent); border-color: var(--accent); color: white; }
   .modal-variant-row { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: var(--radius-sm); border: 1px solid var(--border); }
   .modal-variant-row:hover { border-color: var(--border-strong); background: var(--bg); }
   .modal-variant-info { flex: 1; min-width: 0; }
@@ -287,6 +292,76 @@ let cart = {};
 let filtro = 'todos';
 let categoria = 'todas';
 let references = null;
+let variantDimsCache = {};
+
+const COLOR_WORDS = ['negro','blanco','rojo','azul','verde','amarillo','rosa','naranja','violeta','gris','plateado','dorado','celeste','bordó','bordo','turquesa','beige','crema','lila','fucsia','marrón','marron','nude'];
+
+function parseVariantDimensions(variantes) {
+  const seps = [' / ', ' - '];
+  let sep = null;
+  for (const s of seps) {
+    const count = variantes.filter(v => v.size && v.size.includes(s)).length;
+    if (count >= Math.ceil(variantes.length * 0.6)) { sep = s; break; }
+  }
+  if (!sep) return null;
+
+  let dims = variantes.map(v => {
+    const idx = v.size.indexOf(sep);
+    return { ...v, dim1: v.size.substring(0, idx).trim(), dim2: v.size.substring(idx + sep.length).trim() };
+  });
+
+  // Si el color está en dim2 (ej: "iPhone 11 - Gris"), lo ponemos como dim1 para usarlo como pill
+  const dim1Values = [...new Set(dims.map(d => d.dim1))];
+  const dim2Values = [...new Set(dims.map(d => d.dim2))];
+  const dim1IsColor = detectDimLabel(dim1Values) === 'Color';
+  const dim2IsColor = detectDimLabel(dim2Values) === 'Color';
+  if (!dim1IsColor && (dim2IsColor || dim2Values.length < dim1Values.length)) {
+    dims = dims.map(d => ({ ...d, dim1: d.dim2, dim2: d.dim1 }));
+  }
+
+  return dims;
+}
+
+function detectDimLabel(values) {
+  const lower = values.map(v => v.toLowerCase());
+  return lower.some(v => COLOR_WORDS.some(c => v.includes(c))) ? 'Color' : 'Modelo';
+}
+
+function renderVariantRowsHTML(productId, dims, selectedDim1, nomEsc, precio, imgEsc) {
+  const filtered = dims.filter(d => d.dim1 === selectedDim1 && (getStockVariante(d) === null || getStockVariante(d) > 0));
+  if (!filtered.length) return '<div style="padding:12px 1.25rem;font-size:13px;color:var(--text-muted)">Sin stock para esta selección.</div>';
+  return filtered.map(v => {
+    const vs = getStockVariante(v);
+    const pocas = vs !== null && vs < 10;
+    const sClass = pocas ? 'low' : 'ok';
+    const sTxt = pocas ? 'Últimas ' + vs + 'u' : 'Disponible';
+    const maxAttr = vs !== null ? ' max="' + vs + '"' : '';
+    const vnEsc = v.dim2.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+    const fullVnEsc = v.size.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+    const inputId = 'q-m-' + productId + '-' + v.size_id;
+    return '<div class="modal-variant-row">' +
+      '<div class="modal-variant-info">' +
+        '<div class="modal-variant-name">' + v.dim2 + '</div>' +
+        '<div class="modal-variant-stock ' + sClass + '">' + sTxt + '</div>' +
+      '</div>' +
+      '<div class="modal-vqty-wrap">' +
+        '<button class="modal-vqty-btn minus" onclick="chQty(\'m-' + productId + '-' + v.size_id + '\',-1)">−</button>' +
+        '<input class="modal-vqty-num" type="number" id="' + inputId + '" value="1" min="1"' + maxAttr + ' />' +
+        '<button class="modal-vqty-btn plus" onclick="addCartVariant(\'' + productId + '\',\'' + nomEsc + '\',' + precio + ',' + v.size_id + ',\'' + fullVnEsc + '\',\'' + imgEsc + '\')">+</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function setVariantDim(productId, dim1) {
+  variantDimsCache[productId].selectedDim1 = dim1;
+  const pills = $('vdim-pills-' + productId);
+  if (pills) pills.querySelectorAll('.vdim-pill').forEach(p => p.classList.toggle('active', p.dataset.dim === dim1));
+  const rows = $('vdim-rows-' + productId);
+  if (!rows) return;
+  const { dims, nomEsc, precio, imgEsc } = variantDimsCache[productId];
+  rows.innerHTML = renderVariantRowsHTML(productId, dims, dim1, nomEsc, precio, imgEsc);
+}
 
 function $(id) { return document.getElementById(id); }
 
@@ -537,7 +612,30 @@ function abrirModal(id) {
 
   // Variantes
   const wrap = $('modal-variants-wrap');
-  if (variantes.length > 0) {
+  const dims = parseVariantDimensions(variantes);
+
+  if (dims) {
+    // Variantes con dos dimensiones (ej: Color / Modelo)
+    const groups = [...new Set(dims.map(d => d.dim1))];
+    const dim1Label = detectDimLabel(groups);
+    const dim2Label = dim1Label === 'Color' ? 'Modelo' : 'Variante';
+    const firstGroup = groups[0];
+    variantDimsCache[id] = { dims, selectedDim1: firstGroup, nomEsc, precio, imgEsc };
+
+    wrap.innerHTML =
+      '<div class="modal-variants-label">' + dim1Label + '</div>' +
+      '<div class="vdim-pills" id="vdim-pills-' + id + '">' +
+        groups.map(g =>
+          '<button class="vdim-pill' + (g === firstGroup ? ' active' : '') + '" data-dim="' + g.replace(/"/g,'&quot;') + '" onclick="setVariantDim(' + id + ',\'' + g.replace(/'/g,"\\'") + '\')">' + g + '</button>'
+        ).join('') +
+      '</div>' +
+      '<div class="modal-variants-label no-border">' + dim2Label + '</div>' +
+      '<div class="modal-variant-rows" id="vdim-rows-' + id + '">' +
+        renderVariantRowsHTML(id, dims, firstGroup, nomEsc, precio, imgEsc) +
+      '</div>';
+
+  } else if (variantes.length > 0) {
+    // Lista plana
     wrap.innerHTML =
       '<div class="modal-variants-label">Modelos disponibles</div>' +
       '<div class="modal-variant-rows">' +
@@ -588,7 +686,7 @@ function getDescripcion(p) {
 }
 
 function addCart(id, nombre, precio, img) {
-  const qty = parseInt($('q-' + id)?.value || 1);
+  const qty = parseInt($('q-m-' + id)?.value || 1);
   if (cart[id]) cart[id].qty += qty;
   else cart[id] = { id: parseInt(id), nombre, varNombre: '', precio, qty, sizeId: null, img };
   $('q-' + id) && ($('q-' + id).value = 1);
@@ -599,7 +697,7 @@ function addCart(id, nombre, precio, img) {
 
 function addCartVariant(id, nombre, precio, sizeId, varNombre, img) {
   const key = id + '-' + sizeId;
-  const qty = parseInt($('q-' + key)?.value || 1);
+  const qty = parseInt($('q-m-' + key)?.value || 1);
   if (cart[key]) cart[key].qty += qty;
   else cart[key] = { id: parseInt(id), nombre, varNombre, precio, qty, sizeId, img };
   $('q-' + key) && ($('q-' + key).value = 1);
