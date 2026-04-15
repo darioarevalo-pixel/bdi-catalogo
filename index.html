@@ -483,25 +483,30 @@ function renderProductos() {
     const nomEsc = nombre.replace(/'/g,"\\'");
 
     const cat = p.category || '';
-    const variantRows = variantes.length > 0
-      ? '<div class="variant-label">Variantes (' + variantes.length + '):</div>' +
+    const variantesConStock = variantes.filter(v => {
+      const vs = getStockVariante(v);
+      return vs === null || vs > 0;
+    });
+    const variantRows = variantesConStock.length > 0
+      ? '<div class="variant-label">Variantes:</div>' +
         '<div class="variant-rows">' +
-          variantes.map(v => {
+          variantesConStock.map(v => {
             const vs = getStockVariante(v);
             const vkey = id + '-' + v.size_id;
-            const sinStock = vs !== null && vs === 0;
             const vnEsc = v.size.replace(/'/g,"\\'").replace(/"/g,'&quot;');
-            const sClass = sinStock ? 'out' : (vs !== null && vs <= 5 ? 'low' : 'ok');
-            const sTxt = sinStock ? 'Sin stock' : (vs !== null ? 'Stock: ' + vs : 'Disponible');
-            return '<div class="variant-row' + (sinStock ? ' out' : '') + '">' +
+            const pocasUnidades = vs !== null && vs < 10;
+            const sClass = pocasUnidades ? 'low' : 'ok';
+            const sTxt = pocasUnidades ? 'Últimas ' + vs + 'u' : 'Disponible';
+            const maxAttr = vs !== null ? ' max="' + vs + '"' : '';
+            return '<div class="variant-row">' +
               '<div class="variant-row-info">' +
                 '<div class="variant-row-name">' + v.size + '</div>' +
                 '<div class="variant-row-stock ' + sClass + '">' + sTxt + '</div>' +
               '</div>' +
               '<div class="vqty-wrap">' +
-                '<button class="vqty-btn minus" onclick="chQty(\'' + vkey + '\',-1)"' + (sinStock ? ' disabled' : '') + '>−</button>' +
-                '<input class="vqty-num" type="number" id="q-' + vkey + '" value="1" min="1" />' +
-                '<button class="vqty-btn plus" onclick="addCartVariant(\'' + id + '\',\'' + nomEsc + '\',' + precio + ',' + v.size_id + ',\'' + vnEsc + '\',\'' + imgEsc + '\')"' + (sinStock ? ' disabled' : '') + '>+</button>' +
+                '<button class="vqty-btn minus" onclick="chQty(\'' + vkey + '\',-1)">−</button>' +
+                '<input class="vqty-num" type="number" id="q-' + vkey + '" value="1" min="1"' + maxAttr + ' />' +
+                '<button class="vqty-btn plus" onclick="addCartVariant(\'' + id + '\',\'' + nomEsc + '\',' + precio + ',' + v.size_id + ',\'' + vnEsc + '\',\'' + imgEsc + '\')">+</button>' +
               '</div>' +
             '</div>';
           }).join('') +
@@ -517,7 +522,6 @@ function renderProductos() {
     return '<div class="product-card">' +
       '<div class="product-img-wrap">' +
         (img ? '<img src="' + img + '" alt="' + nombre + '" loading="lazy" onerror="this.parentNode.innerHTML=\'<div class=\\\'no-img\\\'>Sin imagen</div>\'">' : '<div class="no-img">Sin imagen</div>') +
-        '<span class="stock-badge ' + sc + '">' + st + '</span>' +
       '</div>' +
       '<div class="product-body">' +
         (cat ? '<div class="product-cat">' + cat + '</div>' : '') +
@@ -535,6 +539,8 @@ function chQty(id, d) {
   if (!el) return;
   let v = parseInt(el.value) + d;
   if (v < 1) v = 1;
+  const max = el.max ? parseInt(el.max) : null;
+  if (max !== null && v > max) v = max;
   el.value = v;
 }
 
