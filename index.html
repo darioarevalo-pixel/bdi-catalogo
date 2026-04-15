@@ -7,38 +7,40 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #F5F4F0;
+    --bg: #F3F4F6;
     --surface: #FFFFFF;
-    --border: #E2E0D8;
-    --border-strong: #C8C5BA;
-    --text: #1A1916;
-    --text-muted: #6B6960;
-    --text-hint: #A09E96;
-    --accent: #1A6B4A;
-    --accent-light: #E8F4EE;
-    --accent-text: #0F4A32;
-    --danger: #C0392B;
-    --danger-light: #FDEDEB;
-    --warning: #B7570A;
-    --warning-light: #FEF3E8;
+    --border: #E5E7EB;
+    --border-strong: #D1D5DB;
+    --text: #111827;
+    --text-muted: #6B7280;
+    --text-hint: #9CA3AF;
+    --accent: #2563EB;
+    --accent-light: #EFF6FF;
+    --accent-text: #1D4ED8;
+    --stock-ok: #16A34A;
+    --stock-ok-bg: #F0FDF4;
+    --danger: #DC2626;
+    --danger-light: #FEF2F2;
+    --warning: #D97706;
+    --warning-light: #FFFBEB;
     --radius: 10px;
     --radius-sm: 6px;
-    --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.05);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.5; min-height: 100vh; }
 
-  .site-header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 2rem; position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; height: 60px; }
-  .logo { font-size: 17px; font-weight: 600; letter-spacing: -0.3px; color: var(--text); display: flex; align-items: center; gap: 10px; }
-  .logo-badge { font-size: 11px; font-weight: 500; background: var(--accent-light); color: var(--accent-text); padding: 2px 8px; border-radius: 20px; letter-spacing: 0.3px; }
+  .site-header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 1.5rem; position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; height: 56px; }
+  .logo { font-size: 15px; font-weight: 700; color: var(--text); display: flex; flex-direction: column; gap: 1px; }
+  .logo-sub { font-size: 11px; font-weight: 400; color: var(--text-muted); }
   .header-right { display: flex; align-items: center; gap: 10px; }
   .conn-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border-strong); display: inline-block; }
-  .conn-dot.ok { background: var(--accent); }
+  .conn-dot.ok { background: var(--stock-ok); }
   .conn-dot.err { background: var(--danger); }
   .conn-label { font-size: 13px; color: var(--text-muted); }
-  .cart-btn { display: flex; align-items: center; gap: 8px; padding: 7px 14px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer; color: var(--text); transition: background 0.15s; }
-  .cart-btn:hover { background: var(--bg); }
-  .cart-badge { background: var(--accent); color: white; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 20px; min-width: 20px; text-align: center; }
+  .cart-btn { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: var(--accent); border: none; border-radius: var(--radius-sm); font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; color: white; transition: opacity 0.15s; }
+  .cart-btn:hover { opacity: 0.9; }
+  .cart-badge { background: white; color: var(--accent); font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 20px; min-width: 20px; text-align: center; }
 
   .layout { display: flex; min-height: calc(100vh - 60px); }
   .sidebar { width: 280px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); padding: 1.5rem; position: sticky; top: 60px; height: calc(100vh - 60px); overflow-y: auto; }
@@ -59,7 +61,11 @@
   .filter-group { display: flex; flex-direction: column; gap: 4px; }
   .filter-btn { padding: 7px 10px; border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; cursor: pointer; border: none; background: transparent; color: var(--text-muted); text-align: left; transition: background 0.12s, color 0.12s; }
   .filter-btn:hover { background: var(--bg); color: var(--text); }
-  .filter-btn.active { background: var(--accent-light); color: var(--accent-text); font-weight: 500; }
+  .filter-btn.active { background: var(--accent-light); color: var(--accent); font-weight: 500; }
+  .cat-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 1.25rem; }
+  .cat-pill { padding: 5px 14px; border-radius: 20px; font-family: inherit; font-size: 12px; font-weight: 600; letter-spacing: 0.3px; cursor: pointer; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text-muted); transition: all 0.15s; text-transform: uppercase; }
+  .cat-pill:hover { border-color: var(--accent); color: var(--accent); }
+  .cat-pill.active { background: var(--accent); border-color: var(--accent); color: white; }
   .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .stat-card { background: var(--bg); border-radius: var(--radius-sm); padding: 10px; }
   .stat-card .val { font-size: 20px; font-weight: 600; color: var(--text); line-height: 1; }
@@ -74,25 +80,29 @@
   .sort-select { padding: 9px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; background: var(--surface); color: var(--text); outline: none; cursor: pointer; }
 
   .products-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(195px, 1fr)); gap: 12px; align-items: start; }
-  .product-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; transition: border-color 0.15s, box-shadow 0.15s; }
-  .product-card:hover { border-color: var(--border-strong); box-shadow: var(--shadow); }
-  .product-img-wrap { width: 100%; height: 150px; background: var(--bg); overflow: hidden; display: flex; align-items: center; justify-content: center; position: relative; }
+  .product-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; transition: box-shadow 0.15s; }
+  .product-card:hover { box-shadow: var(--shadow); }
+  .product-img-wrap { width: 100%; height: 160px; background: var(--bg); overflow: hidden; display: flex; align-items: center; justify-content: center; position: relative; }
   .product-img-wrap img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.2s; }
   .product-card:hover .product-img-wrap img { transform: scale(1.03); }
   .no-img { font-size: 11px; color: var(--text-hint); text-align: center; }
   .stock-badge { position: absolute; top: 8px; right: 8px; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 20px; }
-  .stock-badge.ok { background: var(--accent-light); color: var(--accent-text); }
+  .stock-badge.ok { background: var(--stock-ok-bg); color: var(--stock-ok); }
   .stock-badge.low { background: var(--warning-light); color: var(--warning); }
   .stock-badge.out { background: var(--danger-light); color: var(--danger); }
-  .product-body { padding: 12px; display: flex; flex-direction: column; gap: 5px; }
-  .product-name { font-size: 13px; font-weight: 500; color: var(--text); line-height: 1.35; }
+  .product-body { padding: 12px 12px 8px; display: flex; flex-direction: column; gap: 3px; }
+  .product-cat { font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .product-name { font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.3; text-transform: uppercase; }
   .product-code { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-hint); }
-  .product-price { font-size: 16px; font-weight: 600; color: var(--text); padding-top: 6px; }
+  .product-price { font-size: 17px; font-weight: 700; color: var(--accent); padding-top: 4px; }
   .product-actions { display: flex; align-items: center; gap: 6px; padding: 0 12px 12px; }
-  .qty-wrap { display: flex; align-items: center; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); overflow: hidden; }
-  .qty-btn { width: 28px; height: 30px; border: none; background: var(--bg); cursor: pointer; font-size: 16px; color: var(--text-muted); display: flex; align-items: center; justify-content: center; font-family: inherit; transition: background 0.1s; }
-  .qty-btn:hover { background: var(--border); }
-  .qty-num { width: 32px; text-align: center; border: none; border-left: 1px solid var(--border); border-right: 1px solid var(--border); font-family: 'DM Mono', monospace; font-size: 13px; background: var(--surface); color: var(--text); height: 30px; outline: none; }
+  .qty-wrap { display: flex; align-items: center; gap: 4px; }
+  .qty-btn { width: 28px; height: 28px; border: none; border-radius: 50%; cursor: pointer; font-size: 18px; font-weight: 300; display: flex; align-items: center; justify-content: center; font-family: inherit; transition: opacity 0.1s; line-height: 1; }
+  .qty-btn.minus { background: var(--border); color: var(--text-muted); }
+  .qty-btn.minus:hover { background: var(--border-strong); }
+  .qty-btn.plus { background: var(--accent); color: white; }
+  .qty-btn.plus:hover { opacity: 0.85; }
+  .qty-num { width: 36px; text-align: center; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: 'DM Mono', monospace; font-size: 13px; background: var(--surface); color: var(--text); height: 28px; outline: none; }
   .btn-add { flex: 1; padding: 0 10px; height: 30px; border-radius: var(--radius-sm); font-family: inherit; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--accent); background: transparent; color: var(--accent); transition: background 0.15s, color 0.15s; white-space: nowrap; }
   .btn-add:hover { background: var(--accent); color: white; }
   .btn-add.in-cart { background: var(--accent); color: white; border-color: var(--accent); }
@@ -142,22 +152,24 @@
   .spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.4); border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block; vertical-align: middle; margin-right: 6px; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  .variant-rows { padding: 0 10px 8px; display: flex; flex-direction: column; gap: 3px; }
-  .variant-row { display: flex; align-items: center; gap: 6px; padding: 5px 7px; border-radius: var(--radius-sm); background: var(--bg); }
-  .variant-row.out { opacity: 0.5; }
-  .variant-row-name { flex: 1; font-size: 12px; color: var(--text); }
-  .variant-row-stock { font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 20px; white-space: nowrap; flex-shrink: 0; }
-  .variant-row-stock.ok { background: var(--accent-light); color: var(--accent-text); }
-  .variant-row-stock.low { background: var(--warning-light); color: var(--warning); }
-  .variant-row-stock.out { background: var(--danger-light); color: var(--danger); }
-  .vqty-wrap { display: flex; align-items: center; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); overflow: hidden; flex-shrink: 0; }
-  .vqty-btn { width: 22px; height: 24px; border: none; background: var(--bg); cursor: pointer; font-size: 14px; color: var(--text-muted); display: flex; align-items: center; justify-content: center; transition: background 0.1s; }
-  .vqty-btn:hover { background: var(--border); }
-  .vqty-num { width: 26px; text-align: center; border: none; border-left: 1px solid var(--border); border-right: 1px solid var(--border); font-family: 'DM Mono', monospace; font-size: 11px; background: var(--surface); color: var(--text); height: 24px; outline: none; }
-  .btn-add-v { width: 26px; height: 26px; border-radius: var(--radius-sm); font-size: 15px; font-weight: 600; cursor: pointer; border: 1px solid var(--accent); background: transparent; color: var(--accent); transition: background 0.15s, color 0.15s; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
-  .btn-add-v:hover:not(:disabled) { background: var(--accent); color: white; }
-  .btn-add-v.in-cart { background: var(--accent); color: white; }
-  .btn-add-v:disabled { opacity: 0.3; cursor: default; border-color: var(--border-strong); }
+  .variant-label { font-size: 11px; color: var(--text-muted); padding: 0 12px 4px; }
+  .variant-rows { padding: 0 10px 10px; display: flex; flex-direction: column; gap: 2px; }
+  .variant-row { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: var(--radius-sm); }
+  .variant-row:hover { background: var(--bg); }
+  .variant-row.out { opacity: 0.45; }
+  .variant-row-info { flex: 1; min-width: 0; }
+  .variant-row-name { font-size: 12px; font-weight: 500; color: var(--text); }
+  .variant-row-stock { font-size: 11px; color: var(--stock-ok); font-weight: 500; }
+  .variant-row-stock.out { color: var(--danger); }
+  .variant-row-stock.low { color: var(--warning); }
+  .vqty-wrap { display: flex; align-items: center; gap: 3px; flex-shrink: 0; }
+  .vqty-btn { width: 24px; height: 24px; border: none; border-radius: 50%; cursor: pointer; font-size: 17px; font-weight: 300; display: flex; align-items: center; justify-content: center; line-height: 1; transition: opacity 0.1s; }
+  .vqty-btn.minus { background: var(--border-strong); color: var(--text-muted); }
+  .vqty-btn.minus:hover { background: #B0B7C0; }
+  .vqty-btn.plus { background: var(--accent); color: white; }
+  .vqty-btn.plus:hover { opacity: 0.85; }
+  .vqty-btn:disabled { opacity: 0.3; cursor: default; }
+  .vqty-num { width: 28px; text-align: center; border: 1px solid var(--border-strong); border-radius: 4px; font-family: 'DM Mono', monospace; font-size: 11px; background: var(--surface); color: var(--text); height: 24px; outline: none; }
 
   @media (max-width: 700px) {
     .sidebar { display: none; }
@@ -172,7 +184,7 @@
 <header class="site-header">
   <div class="logo">
     BDI Accesorios
-    <span class="logo-badge">Mayorista</span>
+    <span class="logo-sub">Catálogo de Productos</span>
   </div>
   <div class="header-right">
     <span class="conn-dot" id="conn-dot"></span>
@@ -211,17 +223,20 @@
   </aside>
 
   <main class="main">
-    <div class="toolbar" id="toolbar" style="display:none">
-      <div class="search-wrap">
-        <span class="search-icon">⌕</span>
-        <input type="text" id="search-input" placeholder="Buscar por nombre o código..." oninput="renderProductos()" />
+    <div id="toolbar" style="display:none">
+      <div class="toolbar">
+        <div class="search-wrap">
+          <span class="search-icon">⌕</span>
+          <input type="text" id="search-input" placeholder="Buscar productos..." oninput="renderProductos()" />
+        </div>
+        <select class="sort-select" id="sort-select" onchange="renderProductos()">
+          <option value="default">Orden original</option>
+          <option value="price-asc">Precio: menor a mayor</option>
+          <option value="price-desc">Precio: mayor a menor</option>
+          <option value="name">Nombre A-Z</option>
+        </select>
       </div>
-      <select class="sort-select" id="sort-select" onchange="renderProductos()">
-        <option value="default">Orden original</option>
-        <option value="price-asc">Precio: menor a mayor</option>
-        <option value="price-desc">Precio: mayor a menor</option>
-        <option value="name">Nombre A-Z</option>
-      </select>
+      <div class="cat-pills" id="cat-pills"></div>
     </div>
     <div class="products-grid" id="products-grid">
       <div class="state-msg">
@@ -274,6 +289,7 @@ let TOKEN = '';
 let allProducts = [];
 let cart = {};
 let filtro = 'todos';
+let categoria = 'todas';
 let currentPage = 1;
 let totalPages = 1;
 let references = null;
@@ -337,6 +353,21 @@ async function cargarReferencias() {
   try { references = await fetchProxy('/ventas/referencias'); } catch(e) { references = null; }
 }
 
+function renderCatPills() {
+  const cats = ['todas', ...new Set(allProducts.map(p => p.category || '').filter(Boolean).sort())];
+  $('cat-pills').innerHTML = cats.map(c =>
+    '<button class="cat-pill' + (c === categoria ? ' active' : '') + '" onclick="setCategoria(\'' + c.replace(/'/g,"\\'") + '\')">' +
+      (c === 'todas' ? 'Todos los productos' : c) +
+    '</button>'
+  ).join('');
+}
+
+function setCategoria(c) {
+  categoria = c;
+  renderCatPills();
+  renderProductos();
+}
+
 async function cargarProductos(page) {
   const qs = 'per_page=100&include_stock=1&include_images=1&include_variants=1&page=' + page;
   const data = await fetchProxy('/productos/obtener', { qs });
@@ -345,6 +376,7 @@ async function cargarProductos(page) {
   currentPage = page;
   totalPages = data.meta ? (data.meta.last_page || data.meta.total_pages || 1) : (items.length === 100 ? page + 1 : page);
   actualizarStats();
+  renderCatPills();
   renderProductos();
   renderPager();
 }
@@ -420,7 +452,8 @@ function renderProductos() {
     const matchQ = !q || nombre.includes(q) || cod.includes(q);
     const stock = getStock(p);
     const matchStock = filtro === 'stock' ? (stock === null || stock > 0) : true;
-    return matchQ && matchStock;
+    const matchCat = categoria === 'todas' || (p.category || '') === categoria;
+    return matchQ && matchStock && matchCat;
   });
   if (sort === 'price-asc') prods.sort((a,b) => getPrecio(a) - getPrecio(b));
   else if (sort === 'price-desc') prods.sort((a,b) => getPrecio(b) - getPrecio(a));
@@ -443,38 +476,36 @@ function renderProductos() {
     const imgEsc = (img||'').replace(/'/g,"\\'");
     const nomEsc = nombre.replace(/'/g,"\\'");
 
+    const cat = p.category || '';
     const variantRows = variantes.length > 0
-      ? '<div class="variant-rows">' +
+      ? '<div class="variant-label">Variantes (' + variantes.length + '):</div>' +
+        '<div class="variant-rows">' +
           variantes.map(v => {
             const vs = getStockVariante(v);
             const vkey = id + '-' + v.size_id;
-            const inCart = !!cart[vkey];
             const sinStock = vs !== null && vs === 0;
             const vnEsc = v.size.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+            const sClass = sinStock ? 'out' : (vs !== null && vs <= 5 ? 'low' : 'ok');
+            const sTxt = sinStock ? 'Sin stock' : (vs !== null ? 'Stock: ' + vs : 'Disponible');
             return '<div class="variant-row' + (sinStock ? ' out' : '') + '">' +
-              '<span class="variant-row-name">' + v.size + '</span>' +
-              '<span class="variant-row-stock ' + stockClass(vs) + '">' + stockText(vs) + '</span>' +
-              '<div class="vqty-wrap">' +
-                '<button class="vqty-btn" onclick="chQty(\'' + vkey + '\',-1)">−</button>' +
-                '<input class="vqty-num" type="number" id="q-' + vkey + '" value="1" min="1" />' +
-                '<button class="vqty-btn" onclick="chQty(\'' + vkey + '\',1)">+</button>' +
+              '<div class="variant-row-info">' +
+                '<div class="variant-row-name">' + v.size + '</div>' +
+                '<div class="variant-row-stock ' + sClass + '">' + sTxt + '</div>' +
               '</div>' +
-              '<button class="btn-add-v' + (inCart ? ' in-cart' : '') + '" ' + (sinStock ? 'disabled' : '') +
-                ' onclick="addCartVariant(\'' + id + '\',\'' + nomEsc + '\',' + precio + ',' + v.size_id + ',\'' + vnEsc + '\',\'' + imgEsc + '\')">' +
-                (inCart ? '✓' : '+') +
-              '</button>' +
+              '<div class="vqty-wrap">' +
+                '<button class="vqty-btn minus" onclick="chQty(\'' + vkey + '\',-1)"' + (sinStock ? ' disabled' : '') + '>−</button>' +
+                '<input class="vqty-num" type="number" id="q-' + vkey + '" value="1" min="1" />' +
+                '<button class="vqty-btn plus" onclick="addCartVariant(\'' + id + '\',\'' + nomEsc + '\',' + precio + ',' + v.size_id + ',\'' + vnEsc + '\',\'' + imgEsc + '\')"' + (sinStock ? ' disabled' : '') + '>+</button>' +
+              '</div>' +
             '</div>';
           }).join('') +
         '</div>'
       : '<div class="product-actions">' +
           '<div class="qty-wrap">' +
-            '<button class="qty-btn" onclick="chQty(\'' + id + '\',-1)">−</button>' +
+            '<button class="qty-btn minus" onclick="chQty(\'' + id + '\',-1)">−</button>' +
             '<input class="qty-num" type="number" id="q-' + id + '" value="1" min="1" />' +
-            '<button class="qty-btn" onclick="chQty(\'' + id + '\',1)">+</button>' +
+            '<button class="qty-btn plus" onclick="addCart(\'' + id + '\',\'' + nomEsc + '\',' + precio + ',\'' + imgEsc + '\')">+</button>' +
           '</div>' +
-          '<button class="btn-add' + (cart[id] ? ' in-cart' : '') + '" onclick="addCart(\'' + id + '\',\'' + nomEsc + '\',' + precio + ',\'' + imgEsc + '\')">' +
-            (cart[id] ? '✓ Agregado' : 'Agregar') +
-          '</button>' +
         '</div>';
 
     return '<div class="product-card">' +
@@ -483,6 +514,7 @@ function renderProductos() {
         '<span class="stock-badge ' + sc + '">' + st + '</span>' +
       '</div>' +
       '<div class="product-body">' +
+        (cat ? '<div class="product-cat">' + cat + '</div>' : '') +
         '<div class="product-name">' + nombre + '</div>' +
         (cod ? '<div class="product-code">' + cod + '</div>' : '') +
         '<div class="product-price">' + formatPrecio(precio) + '</div>' +
@@ -504,6 +536,7 @@ function addCart(id, nombre, precio, img) {
   const qty = parseInt($('q-' + id)?.value || 1);
   if (cart[id]) cart[id].qty += qty;
   else cart[id] = { id: parseInt(id), nombre, varNombre: '', precio, qty, sizeId: null, img };
+  $('q-' + id) && ($('q-' + id).value = 1);
   updateCartUI();
   showToast(nombre + ' agregado', 'success');
   renderProductos();
@@ -514,6 +547,7 @@ function addCartVariant(id, nombre, precio, sizeId, varNombre, img) {
   const qty = parseInt($('q-' + key)?.value || 1);
   if (cart[key]) cart[key].qty += qty;
   else cart[key] = { id: parseInt(id), nombre, varNombre, precio, qty, sizeId, img };
+  $('q-' + key) && ($('q-' + key).value = 1);
   updateCartUI();
   showToast(varNombre + ' · ' + nombre + ' agregado', 'success');
   renderProductos();
