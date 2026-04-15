@@ -1,6 +1,6 @@
 {
   "functions": {
-    "api/[...path].js": {
+    "api/proxy.js": {
       "maxDuration": 15
     }
   }
