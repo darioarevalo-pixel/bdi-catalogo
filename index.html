@@ -657,22 +657,6 @@ function cerrarCarrito() {
   $('cart-drawer').classList.remove('open');
 }
 
-async function buscarOCrearCliente(nombre, contacto) {
-  try {
-    const res = await fetchProxy('/clientes/obtener', { qs: 'q=' + encodeURIComponent(nombre) });
-    const lista = Array.isArray(res) ? res : (res.data || res.clients || res.items || []);
-    const encontrado = lista.find(c => (c.name || c.nombre || '').toLowerCase() === nombre.toLowerCase());
-    if (encontrado) return encontrado.id || encontrado.client_id;
-  } catch(e) {}
-  try {
-    const nuevo = await fetchProxy('/clientes/registrar', {
-      method: 'POST',
-      body: { name: nombre, phone: contacto || '', source: 'catalogo_mayorista' }
-    });
-    return nuevo.id || nuevo.client_id || null;
-  } catch(e) {}
-  return null;
-}
 
 async function confirmarPedido() {
   const items = Object.values(cart);
@@ -687,8 +671,7 @@ async function confirmarPedido() {
   btn.disabled = true;
 
   try {
-    const clientId = await buscarOCrearCliente(clientName, contact);
-    if (!clientId) throw new Error('No se pudo registrar el cliente');
+    const clientId = 13528; // Cliente "Pedido Catalogo" en Gestión Nube
 
     const canales = references?.canales || [];
     const tipos = references?.tipos_venta || [];
@@ -706,7 +689,7 @@ async function confirmarPedido() {
       store_id: storeId,
       sale_state_id: 1,
       discount_inventory: true,
-      comments: [contact, obs].filter(Boolean).join(' — '),
+      comments: [clientName, contact, obs].filter(Boolean).join(' — '),
       items: items.map(i => ({ product_id: i.id, ...(i.sizeId ? { size_id: i.sizeId } : {}), quantity: i.qty, unit_price: i.precio }))
     };
 
