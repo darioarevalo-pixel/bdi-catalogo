@@ -14,12 +14,10 @@ module.exports = async (req, res) => {
   const token = req.headers['x-api-token'];
   if (!token) return res.status(401).json({ error: 'Token requerido' });
 
-  const parts = Array.isArray(req.query.path) ? req.query.path : [req.query.path];
-  const pathStr = '/' + parts.join('/');
-  const qsObj = Object.fromEntries(Object.entries(req.query).filter(([k]) => k !== 'path'));
+  const apiPath = req.query._path || '/';
+  const qsObj = Object.fromEntries(Object.entries(req.query).filter(([k]) => k !== '_path'));
   const qs = new URLSearchParams(qsObj);
-  const url = API_BASE + pathStr + (qs.toString() ? '?' + qs.toString() : '');
-  console.log('[proxy] url:', url);
+  const url = API_BASE + apiPath + (qs.toString() ? '?' + qs.toString() : '');
 
   try {
     const opts = {
@@ -31,7 +29,6 @@ module.exports = async (req, res) => {
     }
     const r = await fetch(url, opts);
     const data = await r.text();
-    console.log('[proxy] status:', r.status);
     res.status(r.status).setHeader('Content-Type', 'application/json').send(data);
   } catch (e) {
     res.status(500).json({ error: e.message });

@@ -311,8 +311,8 @@ function setStatus(msg, type='loading') {
 }
 
 async function fetchProxy(path, opts={}) {
-  const qs = opts.qs ? '?' + opts.qs : '';
-  const res = await fetch('/api' + path + qs, {
+  const qs = (opts.qs ? '&' + opts.qs : '');
+  const res = await fetch('/api/proxy?_path=' + encodeURIComponent(path) + qs, {
     method: opts.method || 'GET',
     headers: { 'x-api-token': TOKEN, 'Content-Type': 'application/json' },
     body: opts.body ? JSON.stringify(opts.body) : undefined
