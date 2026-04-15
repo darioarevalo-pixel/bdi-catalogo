@@ -222,10 +222,11 @@
           <input type="text" id="search-input" placeholder="Buscar productos..." oninput="renderProductos()" />
         </div>
         <select class="sort-select" id="sort-select" onchange="renderProductos()">
-          <option value="default">Orden original</option>
+          <option value="stock-desc">Stock: mayor a menor</option>
           <option value="price-asc">Precio: menor a mayor</option>
           <option value="price-desc">Precio: mayor a menor</option>
           <option value="name">Nombre A-Z</option>
+          <option value="default">Orden original</option>
         </select>
       </div>
       <div class="cat-pills" id="cat-pills"></div>
@@ -360,7 +361,7 @@ async function cargarProductos(page) {
     const id = p.id || p.product_id;
     if (seen.has(id) || p.active === 0) return false;
     seen.add(id);
-    return true;
+    return getPrecio(p) > 0;
   });
   allProducts = items;
   currentPage = page;
@@ -386,6 +387,14 @@ function getStockVariante(v) {
   const tienda = v.stock_por_tienda.find(t => t.store_name === 'Deposito Minorista');
   if (tienda) return tienda.stock_disponible || 0;
   return v.stock_por_tienda.reduce((s, t) => s + (t.stock_disponible || 0), 0);
+}
+
+function getStockTotal(p) {
+  const vars = p.variantes || [];
+  if (vars.length > 0) {
+    return vars.reduce((s, v) => s + (getStockVariante(v) || 0), 0);
+  }
+  return getStock(p) || 0;
 }
 
 function stockClass(stock) {
@@ -447,7 +456,8 @@ function renderProductos() {
     const matchCat = categoria === 'todas' || (p.category || '') === categoria;
     return matchQ && matchStock && matchCat;
   });
-  if (sort === 'price-asc') prods.sort((a,b) => getPrecio(a) - getPrecio(b));
+  if (sort === 'stock-desc') prods.sort((a,b) => getStockTotal(b) - getStockTotal(a));
+  else if (sort === 'price-asc') prods.sort((a,b) => getPrecio(a) - getPrecio(b));
   else if (sort === 'price-desc') prods.sort((a,b) => getPrecio(b) - getPrecio(a));
   else if (sort === 'name') prods.sort((a,b) => (a.name||'').localeCompare(b.name||''));
 
