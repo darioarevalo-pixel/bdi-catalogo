@@ -188,7 +188,7 @@
   </div>
   <div class="header-right">
     <span class="conn-dot" id="conn-dot"></span>
-    <span class="conn-label" id="conn-label">Sin conectar</span>
+    <span class="conn-label" id="conn-label">Cargando...</span>
     <button class="cart-btn" onclick="abrirCarrito()">
       Pedido
       <span class="cart-badge" id="cart-badge">0</span>
@@ -198,14 +198,6 @@
 
 <div class="layout">
   <aside class="sidebar">
-    <div class="sidebar-section">
-      <div class="sidebar-label">Conexión API</div>
-      <div class="token-input-wrap">
-        <input type="password" id="api-token" placeholder="Token de acceso..." autocomplete="off" />
-      </div>
-      <button class="btn btn-accent" onclick="conectar()" id="btn-conectar">Conectar</button>
-      <div id="status-msg" class="status-msg" style="display:none"></div>
-    </div>
     <div class="sidebar-section" id="filtros-section" style="display:none">
       <div class="sidebar-label">Filtros</div>
       <div class="filter-group">
@@ -240,9 +232,8 @@
     </div>
     <div class="products-grid" id="products-grid">
       <div class="state-msg">
-        <div class="icon">⬡</div>
-        <h3>Catálogo mayorista BDI</h3>
-        <p>Ingresá tu token de Gestión Nube para cargar los productos.</p>
+        <div class="icon"><span class="spinner" style="width:24px;height:24px;border-color:rgba(0,0,0,0.1);border-top-color:var(--accent)"></span></div>
+        <h3>Cargando catálogo...</h3>
       </div>
     </div>
     <div class="pager" id="pager"></div>
@@ -285,7 +276,6 @@
 <div class="toast" id="toast"></div>
 
 <script>
-let TOKEN = '';
 let allProducts = [];
 let cart = {};
 let filtro = 'todos';
@@ -314,7 +304,7 @@ async function fetchProxy(path, opts={}) {
   const qs = (opts.qs ? '&' + opts.qs : '');
   const res = await fetch('/api/proxy?_path=' + encodeURIComponent(path) + qs, {
     method: opts.method || 'GET',
-    headers: { 'x-api-token': TOKEN, 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json' },
     body: opts.body ? JSON.stringify(opts.body) : undefined
   });
   if (!res.ok) {
@@ -325,29 +315,22 @@ async function fetchProxy(path, opts={}) {
 }
 
 async function conectar() {
-  TOKEN = $('api-token').value.trim().replace(/[^\x20-\x7E]/g, '');
-  if (!TOKEN) { showToast('Ingresá el token primero', 'error'); return; }
-  $('btn-conectar').innerHTML = '<span class="spinner"></span>Conectando...';
-  $('btn-conectar').disabled = true;
-  setStatus('Conectando...', 'loading');
   try {
     await cargarReferencias();
     await cargarProductos(1);
     $('conn-dot').className = 'conn-dot ok';
-    $('conn-label').textContent = 'Conectado';
-    setStatus(allProducts.length + ' productos cargados', 'ok');
+    $('conn-label').textContent = allProducts.length + ' productos';
     $('filtros-section').style.display = 'block';
     $('stats-section').style.display = 'block';
-    $('toolbar').style.display = 'flex';
-    $('api-token').value = '••••••••••••';
+    $('toolbar').style.display = 'block';
   } catch(e) {
     $('conn-dot').className = 'conn-dot err';
-    $('conn-label').textContent = 'Error';
-    setStatus('Error: ' + e.message, 'err');
+    $('conn-label').textContent = 'Error de conexión';
+    $('products-grid').innerHTML = '<div class="state-msg"><div class="icon">⚠</div><h3>No se pudo cargar el catálogo</h3><p>' + e.message + '</p></div>';
   }
-  $('btn-conectar').innerHTML = 'Conectar';
-  $('btn-conectar').disabled = false;
 }
+
+window.addEventListener('DOMContentLoaded', conectar);
 
 async function cargarReferencias() {
   try { references = await fetchProxy('/ventas/referencias'); } catch(e) { references = null; }

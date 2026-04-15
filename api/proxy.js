@@ -11,8 +11,8 @@ module.exports = async (req, res) => {
 
   if (req.method === 'OPTIONS') return res.status(204).end();
 
-  const token = req.headers['x-api-token'];
-  if (!token) return res.status(401).json({ error: 'Token requerido' });
+  const token = process.env.GESTIONNUBE_TOKEN;
+  if (!token) return res.status(500).json({ error: 'Token no configurado en el servidor' });
 
   const apiPath = req.query._path || '/';
   const qsObj = Object.fromEntries(Object.entries(req.query).filter(([k]) => k !== '_path'));
