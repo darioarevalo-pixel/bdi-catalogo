@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — BDI Catálogo</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F3F4F6; --surface: #FFFFFF; --border: #E5E7EB; --border-strong: #D1D5DB;
+    --text: #111827; --text-muted: #6B7280; --text-hint: #9CA3AF;
+    --accent: #111827; --danger: #DC2626; --success: #16A34A;
+    --radius: 10px; --radius-sm: 6px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); font-size: 15px; min-height: 100vh; }
+
+  /* Login */
+  .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+  .login-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 2rem; width: 100%; max-width: 340px; }
+  .login-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+  .login-sub { font-size: 12px; color: var(--text-muted); margin-bottom: 1.5rem; }
+  .login-box input { width: 100%; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 14px; margin-bottom: 10px; outline: none; }
+  .login-box input:focus { border-color: var(--accent); }
+  .login-box button { width: 100%; padding: 10px; background: var(--accent); color: white; border: none; border-radius: var(--radius-sm); font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .login-err { font-size: 12px; color: var(--danger); margin-top: 8px; display: none; }
+
+  /* Header */
+  .admin-header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 1.5rem; height: 56px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
+  .header-title { font-size: 14px; font-weight: 700; }
+  .header-sub { font-size: 11px; color: var(--text-muted); }
+  .btn-save { padding: 8px 18px; background: var(--accent); color: white; border: none; border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: background 0.2s; }
+  .btn-save:disabled { opacity: 0.5; cursor: default; }
+  .btn-save.saved { background: var(--success); }
+
+  /* Tabs */
+  .tabs { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 1.5rem; display: flex; }
+  .tab-btn { padding: 12px 16px; font-family: inherit; font-size: 13px; font-weight: 500; border: none; background: transparent; cursor: pointer; color: var(--text-muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* Content */
+  .admin-content { max-width: 860px; margin: 0 auto; padding: 1.5rem; }
+
+  /* Toolbar */
+  .admin-toolbar { display: flex; gap: 8px; margin-bottom: 1rem; }
+  .admin-search { flex: 1; padding: 9px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 14px; outline: none; background: var(--surface); }
+  .admin-search:focus { border-color: var(--accent); }
+  .admin-select { padding: 9px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; outline: none; background: var(--surface); cursor: pointer; }
+
+  /* Product rows */
+  .product-row { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 6px; overflow: hidden; }
+  .product-row-header { display: flex; align-items: center; gap: 12px; padding: 10px 14px; }
+  .product-info { flex: 1; min-width: 0; }
+  .product-row-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .product-row.hidden-row .product-row-name { color: var(--text-hint); text-decoration: line-through; }
+  .product-row-cat { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+  .expand-btn { font-size: 12px; color: var(--text-hint); background: var(--bg); border: 1px solid var(--border); cursor: pointer; padding: 4px 10px; border-radius: 20px; white-space: nowrap; font-family: inherit; transition: color 0.12s; }
+  .expand-btn:hover { color: var(--text); border-color: var(--border-strong); }
+
+  /* Toggle */
+  .toggle { width: 36px; height: 20px; border-radius: 10px; background: var(--border-strong); border: none; cursor: pointer; position: relative; flex-shrink: 0; transition: background 0.2s; }
+  .toggle.on { background: var(--success); }
+  .toggle::after { content: ''; position: absolute; left: 2px; top: 2px; width: 16px; height: 16px; border-radius: 50%; background: white; transition: left 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+  .toggle.on::after { left: 18px; }
+
+  /* Variant rows */
+  .variant-rows { border-top: 1px solid var(--border); background: var(--bg); padding: 6px 14px 6px 20px; display: none; }
+  .variant-rows.open { display: block; }
+  .variant-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+  .variant-row:last-child { border-bottom: none; }
+  .variant-row-name { flex: 1; font-size: 12px; color: var(--text); }
+  .variant-row.hidden-var .variant-row-name { color: var(--text-hint); text-decoration: line-through; }
+
+  /* Category rows */
+  .cat-row { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 6px; display: flex; align-items: center; gap: 10px; padding: 10px 14px; }
+  .cat-row-name { flex: 1; font-size: 14px; font-weight: 500; }
+  .arrow-btn { width: 30px; height: 30px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); cursor: pointer; font-size: 15px; display: flex; align-items: center; justify-content: center; transition: background 0.12s; }
+  .arrow-btn:hover:not(:disabled) { background: var(--bg); }
+  .arrow-btn:disabled { opacity: 0.25; cursor: default; }
+
+  .section-note { font-size: 12px; color: var(--text-muted); margin-bottom: 1rem; line-height: 1.5; }
+  .loading-state { text-align: center; padding: 3rem; color: var(--text-muted); font-size: 13px; }
+  .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.4); border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block; vertical-align: middle; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(10px); background: var(--text); color: white; padding: 10px 18px; border-radius: var(--radius); font-size: 13px; font-weight: 500; opacity: 0; transition: opacity 0.2s, transform 0.2s; pointer-events: none; z-index: 500; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.success { background: var(--success); }
+  .toast.error { background: var(--danger); }
+</style>
+</head>
+<body>
+
+<!-- Login -->
+<div class="login-wrap" id="login-screen">
+  <div class="login-box">
+    <div class="login-title">BDI Accesorios</div>
+    <div class="login-sub">Panel de administración del catálogo</div>
+    <input type="password" id="pwd-input" placeholder="Contraseña" />
+    <button id="login-btn" onclick="login()">Ingresar</button>
+    <div class="login-err" id="login-err">Contraseña incorrecta</div>
+  </div>
+</div>
+
+<!-- Admin panel -->
+<div id="admin-panel" style="display:none">
+  <div class="admin-header">
+    <div>
+      <div class="header-title">BDI Accesorios</div>
+      <div class="header-sub">Administrador de catálogo</div>
+    </div>
+    <button class="btn-save" id="btn-save" onclick="guardarConfig()">Guardar cambios</button>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="setTab('products')">Productos</button>
+    <button class="tab-btn" onclick="setTab('categories')">Categorías</button>
+  </div>
+
+  <div class="admin-content">
+    <div id="tab-products">
+      <div class="admin-toolbar">
+        <input class="admin-search" type="text" id="admin-search" placeholder="Buscar producto..." oninput="renderProductList()" />
+        <select class="admin-select" id="admin-cat-filter" onchange="renderProductList()">
+          <option value="">Todas las categorías</option>
+        </select>
+      </div>
+      <div id="products-list"><div class="loading-state">Cargando productos...</div></div>
+    </div>
+
+    <div id="tab-categories" style="display:none">
+      <p class="section-note">Arrastrá las categorías con las flechas para definir el orden en que aparecen en el catálogo.</p>
+      <div id="categories-list"><div class="loading-state">Cargando...</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let allAdminProducts = [];
+let config = { hiddenProducts: [], hiddenVariants: {}, categoryOrder: [] };
+let adminPassword = '';
+
+function $(id) { return document.getElementById(id); }
+
+function showToast(msg, type = '', dur = 2800) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', dur);
+}
+
+$('pwd-input').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+
+async function login() {
+  const pwd = $('pwd-input').value.trim();
+  if (!pwd) return;
+  const btn = $('login-btn');
+  btn.disabled = true;
+  btn.textContent = 'Verificando...';
+  $('login-err').style.display = 'none';
+  try {
+    const r = await fetch('/api/config?verify=1', {
+      headers: { 'x-admin-password': pwd }
+    });
+    if (r.status === 401) {
+      $('login-err').style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Ingresar';
+      return;
+    }
+    config = await r.json();
+    adminPassword = pwd;
+    $('login-screen').style.display = 'none';
+    $('admin-panel').style.display = 'block';
+    await cargarProductos();
+  } catch (e) {
+    showToast('Error de conexión', 'error');
+    btn.disabled = false;
+    btn.textContent = 'Ingresar';
+  }
+}
+
+async function cargarProductos() {
+  const seen = new Set();
+  let all = [];
+  let page = 1;
+  while (true) {
+    const qs = 'per_page=100&include_stock=1&include_variants=1&page=' + page;
+    const r = await fetch('/api/proxy?_path=/productos/obtener&' + qs);
+    const data = await r.json();
+    const raw = Array.isArray(data) ? data : (data.data || data.products || data.items || []);
+    for (const p of raw) {
+      const id = p.id || p.product_id;
+      if (seen.has(id) || p.active === 0) continue;
+      seen.add(id);
+      all.push(p);
+    }
+    const lastPage = data.meta ? (data.meta.last_page || 1) : 1;
+    if (page >= lastPage || raw.length < 100) break;
+    page++;
+  }
+  allAdminProducts = all;
+
+  // Si no hay orden de categorías guardado, inicializar con todas las del catálogo
+  const allCats = [...new Set(all.map(p => p.category || '').filter(Boolean).sort())];
+  if (!config.categoryOrder || !config.categoryOrder.length) {
+    config.categoryOrder = allCats;
+  } else {
+    // Agregar categorías nuevas que no estén en el orden guardado
+    const newCats = allCats.filter(c => !config.categoryOrder.includes(c));
+    config.categoryOrder = [...config.categoryOrder, ...newCats];
+  }
+
+  // Populate category filter
+  const sel = $('admin-cat-filter');
+  allCats.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c; opt.textContent = c;
+    sel.appendChild(opt);
+  });
+
+  renderProductList();
+  renderCategoryList();
+}
+
+function isHidden(id) {
+  return config.hiddenProducts.some(x => x == id);
+}
+
+function isVariantHidden(productId, variantId) {
+  const list = (config.hiddenVariants || {})[String(productId)] || [];
+  return list.some(x => x == variantId);
+}
+
+function toggleProduct(id) {
+  const idx = config.hiddenProducts.findIndex(x => x == id);
+  if (idx >= 0) {
+    config.hiddenProducts.splice(idx, 1);
+  } else {
+    config.hiddenProducts.push(parseInt(id));
+  }
+  const hidden = isHidden(id);
+  $('prod-row-' + id)?.classList.toggle('hidden-row', hidden);
+  const tog = $('prod-toggle-' + id);
+  if (tog) tog.classList.toggle('on', !hidden);
+}
+
+function toggleVariant(productId, variantId) {
+  if (!config.hiddenVariants) config.hiddenVariants = {};
+  const pid = String(productId);
+  if (!config.hiddenVariants[pid]) config.hiddenVariants[pid] = [];
+  const list = config.hiddenVariants[pid];
+  const idx = list.findIndex(x => x == variantId);
+  if (idx >= 0) list.splice(idx, 1);
+  else list.push(parseInt(variantId));
+  if (!list.length) delete config.hiddenVariants[pid];
+
+  const hidden = isVariantHidden(productId, variantId);
+  $('var-row-' + productId + '-' + variantId)?.classList.toggle('hidden-var', hidden);
+  const tog = $('var-tog-' + productId + '-' + variantId);
+  if (tog) tog.classList.toggle('on', !hidden);
+}
+
+function toggleExpand(id) {
+  const rows = $('var-rows-' + id);
+  const btn = $('expand-btn-' + id);
+  if (!rows) return;
+  const open = rows.classList.toggle('open');
+  btn.textContent = open ? 'Ocultar' : 'Ver variantes';
+}
+
+function renderProductList() {
+  const q = ($('admin-search')?.value || '').toLowerCase();
+  const cat = $('admin-cat-filter')?.value || '';
+  const prods = allAdminProducts.filter(p => {
+    const name = (p.name || p.nombre || '').toLowerCase();
+    const code = (p.code || p.sku || '').toLowerCase();
+    const pcat = p.category || '';
+    return (!q || name.includes(q) || code.includes(q)) && (!cat || pcat === cat);
+  });
+
+  const container = $('products-list');
+  if (!prods.length) {
+    container.innerHTML = '<div class="loading-state">Sin resultados</div>';
+    return;
+  }
+
+  container.innerHTML = prods.map(p => {
+    const id = p.id || p.product_id;
+    const name = p.name || p.nombre || 'Sin nombre';
+    const pcat = p.category || '';
+    const variants = p.variantes || [];
+    const hidden = isHidden(id);
+
+    const varRows = variants.map(v => {
+      const vh = isVariantHidden(id, v.size_id);
+      return '<div class="variant-row' + (vh ? ' hidden-var' : '') + '" id="var-row-' + id + '-' + v.size_id + '">' +
+        '<button class="toggle' + (vh ? '' : ' on') + '" id="var-tog-' + id + '-' + v.size_id + '" onclick="toggleVariant(' + id + ',' + v.size_id + ')"></button>' +
+        '<div class="variant-row-name">' + v.size + '</div>' +
+        '</div>';
+    }).join('');
+
+    return '<div class="product-row' + (hidden ? ' hidden-row' : '') + '" id="prod-row-' + id + '">' +
+      '<div class="product-row-header">' +
+        '<button class="toggle' + (hidden ? '' : ' on') + '" id="prod-toggle-' + id + '" onclick="toggleProduct(' + id + ')"></button>' +
+        '<div class="product-info">' +
+          '<div class="product-row-name">' + name + '</div>' +
+          (pcat ? '<div class="product-row-cat">' + pcat + '</div>' : '') +
+        '</div>' +
+        (variants.length ? '<button class="expand-btn" id="expand-btn-' + id + '" onclick="toggleExpand(' + id + ')">Ver variantes</button>' : '') +
+      '</div>' +
+      (variants.length ? '<div class="variant-rows" id="var-rows-' + id + '">' + varRows + '</div>' : '') +
+    '</div>';
+  }).join('');
+}
+
+function renderCategoryList() {
+  const cats = config.categoryOrder;
+  const container = $('categories-list');
+  if (!cats || !cats.length) {
+    container.innerHTML = '<div class="loading-state">No hay categorías</div>';
+    return;
+  }
+  container.innerHTML = cats.map((cat, idx) =>
+    '<div class="cat-row">' +
+      '<div class="cat-row-name">' + cat + '</div>' +
+      '<button class="arrow-btn" onclick="moveCategory(' + idx + ',-1)"' + (idx === 0 ? ' disabled' : '') + '>↑</button>' +
+      '<button class="arrow-btn" onclick="moveCategory(' + idx + ',1)"' + (idx === cats.length - 1 ? ' disabled' : '') + '>↓</button>' +
+    '</div>'
+  ).join('');
+}
+
+function moveCategory(idx, dir) {
+  const arr = config.categoryOrder;
+  const newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= arr.length) return;
+  [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
+  renderCategoryList();
+}
+
+function setTab(tab) {
+  $('tab-products').style.display = tab === 'products' ? 'block' : 'none';
+  $('tab-categories').style.display = tab === 'categories' ? 'block' : 'none';
+  document.querySelectorAll('.tab-btn').forEach((btn, i) => {
+    btn.classList.toggle('active', (i === 0) === (tab === 'products'));
+  });
+}
+
+async function guardarConfig() {
+  const btn = $('btn-save');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Guardando...';
+  try {
+    const r = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+      body: JSON.stringify(config)
+    });
+    if (!r.ok) {
+      const err = await r.json();
+      throw new Error(err.error || 'Error al guardar');
+    }
+    btn.className = 'btn-save saved';
+    btn.innerHTML = '✓ Guardado';
+    showToast('Configuración guardada correctamente', 'success');
+    setTimeout(() => {
+      btn.className = 'btn-save';
+      btn.innerHTML = 'Guardar cambios';
+      btn.disabled = false;
+    }, 2500);
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+    btn.innerHTML = 'Guardar cambios';
+    btn.disabled = false;
+  }
+}
+</script>
+</body>
+</html>

@@ -292,6 +292,7 @@ let cart = {};
 let filtro = 'todos';
 let categoria = 'todas';
 let references = null;
+let adminConfig = { hiddenProducts: [], hiddenVariants: {}, categoryOrder: [] };
 let variantDimsCache = {};
 
 const COLOR_WORDS = ['negro','blanco','rojo','azul','verde','amarillo','rosa','naranja','violeta','gris','plateado','dorado','celeste','bordó','bordo','turquesa','beige','crema','lila','fucsia','marrón','marron','nude'];
@@ -393,9 +394,16 @@ async function fetchProxy(path, opts={}) {
   return res.json();
 }
 
+async function cargarConfig() {
+  try {
+    const r = await fetch('/api/config');
+    if (r.ok) adminConfig = await r.json();
+  } catch(e) {}
+}
+
 async function conectar() {
   try {
-    await cargarReferencias();
+    await Promise.all([cargarReferencias(), cargarConfig()]);
     await cargarProductos();
     $('conn-dot').className = 'conn-dot ok';
     $('conn-label').textContent = allProducts.length + ' productos';
@@ -414,7 +422,16 @@ async function cargarReferencias() {
 }
 
 function renderCatPills() {
-  const cats = ['todas', ...new Set(allProducts.map(p => p.category || '').filter(Boolean).sort())];
+  const rawCats = [...new Set(allProducts.map(p => p.category || '').filter(Boolean))];
+  let orderedCats;
+  if (adminConfig.categoryOrder && adminConfig.categoryOrder.length) {
+    const inOrder = adminConfig.categoryOrder.filter(c => rawCats.includes(c));
+    const rest = rawCats.filter(c => !adminConfig.categoryOrder.includes(c)).sort();
+    orderedCats = [...inOrder, ...rest];
+  } else {
+    orderedCats = rawCats.sort();
+  }
+  const cats = ['todas', ...orderedCats];
   $('cat-pills').innerHTML = cats.map(c =>
     '<button class="cat-pill' + (c === categoria ? ' active' : '') + '" onclick="setCategoria(\'' + c.replace(/'/g,"\\'") + '\')">' +
       (c === 'todas' ? 'Todos los productos' : c) +
@@ -450,6 +467,8 @@ async function cargarProductos() {
     page++;
   }
 
+  // Filtrar productos ocultos por el admin
+  all = all.filter(p => !adminConfig.hiddenProducts.some(hid => hid == (p.id || p.product_id)));
   allProducts = all;
   renderCatPills();
   renderProductos();
@@ -582,7 +601,9 @@ function abrirModal(id) {
   const img = getImagen(p);
   const cat = p.category || '';
   const desc = getDescripcion(p);
+  const hiddenVars = (adminConfig.hiddenVariants || {})[String(id)] || [];
   const variantes = (p.variantes || []).filter(v => {
+    if (hiddenVars.some(hid => hid == v.size_id)) return false;
     const vs = getStockVariante(v);
     return vs === null || vs > 0;
   });

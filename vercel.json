@@ -1,7 +1,9 @@
 {
   "functions": {
-    "api/proxy.js": {
-      "maxDuration": 15
-    }
-  }
+    "api/proxy.js": { "maxDuration": 15 },
+    "api/config.js": { "maxDuration": 10 }
+  },
+  "rewrites": [
+    { "source": "/admin", "destination": "/admin.html" }
+  ]
 }
