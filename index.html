@@ -301,7 +301,7 @@ let cart = {};
 let filtro = 'todos';
 let categoria = 'todas';
 let references = null;
-let adminConfig = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {} };
+let adminConfig = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false };
 let variantDimsCache = {};
 let tnImageMap = {}; // nombre/SKU -> array de imágenes de Tienda Nube
 let modalGallery = [];
@@ -492,6 +492,7 @@ async function cargarProductos() {
   all = all.filter(p => {
     if (adminConfig.hiddenProducts.some(hid => hid == (p.id || p.product_id))) return false;
     if (hiddenCats.includes(p.category || '')) return false;
+    if (adminConfig.hideNoStock && getStockTotal(p) === 0) return false;
     return true;
   });
   allProducts = all;

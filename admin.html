@@ -101,6 +101,10 @@
   .prod-drag-handle:active { cursor: grabbing; }
 
   .section-note { font-size: 12px; color: var(--text-muted); margin-bottom: 1rem; line-height: 1.5; }
+  .setting-row { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px 16px; display: flex; align-items: center; gap: 16px; margin-bottom: 8px; }
+  .setting-info { flex: 1; }
+  .setting-label { font-size: 14px; font-weight: 500; }
+  .setting-desc { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
   .loading-state { text-align: center; padding: 3rem; color: var(--text-muted); font-size: 13px; }
   .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.4); border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block; vertical-align: middle; }
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -136,6 +140,7 @@
   <div class="tabs">
     <button class="tab-btn active" onclick="setTab('products')">Productos</button>
     <button class="tab-btn" onclick="setTab('categories')">Categorías</button>
+    <button class="tab-btn" onclick="setTab('settings')">Configuración</button>
   </div>
 
   <div class="admin-content">
@@ -154,6 +159,16 @@
       <p class="section-note">Arrastrá las categorías para definir el orden en que aparecen. Dentro de cada una podés ordenar los productos de esa categoría específica.</p>
       <div id="categories-list"><div class="loading-state">Cargando...</div></div>
     </div>
+
+    <div id="tab-settings" style="display:none">
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label">Ocultar productos sin stock</div>
+          <div class="setting-desc">Los productos sin stock disponible no se muestran en el catálogo.</div>
+        </div>
+        <button class="toggle" id="toggle-hide-no-stock" onclick="toggleSetting('hideNoStock')"></button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -162,7 +177,7 @@
 <script>
 let allAdminProducts = [];
 const ALL_KEY = '__todas__';
-let config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {} };
+let config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false };
 let adminPassword = '';
 
 function $(id) { return document.getElementById(id); }
@@ -194,7 +209,7 @@ async function login() {
       return;
     }
     const loaded = await r.json();
-    config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, ...loaded };
+    config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, ...loaded };
     adminPassword = pwd;
     $('login-screen').style.display = 'none';
     $('admin-panel').style.display = 'block';
@@ -570,9 +585,21 @@ function prodDrop(e, cat, catIdx, toProdIdx) {
 function setTab(tab) {
   $('tab-products').style.display = tab === 'products' ? 'block' : 'none';
   $('tab-categories').style.display = tab === 'categories' ? 'block' : 'none';
+  $('tab-settings').style.display = tab === 'settings' ? 'block' : 'none';
   document.querySelectorAll('.tab-btn').forEach((btn, i) => {
-    btn.classList.toggle('active', (i === 0) === (tab === 'products'));
+    btn.classList.toggle('active', ['products','categories','settings'][i] === tab);
   });
+  if (tab === 'settings') renderSettings();
+}
+
+function renderSettings() {
+  const tog = $('toggle-hide-no-stock');
+  if (tog) tog.classList.toggle('on', !!(config.hideNoStock));
+}
+
+function toggleSetting(key) {
+  config[key] = !config[key];
+  renderSettings();
 }
 
 async function guardarConfig() {
