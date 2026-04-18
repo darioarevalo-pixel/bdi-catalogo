@@ -542,7 +542,7 @@ function applyCustomProductOrder(prods, cat) {
   if (!orderMap.length) return prods;
   const indexed = prods.map(p => {
     const id = String(p.id || p.product_id);
-    const pos = orderMap.indexOf(id);
+    const pos = orderMap.findIndex(oid => String(oid) === id);
     return { p, pos: pos === -1 ? 9999 : pos };
   });
   indexed.sort((a, b) => a.pos - b.pos);

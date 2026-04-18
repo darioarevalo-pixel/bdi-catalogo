@@ -72,22 +72,28 @@
   .variant-row.hidden-var .variant-row-name { color: var(--text-hint); text-decoration: line-through; }
 
   /* Category rows */
-  .cat-section { margin-bottom: 8px; }
+  .cat-section { margin-bottom: 6px; }
+  .cat-section.drag-over > .cat-row { border-color: var(--accent); background: #f8f8f8; }
+  .cat-section.dragging { opacity: 0.45; }
   .cat-row { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); display: flex; align-items: center; gap: 10px; padding: 10px 14px; }
   .cat-section .cat-row { border-radius: var(--radius-sm) var(--radius-sm) 0 0; border-bottom: none; margin-bottom: 0; }
   .cat-section .cat-row.collapsed { border-radius: var(--radius-sm); border-bottom: 1px solid var(--border); }
   .cat-row-name { flex: 1; font-size: 14px; font-weight: 500; }
   .cat-count { font-size: 11px; color: var(--text-hint); font-weight: 400; }
-  .arrow-btn { width: 30px; height: 30px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); cursor: pointer; font-size: 15px; display: flex; align-items: center; justify-content: center; transition: background 0.12s; }
-  .arrow-btn:hover:not(:disabled) { background: var(--bg); }
-  .arrow-btn:disabled { opacity: 0.25; cursor: default; }
+  .drag-handle { cursor: grab; color: var(--text-hint); font-size: 16px; padding: 2px 4px; user-select: none; flex-shrink: 0; }
+  .drag-handle:active { cursor: grabbing; }
 
   /* Product order within category */
   .cat-products { border: 1px solid var(--border); border-top: none; border-radius: 0 0 var(--radius-sm) var(--radius-sm); background: var(--bg); padding: 6px 10px 10px; }
-  .cat-prod-row { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px; margin-bottom: 4px; }
+  .cat-prod-row { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px; margin-bottom: 4px; cursor: grab; transition: box-shadow 0.15s, opacity 0.15s; }
   .cat-prod-row:last-child { margin-bottom: 0; }
+  .cat-prod-row:active { cursor: grabbing; }
+  .cat-prod-row.dragging { opacity: 0.4; box-shadow: none; }
+  .cat-prod-row.drag-over { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(17,24,39,0.15); }
   .cat-prod-name { flex: 1; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .cat-prod-pos { font-size: 11px; color: var(--text-hint); font-family: monospace; flex-shrink: 0; width: 20px; text-align: right; }
+  .prod-drag-handle { color: var(--text-hint); font-size: 14px; cursor: grab; user-select: none; flex-shrink: 0; }
+  .prod-drag-handle:active { cursor: grabbing; }
 
   .section-note { font-size: 12px; color: var(--text-muted); margin-bottom: 1rem; line-height: 1.5; }
   .loading-state { text-align: center; padding: 3rem; color: var(--text-muted); font-size: 13px; }
@@ -139,7 +145,7 @@
     </div>
 
     <div id="tab-categories" style="display:none">
-      <p class="section-note">Arrastrá las categorías con las flechas para definir el orden en que aparecen en el catálogo.</p>
+      <p class="section-note">Arrastrá las categorías para definir el orden en que aparecen. Dentro de cada categoría podés también arrastrar los productos.</p>
       <div id="categories-list"><div class="loading-state">Cargando...</div></div>
     </div>
   </div>
@@ -327,6 +333,11 @@ function renderProductList() {
   }).join('');
 }
 
+// ── Drag state ──────────────────────────────────────────────
+let dragCatIdx = null;
+let dragProdKey = null; // "catName::prodIdx"
+
+// ── Category list ────────────────────────────────────────────
 function renderCategoryList() {
   const cats = config.categoryOrder;
   const container = $('categories-list');
@@ -337,23 +348,46 @@ function renderCategoryList() {
   container.innerHTML = cats.map((cat, idx) => {
     const count = allAdminProducts.filter(p => (p.category || '') === cat && !isHidden(p.id || p.product_id)).length;
     const catEsc = cat.replace(/'/g, "\\'");
-    return '<div class="cat-section" id="cat-section-' + idx + '">' +
+    return '<div class="cat-section" id="cat-section-' + idx + '" draggable="true" ' +
+        'ondragstart="catDragStart(event,' + idx + ')" ' +
+        'ondragover="catDragOver(event,' + idx + ')" ' +
+        'ondragleave="catDragLeave(event,' + idx + ')" ' +
+        'ondrop="catDrop(event,' + idx + ')">' +
       '<div class="cat-row collapsed" id="cat-row-' + idx + '">' +
+        '<span class="drag-handle" title="Arrastrar">⠿</span>' +
         '<div class="cat-row-name">' + cat + ' <span class="cat-count">(' + count + ' productos)</span></div>' +
         '<button class="expand-btn" id="cat-expand-btn-' + idx + '" onclick="toggleCatProducts(\'' + catEsc + '\',' + idx + ')">Ordenar productos</button>' +
-        '<button class="arrow-btn" onclick="moveCategory(' + idx + ',-1)"' + (idx === 0 ? ' disabled' : '') + '>↑</button>' +
-        '<button class="arrow-btn" onclick="moveCategory(' + idx + ',1)"' + (idx === cats.length - 1 ? ' disabled' : '') + '>↓</button>' +
       '</div>' +
       '<div class="cat-products" id="cat-prods-' + idx + '" style="display:none"></div>' +
     '</div>';
   }).join('');
 }
 
-function moveCategory(idx, dir) {
+function catDragStart(e, idx) {
+  dragCatIdx = idx;
+  e.dataTransfer.effectAllowed = 'move';
+  setTimeout(() => $('cat-section-' + idx)?.classList.add('dragging'), 0);
+}
+function catDragOver(e, idx) {
+  e.preventDefault();
+  if (dragCatIdx === null || dragCatIdx === idx) return;
+  e.dataTransfer.dropEffect = 'move';
+  document.querySelectorAll('.cat-section').forEach(el => el.classList.remove('drag-over'));
+  $('cat-section-' + idx)?.classList.add('drag-over');
+}
+function catDragLeave(e, idx) {
+  if (!e.currentTarget.contains(e.relatedTarget)) {
+    $('cat-section-' + idx)?.classList.remove('drag-over');
+  }
+}
+function catDrop(e, toIdx) {
+  e.preventDefault();
+  document.querySelectorAll('.cat-section').forEach(el => { el.classList.remove('drag-over'); el.classList.remove('dragging'); });
+  if (dragCatIdx === null || dragCatIdx === toIdx) { dragCatIdx = null; return; }
   const arr = config.categoryOrder;
-  const newIdx = idx + dir;
-  if (newIdx < 0 || newIdx >= arr.length) return;
-  [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
+  const [moved] = arr.splice(dragCatIdx, 1);
+  arr.splice(toIdx, 0, moved);
+  dragCatIdx = null;
   renderCategoryList();
 }
 
@@ -366,9 +400,10 @@ function toggleCatProducts(cat, idx) {
   el.style.display = isOpen ? 'block' : 'none';
   row?.classList.toggle('collapsed', !isOpen);
   btn.textContent = isOpen ? 'Cerrar' : 'Ordenar productos';
-  if (isOpen) el.innerHTML = renderCatProductRows(cat, idx);
+  if (isOpen) renderCatProductRows(cat, idx);
 }
 
+// ── Product order within category ───────────────────────────
 function getOrderedCatProducts(cat) {
   const prods = allAdminProducts.filter(p => (p.category || '') === cat && !isHidden(p.id || p.product_id));
   const order = (config.productOrder || {})[cat] || [];
@@ -380,32 +415,64 @@ function getOrderedCatProducts(cat) {
   });
 }
 
-function renderCatProductRows(cat, idx) {
+function renderCatProductRows(cat, catIdx) {
   const prods = getOrderedCatProducts(cat);
-  if (!prods.length) return '<div style="padding:10px;font-size:13px;color:var(--text-muted)">No hay productos visibles en esta categoría.</div>';
-  const catEsc = cat.replace(/'/g, "\\'");
-  return prods.map((p, i) => {
-    const id = p.id || p.product_id;
+  const el = $('cat-prods-' + catIdx);
+  if (!el) return;
+  if (!prods.length) {
+    el.innerHTML = '<div style="padding:10px;font-size:13px;color:var(--text-muted)">No hay productos visibles en esta categoría.</div>';
+    return;
+  }
+  el.innerHTML = prods.map((p, i) => {
     const name = p.name || p.nombre || 'Sin nombre';
-    return '<div class="cat-prod-row">' +
+    const catEsc = cat.replace(/'/g, "\\'");
+    return '<div class="cat-prod-row" draggable="true" ' +
+        'ondragstart="prodDragStart(event,\'' + catEsc + '\',' + catIdx + ',' + i + ')" ' +
+        'ondragover="prodDragOver(event,\'' + catEsc + '\',' + catIdx + ',' + i + ')" ' +
+        'ondragleave="prodDragLeave(event,' + catIdx + ',' + i + ')" ' +
+        'ondrop="prodDrop(event,\'' + catEsc + '\',' + catIdx + ',' + i + ')">' +
+      '<span class="prod-drag-handle" title="Arrastrar">⠿</span>' +
       '<div class="cat-prod-pos">' + (i + 1) + '</div>' +
       '<div class="cat-prod-name">' + name + '</div>' +
-      '<button class="arrow-btn" onclick="moveCatProduct(\'' + catEsc + '\',' + idx + ',' + i + ',-1)"' + (i === 0 ? ' disabled' : '') + '>↑</button>' +
-      '<button class="arrow-btn" onclick="moveCatProduct(\'' + catEsc + '\',' + idx + ',' + i + ',1)"' + (i === prods.length - 1 ? ' disabled' : '') + '>↓</button>' +
     '</div>';
   }).join('');
 }
 
-function moveCatProduct(cat, catIdx, prodIdx, dir) {
+let dragProdFrom = null; // { cat, catIdx, prodIdx }
+
+function prodDragStart(e, cat, catIdx, prodIdx) {
+  dragProdFrom = { cat, catIdx, prodIdx };
+  e.dataTransfer.effectAllowed = 'move';
+  setTimeout(() => {
+    const rows = $('cat-prods-' + catIdx)?.querySelectorAll('.cat-prod-row');
+    if (rows) rows[prodIdx]?.classList.add('dragging');
+  }, 0);
+}
+function prodDragOver(e, cat, catIdx, prodIdx) {
+  e.preventDefault();
+  if (!dragProdFrom || dragProdFrom.prodIdx === prodIdx) return;
+  e.dataTransfer.dropEffect = 'move';
+  const rows = $('cat-prods-' + catIdx)?.querySelectorAll('.cat-prod-row');
+  if (rows) rows.forEach((r, i) => r.classList.toggle('drag-over', i === prodIdx));
+}
+function prodDragLeave(e, catIdx, prodIdx) {
+  if (!e.currentTarget.contains(e.relatedTarget)) {
+    e.currentTarget.classList.remove('drag-over');
+  }
+}
+function prodDrop(e, cat, catIdx, toProdIdx) {
+  e.preventDefault();
+  const rows = $('cat-prods-' + catIdx)?.querySelectorAll('.cat-prod-row');
+  if (rows) rows.forEach(r => { r.classList.remove('drag-over'); r.classList.remove('dragging'); });
+  if (!dragProdFrom || dragProdFrom.prodIdx === toProdIdx) { dragProdFrom = null; return; }
   if (!config.productOrder) config.productOrder = {};
   const prods = getOrderedCatProducts(cat);
-  const newIdx = prodIdx + dir;
-  if (newIdx < 0 || newIdx >= prods.length) return;
-  const ids = prods.map(p => parseInt(p.id || p.product_id));
-  [ids[prodIdx], ids[newIdx]] = [ids[newIdx], ids[prodIdx]];
+  const ids = prods.map(p => String(p.id || p.product_id));
+  const [moved] = ids.splice(dragProdFrom.prodIdx, 1);
+  ids.splice(toProdIdx, 0, moved);
   config.productOrder[cat] = ids;
-  const el = $('cat-prods-' + catIdx);
-  if (el) el.innerHTML = renderCatProductRows(cat, catIdx);
+  dragProdFrom = null;
+  renderCatProductRows(cat, catIdx);
 }
 
 function setTab(tab) {
