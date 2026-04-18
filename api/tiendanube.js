@@ -32,17 +32,17 @@ module.exports = async (req, res) => {
       page++;
     }
 
-    // Construir mapa nombre_normalizado -> imagen principal
+    // Construir mapa nombre_normalizado -> array de imágenes
     const imgMap = {};
     for (const p of all) {
-      const img = p.images?.[0]?.src || null;
-      if (!img) continue;
+      const imgs = (p.images || []).map(i => i.src).filter(Boolean);
+      if (!imgs.length) continue;
       const nombre = (p.name?.es || p.name?.pt || Object.values(p.name || {})[0] || '').trim().toLowerCase();
-      if (nombre) imgMap[nombre] = img;
+      if (nombre) imgMap[nombre] = imgs;
       // También indexar por SKU si existe en alguna variante
       if (Array.isArray(p.variants)) {
         for (const v of p.variants) {
-          if (v.sku) imgMap[v.sku.trim().toLowerCase()] = img;
+          if (v.sku) imgMap[v.sku.trim().toLowerCase()] = imgs;
         }
       }
     }
