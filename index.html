@@ -531,11 +531,25 @@ function getPrecio(p) {
 }
 
 function getImagen(p) {
-  // Primero intentar desde Tienda Nube por SKU o nombre
+  // Primero intentar desde Tienda Nube por SKU, nombre exacto, o nombre parcial
   const sku = (p.code || p.sku || p.codigo || '').trim().toLowerCase();
   if (sku && tnImageMap[sku]) return tnImageMap[sku];
   const nombre = (p.name || p.nombre || p.product_name || '').trim().toLowerCase();
-  if (nombre && tnImageMap[nombre]) return tnImageMap[nombre];
+  if (nombre) {
+    if (tnImageMap[nombre]) return tnImageMap[nombre];
+    // Matching parcial: buscar el nombre de TN cuyos palabras estén todas en el nombre de GN
+    // Preferir el match más largo (más palabras = más específico)
+    const gnWords = nombre.split(/\s+/);
+    let bestMatch = null, bestLen = 0;
+    for (const tnNombre of Object.keys(tnImageMap)) {
+      const tnWords = tnNombre.split(/\s+/);
+      if (tnWords.every(w => gnWords.includes(w)) && tnWords.length > bestLen) {
+        bestMatch = tnNombre;
+        bestLen = tnWords.length;
+      }
+    }
+    if (bestMatch) return tnImageMap[bestMatch];
+  }
 
   // Fallback: campos propios de Gestión Nube
   if (p.image_url) return p.image_url;
