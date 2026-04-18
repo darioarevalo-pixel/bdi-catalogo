@@ -83,6 +83,7 @@
   .cat-section .cat-row { border-radius: var(--radius-sm) var(--radius-sm) 0 0; border-bottom: none; margin-bottom: 0; }
   .cat-section .cat-row.collapsed { border-radius: var(--radius-sm); border-bottom: 1px solid var(--border); }
   .cat-row-name { flex: 1; font-size: 14px; font-weight: 500; }
+  .cat-name-hidden { color: var(--text-hint); text-decoration: line-through; }
   .cat-count { font-size: 11px; color: var(--text-hint); font-weight: 400; }
   .drag-handle { cursor: grab; color: var(--text-hint); font-size: 16px; padding: 2px 4px; user-select: none; flex-shrink: 0; }
   .drag-handle:active { cursor: grabbing; }
@@ -161,7 +162,7 @@
 <script>
 let allAdminProducts = [];
 const ALL_KEY = '__todas__';
-let config = { hiddenProducts: [], hiddenVariants: {}, categoryOrder: [], productOrder: {} };
+let config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {} };
 let adminPassword = '';
 
 function $(id) { return document.getElementById(id); }
@@ -193,7 +194,7 @@ async function login() {
       return;
     }
     const loaded = await r.json();
-    config = { hiddenProducts: [], hiddenVariants: {}, categoryOrder: [], productOrder: {}, ...loaded };
+    config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, ...loaded };
     adminPassword = pwd;
     $('login-screen').style.display = 'none';
     $('admin-panel').style.display = 'block';
@@ -250,6 +251,18 @@ async function cargarProductos() {
 
 function isHidden(id) {
   return config.hiddenProducts.some(x => x == id);
+}
+
+function isCatHidden(cat) {
+  return (config.hiddenCategories || []).includes(cat);
+}
+
+function toggleCategory(cat) {
+  if (!config.hiddenCategories) config.hiddenCategories = [];
+  const idx = config.hiddenCategories.indexOf(cat);
+  if (idx >= 0) config.hiddenCategories.splice(idx, 1);
+  else config.hiddenCategories.push(cat);
+  renderCategoryList();
 }
 
 function isVariantHidden(productId, variantId) {
@@ -425,14 +438,16 @@ function renderCategoryList() {
   container.innerHTML = cats.map((cat, idx) => {
     const count = allAdminProducts.filter(p => (p.category || '') === cat && !isHidden(p.id || p.product_id)).length;
     const catEsc = cat.replace(/'/g, "\\'");
-    return '<div class="cat-section" id="cat-section-' + idx + '" draggable="true" ' +
+    const hidden = isCatHidden(cat);
+    return '<div class="cat-section' + (hidden ? ' hidden-cat' : '') + '" id="cat-section-' + idx + '" draggable="true" ' +
         'ondragstart="catDragStart(event,' + idx + ')" ' +
         'ondragover="catDragOver(event,' + idx + ')" ' +
         'ondragleave="catDragLeave(event,' + idx + ')" ' +
         'ondrop="catDrop(event,' + idx + ')">' +
       '<div class="cat-row collapsed" id="cat-row-' + idx + '">' +
         '<span class="drag-handle" title="Arrastrar">⠿</span>' +
-        '<div class="cat-row-name">' + cat + ' <span class="cat-count">(' + count + ' productos)</span></div>' +
+        '<button class="toggle' + (hidden ? '' : ' on') + '" onclick="toggleCategory(\'' + catEsc + '\')"></button>' +
+        '<div class="cat-row-name' + (hidden ? ' cat-name-hidden' : '') + '">' + cat + ' <span class="cat-count">(' + count + ' productos)</span></div>' +
         '<button class="expand-btn" id="cat-expand-btn-' + idx + '" onclick="toggleCatProducts(\'' + catEsc + '\',' + idx + ')">Ordenar productos</button>' +
       '</div>' +
       '<div class="cat-products" id="cat-prods-' + idx + '" style="display:none"></div>' +

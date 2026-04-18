@@ -293,7 +293,7 @@ let cart = {};
 let filtro = 'todos';
 let categoria = 'todas';
 let references = null;
-let adminConfig = { hiddenProducts: [], hiddenVariants: {}, categoryOrder: [], productOrder: {} };
+let adminConfig = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {} };
 let variantDimsCache = {};
 
 const COLOR_WORDS = ['negro','blanco','rojo','azul','verde','amarillo','rosa','naranja','violeta','gris','plateado','dorado','celeste','bordó','bordo','turquesa','beige','crema','lila','fucsia','marrón','marron','nude'];
@@ -423,7 +423,9 @@ async function cargarReferencias() {
 }
 
 function renderCatPills() {
-  const rawCats = [...new Set(allProducts.map(p => p.category || '').filter(Boolean))];
+  const hiddenCats = adminConfig.hiddenCategories || [];
+  const rawCats = [...new Set(allProducts.map(p => p.category || '').filter(Boolean))]
+    .filter(c => !hiddenCats.includes(c));
   let orderedCats;
   if (adminConfig.categoryOrder && adminConfig.categoryOrder.length) {
     const inOrder = adminConfig.categoryOrder.filter(c => rawCats.includes(c));
@@ -468,8 +470,13 @@ async function cargarProductos() {
     page++;
   }
 
-  // Filtrar productos ocultos por el admin
-  all = all.filter(p => !adminConfig.hiddenProducts.some(hid => hid == (p.id || p.product_id)));
+  // Filtrar productos y categorías ocultos por el admin
+  const hiddenCats = adminConfig.hiddenCategories || [];
+  all = all.filter(p => {
+    if (adminConfig.hiddenProducts.some(hid => hid == (p.id || p.product_id))) return false;
+    if (hiddenCats.includes(p.category || '')) return false;
+    return true;
+  });
   allProducts = all;
   renderCatPills();
   renderProductos();
