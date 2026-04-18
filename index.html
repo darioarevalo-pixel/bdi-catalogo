@@ -740,7 +740,6 @@ function chQty(cartKey, productId, nombre, precio, sizeId, varNombre, img, d) {
 
   if (el) el.value = newQty;
   updateCartUI();
-  renderProductos();
 }
 
 function renderGallery(idx, alt) {
@@ -928,7 +927,6 @@ function removeCart(id) {
   delete cart[id];
   updateCartUI();
   renderCartItems();
-  renderProductos();
 }
 
 function updateCartUI() {
