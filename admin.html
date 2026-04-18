@@ -145,7 +145,19 @@
     </div>
 
     <div id="tab-categories" style="display:none">
-      <p class="section-note">Arrastrá las categorías para definir el orden en que aparecen. Dentro de cada categoría podés también arrastrar los productos.</p>
+      <p class="section-note">Arrastrá los productos en "Todas las categorías" para definir el orden global. También podés ordenar por categoría por separado.</p>
+
+      <!-- Sección: orden global (Todas) -->
+      <div class="cat-section" style="margin-bottom:16px">
+        <div class="cat-row collapsed" id="all-prods-row" style="border-radius:var(--radius-sm);border-bottom:1px solid var(--border)">
+          <div class="cat-row-name">Todas las categorías <span class="cat-count" id="all-prods-count"></span></div>
+          <button class="expand-btn" id="all-prods-btn" onclick="toggleAllProds()">Ordenar productos</button>
+        </div>
+        <div class="cat-products" id="all-prods-list" style="display:none"></div>
+      </div>
+
+      <!-- Sección: orden por categoría -->
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;font-weight:500;text-transform:uppercase;letter-spacing:0.04em">Orden de categorías</div>
       <div id="categories-list"><div class="loading-state">Cargando...</div></div>
     </div>
   </div>
@@ -240,6 +252,9 @@ async function cargarProductos() {
 
   renderProductList();
   renderCategoryList();
+  // Actualizar contador del panel "Todas"
+  const countEl = $('all-prods-count');
+  if (countEl) countEl.textContent = '(' + allAdminProducts.filter(p => !isHidden(p.id || p.product_id)).length + ' productos)';
 }
 
 function isHidden(id) {
@@ -331,6 +346,96 @@ function renderProductList() {
       (variants.length ? '<div class="variant-rows" id="var-rows-' + id + '">' + varRows + '</div>' : '') +
     '</div>';
   }).join('');
+}
+
+// ── Orden global (Todas las categorías) ──────────────────────
+const ALL_KEY = '__todas__';
+
+function getOrderedAllProducts() {
+  const visible = allAdminProducts.filter(p => !isHidden(p.id || p.product_id));
+  const order = (config.productOrder || {})[ALL_KEY] || [];
+  if (!order.length) return visible;
+  return [...visible].sort((a, b) => {
+    const ia = order.findIndex(id => String(id) === String(a.id || a.product_id));
+    const ib = order.findIndex(id => String(id) === String(b.id || b.product_id));
+    return (ia >= 0 ? ia : Infinity) - (ib >= 0 ? ib : Infinity);
+  });
+}
+
+function toggleAllProds() {
+  const el = $('all-prods-list');
+  const btn = $('all-prods-btn');
+  const row = $('all-prods-row');
+  const isOpen = el.style.display === 'none';
+  el.style.display = isOpen ? 'block' : 'none';
+  row.style.borderRadius = isOpen ? 'var(--radius-sm) var(--radius-sm) 0 0' : 'var(--radius-sm)';
+  row.style.borderBottom = isOpen ? 'none' : '1px solid var(--border)';
+  btn.textContent = isOpen ? 'Cerrar' : 'Ordenar productos';
+  if (isOpen) renderAllProdRows();
+}
+
+function renderAllProdRows() {
+  const prods = getOrderedAllProducts();
+  const el = $('all-prods-list');
+  const countEl = $('all-prods-count');
+  if (countEl) countEl.textContent = '(' + prods.length + ' productos)';
+  if (!prods.length) {
+    el.innerHTML = '<div style="padding:10px;font-size:13px;color:var(--text-muted)">No hay productos visibles.</div>';
+    return;
+  }
+  el.innerHTML = prods.map((p, i) => {
+    const name = p.name || p.nombre || 'Sin nombre';
+    const cat = p.category || '';
+    return '<div class="cat-prod-row" draggable="true" ' +
+        'ondragstart="allProdDragStart(event,' + i + ')" ' +
+        'ondragover="allProdDragOver(event,' + i + ')" ' +
+        'ondragleave="allProdDragLeave(event)" ' +
+        'ondrop="allProdDrop(event,' + i + ')">' +
+      '<span class="prod-drag-handle" title="Arrastrar">⠿</span>' +
+      '<div class="cat-prod-pos">' + (i + 1) + '</div>' +
+      '<div style="flex:1;min-width:0">' +
+        '<div class="cat-prod-name">' + name + '</div>' +
+        (cat ? '<div style="font-size:11px;color:var(--text-hint);margin-top:1px">' + cat + '</div>' : '') +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+let dragAllFrom = null;
+
+function allProdDragStart(e, idx) {
+  dragAllFrom = idx;
+  e.dataTransfer.effectAllowed = 'move';
+  setTimeout(() => {
+    const rows = $('all-prods-list')?.querySelectorAll('.cat-prod-row');
+    if (rows) rows[idx]?.classList.add('dragging');
+  }, 0);
+}
+function allProdDragOver(e, idx) {
+  e.preventDefault();
+  if (dragAllFrom === null || dragAllFrom === idx) return;
+  e.dataTransfer.dropEffect = 'move';
+  $('all-prods-list')?.querySelectorAll('.cat-prod-row').forEach((r, i) =>
+    r.classList.toggle('drag-over', i === idx));
+}
+function allProdDragLeave(e) {
+  if (!e.currentTarget.contains(e.relatedTarget))
+    e.currentTarget.classList.remove('drag-over');
+}
+function allProdDrop(e, toIdx) {
+  e.preventDefault();
+  $('all-prods-list')?.querySelectorAll('.cat-prod-row').forEach(r => {
+    r.classList.remove('drag-over'); r.classList.remove('dragging');
+  });
+  if (dragAllFrom === null || dragAllFrom === toIdx) { dragAllFrom = null; return; }
+  if (!config.productOrder) config.productOrder = {};
+  const prods = getOrderedAllProducts();
+  const ids = prods.map(p => String(p.id || p.product_id));
+  const [moved] = ids.splice(dragAllFrom, 1);
+  ids.splice(toIdx, 0, moved);
+  config.productOrder[ALL_KEY] = ids;
+  dragAllFrom = null;
+  renderAllProdRows();
 }
 
 // ── Drag state ──────────────────────────────────────────────

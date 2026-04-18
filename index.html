@@ -565,19 +565,24 @@ function renderProductos() {
     if (categoria !== 'todas') {
       prods = applyCustomProductOrder(prods, categoria);
     } else {
-      // When showing all categories, apply per-category ordering
-      const cats = [...new Set(prods.map(p => p.category || ''))];
-      const catOrder = (adminConfig.categoryOrder && adminConfig.categoryOrder.length)
-        ? adminConfig.categoryOrder
-        : cats.sort();
-      const sorted = [];
-      catOrder.forEach(c => {
-        const catProds = prods.filter(p => (p.category || '') === c);
-        sorted.push(...applyCustomProductOrder(catProds, c));
-      });
-      // Append any products without a category
-      prods.filter(p => !p.category).forEach(p => sorted.push(p));
-      prods = sorted;
+      const globalOrder = (adminConfig.productOrder || {})['__todas__'] || [];
+      if (globalOrder.length) {
+        // Use flat global order defined in admin
+        prods = applyCustomProductOrder(prods, '__todas__');
+      } else {
+        // Fallback: group by category order, apply per-category ordering within each group
+        const cats = [...new Set(prods.map(p => p.category || ''))];
+        const catOrder = (adminConfig.categoryOrder && adminConfig.categoryOrder.length)
+          ? adminConfig.categoryOrder
+          : cats.sort();
+        const sorted = [];
+        catOrder.forEach(c => {
+          const catProds = prods.filter(p => (p.category || '') === c);
+          sorted.push(...applyCustomProductOrder(catProds, c));
+        });
+        prods.filter(p => !p.category).forEach(p => sorted.push(p));
+        prods = sorted;
+      }
     }
   } else if (sort === 'stock-desc') prods.sort((a,b) => getStockTotal(b) - getStockTotal(a));
   else if (sort === 'price-asc') prods.sort((a,b) => getPrecio(a) - getPrecio(b));
