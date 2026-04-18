@@ -72,11 +72,22 @@
   .variant-row.hidden-var .variant-row-name { color: var(--text-hint); text-decoration: line-through; }
 
   /* Category rows */
-  .cat-row { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 6px; display: flex; align-items: center; gap: 10px; padding: 10px 14px; }
+  .cat-section { margin-bottom: 8px; }
+  .cat-row { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); display: flex; align-items: center; gap: 10px; padding: 10px 14px; }
+  .cat-section .cat-row { border-radius: var(--radius-sm) var(--radius-sm) 0 0; border-bottom: none; margin-bottom: 0; }
+  .cat-section .cat-row.collapsed { border-radius: var(--radius-sm); border-bottom: 1px solid var(--border); }
   .cat-row-name { flex: 1; font-size: 14px; font-weight: 500; }
+  .cat-count { font-size: 11px; color: var(--text-hint); font-weight: 400; }
   .arrow-btn { width: 30px; height: 30px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); cursor: pointer; font-size: 15px; display: flex; align-items: center; justify-content: center; transition: background 0.12s; }
   .arrow-btn:hover:not(:disabled) { background: var(--bg); }
   .arrow-btn:disabled { opacity: 0.25; cursor: default; }
+
+  /* Product order within category */
+  .cat-products { border: 1px solid var(--border); border-top: none; border-radius: 0 0 var(--radius-sm) var(--radius-sm); background: var(--bg); padding: 6px 10px 10px; }
+  .cat-prod-row { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px; margin-bottom: 4px; }
+  .cat-prod-row:last-child { margin-bottom: 0; }
+  .cat-prod-name { flex: 1; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cat-prod-pos { font-size: 11px; color: var(--text-hint); font-family: monospace; flex-shrink: 0; width: 20px; text-align: right; }
 
   .section-note { font-size: 12px; color: var(--text-muted); margin-bottom: 1rem; line-height: 1.5; }
   .loading-state { text-align: center; padding: 3rem; color: var(--text-muted); font-size: 13px; }
@@ -138,7 +149,7 @@
 
 <script>
 let allAdminProducts = [];
-let config = { hiddenProducts: [], hiddenVariants: {}, categoryOrder: [] };
+let config = { hiddenProducts: [], hiddenVariants: {}, categoryOrder: [], productOrder: {} };
 let adminPassword = '';
 
 function $(id) { return document.getElementById(id); }
@@ -169,7 +180,8 @@ async function login() {
       btn.textContent = 'Ingresar';
       return;
     }
-    config = await r.json();
+    const loaded = await r.json();
+    config = { hiddenProducts: [], hiddenVariants: {}, categoryOrder: [], productOrder: {}, ...loaded };
     adminPassword = pwd;
     $('login-screen').style.display = 'none';
     $('admin-panel').style.display = 'block';
@@ -322,13 +334,19 @@ function renderCategoryList() {
     container.innerHTML = '<div class="loading-state">No hay categorías</div>';
     return;
   }
-  container.innerHTML = cats.map((cat, idx) =>
-    '<div class="cat-row">' +
-      '<div class="cat-row-name">' + cat + '</div>' +
-      '<button class="arrow-btn" onclick="moveCategory(' + idx + ',-1)"' + (idx === 0 ? ' disabled' : '') + '>↑</button>' +
-      '<button class="arrow-btn" onclick="moveCategory(' + idx + ',1)"' + (idx === cats.length - 1 ? ' disabled' : '') + '>↓</button>' +
-    '</div>'
-  ).join('');
+  container.innerHTML = cats.map((cat, idx) => {
+    const count = allAdminProducts.filter(p => (p.category || '') === cat && !isHidden(p.id || p.product_id)).length;
+    const catEsc = cat.replace(/'/g, "\\'");
+    return '<div class="cat-section" id="cat-section-' + idx + '">' +
+      '<div class="cat-row collapsed" id="cat-row-' + idx + '">' +
+        '<div class="cat-row-name">' + cat + ' <span class="cat-count">(' + count + ' productos)</span></div>' +
+        '<button class="expand-btn" id="cat-expand-btn-' + idx + '" onclick="toggleCatProducts(\'' + catEsc + '\',' + idx + ')">Ordenar productos</button>' +
+        '<button class="arrow-btn" onclick="moveCategory(' + idx + ',-1)"' + (idx === 0 ? ' disabled' : '') + '>↑</button>' +
+        '<button class="arrow-btn" onclick="moveCategory(' + idx + ',1)"' + (idx === cats.length - 1 ? ' disabled' : '') + '>↓</button>' +
+      '</div>' +
+      '<div class="cat-products" id="cat-prods-' + idx + '" style="display:none"></div>' +
+    '</div>';
+  }).join('');
 }
 
 function moveCategory(idx, dir) {
@@ -337,6 +355,57 @@ function moveCategory(idx, dir) {
   if (newIdx < 0 || newIdx >= arr.length) return;
   [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
   renderCategoryList();
+}
+
+function toggleCatProducts(cat, idx) {
+  const el = $('cat-prods-' + idx);
+  const btn = $('cat-expand-btn-' + idx);
+  const row = $('cat-row-' + idx);
+  if (!el) return;
+  const isOpen = el.style.display === 'none';
+  el.style.display = isOpen ? 'block' : 'none';
+  row?.classList.toggle('collapsed', !isOpen);
+  btn.textContent = isOpen ? 'Cerrar' : 'Ordenar productos';
+  if (isOpen) el.innerHTML = renderCatProductRows(cat, idx);
+}
+
+function getOrderedCatProducts(cat) {
+  const prods = allAdminProducts.filter(p => (p.category || '') === cat && !isHidden(p.id || p.product_id));
+  const order = (config.productOrder || {})[cat] || [];
+  if (!order.length) return prods;
+  return [...prods].sort((a, b) => {
+    const ia = order.findIndex(id => id == (a.id || a.product_id));
+    const ib = order.findIndex(id => id == (b.id || b.product_id));
+    return (ia >= 0 ? ia : Infinity) - (ib >= 0 ? ib : Infinity);
+  });
+}
+
+function renderCatProductRows(cat, idx) {
+  const prods = getOrderedCatProducts(cat);
+  if (!prods.length) return '<div style="padding:10px;font-size:13px;color:var(--text-muted)">No hay productos visibles en esta categoría.</div>';
+  const catEsc = cat.replace(/'/g, "\\'");
+  return prods.map((p, i) => {
+    const id = p.id || p.product_id;
+    const name = p.name || p.nombre || 'Sin nombre';
+    return '<div class="cat-prod-row">' +
+      '<div class="cat-prod-pos">' + (i + 1) + '</div>' +
+      '<div class="cat-prod-name">' + name + '</div>' +
+      '<button class="arrow-btn" onclick="moveCatProduct(\'' + catEsc + '\',' + idx + ',' + i + ',-1)"' + (i === 0 ? ' disabled' : '') + '>↑</button>' +
+      '<button class="arrow-btn" onclick="moveCatProduct(\'' + catEsc + '\',' + idx + ',' + i + ',1)"' + (i === prods.length - 1 ? ' disabled' : '') + '>↓</button>' +
+    '</div>';
+  }).join('');
+}
+
+function moveCatProduct(cat, catIdx, prodIdx, dir) {
+  if (!config.productOrder) config.productOrder = {};
+  const prods = getOrderedCatProducts(cat);
+  const newIdx = prodIdx + dir;
+  if (newIdx < 0 || newIdx >= prods.length) return;
+  const ids = prods.map(p => parseInt(p.id || p.product_id));
+  [ids[prodIdx], ids[newIdx]] = [ids[newIdx], ids[prodIdx]];
+  config.productOrder[cat] = ids;
+  const el = $('cat-prods-' + catIdx);
+  if (el) el.innerHTML = renderCatProductRows(cat, catIdx);
 }
 
 function setTab(tab) {

@@ -212,6 +212,7 @@
           <input type="text" id="search-input" placeholder="Buscar productos..." oninput="renderProductos()" />
         </div>
         <select class="sort-select" id="sort-select" onchange="renderProductos()" style="display:none">
+          <option value="custom">Orden personalizado</option>
           <option value="stock-desc">Stock: mayor a menor</option>
           <option value="price-asc">Precio: menor a mayor</option>
           <option value="price-desc">Precio: mayor a menor</option>
@@ -292,7 +293,7 @@ let cart = {};
 let filtro = 'todos';
 let categoria = 'todas';
 let references = null;
-let adminConfig = { hiddenProducts: [], hiddenVariants: {}, categoryOrder: [] };
+let adminConfig = { hiddenProducts: [], hiddenVariants: {}, categoryOrder: [], productOrder: {} };
 let variantDimsCache = {};
 
 const COLOR_WORDS = ['negro','blanco','rojo','azul','verde','amarillo','rosa','naranja','violeta','gris','plateado','dorado','celeste','bordó','bordo','turquesa','beige','crema','lila','fucsia','marrón','marron','nude'];
@@ -536,9 +537,21 @@ function formatPrecio(n) {
 }
 
 
+function applyCustomProductOrder(prods, cat) {
+  const orderMap = (adminConfig.productOrder || {})[cat] || [];
+  if (!orderMap.length) return prods;
+  const indexed = prods.map(p => {
+    const id = String(p.id || p.product_id);
+    const pos = orderMap.indexOf(id);
+    return { p, pos: pos === -1 ? 9999 : pos };
+  });
+  indexed.sort((a, b) => a.pos - b.pos);
+  return indexed.map(x => x.p);
+}
+
 function renderProductos() {
   const q = ($('search-input')?.value || '').toLowerCase();
-  const sort = $('sort-select')?.value || 'default';
+  const sort = $('sort-select')?.value || 'custom';
   let prods = allProducts.filter(p => {
     const nombre = (p.name || p.nombre || p.product_name || '').toLowerCase();
     const cod = (p.code || p.sku || p.codigo || '').toLowerCase();
@@ -548,7 +561,25 @@ function renderProductos() {
     const matchCat = categoria === 'todas' || (p.category || '') === categoria;
     return matchQ && matchStock && matchCat;
   });
-  if (sort === 'stock-desc') prods.sort((a,b) => getStockTotal(b) - getStockTotal(a));
+  if (sort === 'custom' || sort === 'default') {
+    if (categoria !== 'todas') {
+      prods = applyCustomProductOrder(prods, categoria);
+    } else {
+      // When showing all categories, apply per-category ordering
+      const cats = [...new Set(prods.map(p => p.category || ''))];
+      const catOrder = (adminConfig.categoryOrder && adminConfig.categoryOrder.length)
+        ? adminConfig.categoryOrder
+        : cats.sort();
+      const sorted = [];
+      catOrder.forEach(c => {
+        const catProds = prods.filter(p => (p.category || '') === c);
+        sorted.push(...applyCustomProductOrder(catProds, c));
+      });
+      // Append any products without a category
+      prods.filter(p => !p.category).forEach(p => sorted.push(p));
+      prods = sorted;
+    }
+  } else if (sort === 'stock-desc') prods.sort((a,b) => getStockTotal(b) - getStockTotal(a));
   else if (sort === 'price-asc') prods.sort((a,b) => getPrecio(a) - getPrecio(b));
   else if (sort === 'price-desc') prods.sort((a,b) => getPrecio(b) - getPrecio(a));
   else if (sort === 'name') prods.sort((a,b) => (a.name||'').localeCompare(b.name||''));
