@@ -295,6 +295,7 @@ let categoria = 'todas';
 let references = null;
 let adminConfig = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {} };
 let variantDimsCache = {};
+let tnImageMap = {}; // SKU -> imagen de Tienda Nube
 
 const COLOR_WORDS = ['negro','blanco','rojo','azul','verde','amarillo','rosa','naranja','violeta','gris','plateado','dorado','celeste','bordó','bordo','turquesa','beige','crema','lila','fucsia','marrón','marron','nude'];
 
@@ -402,9 +403,16 @@ async function cargarConfig() {
   } catch(e) {}
 }
 
+async function cargarImagenesTN() {
+  try {
+    const r = await fetch('/api/tiendanube');
+    if (r.ok) tnImageMap = await r.json();
+  } catch(e) {}
+}
+
 async function conectar() {
   try {
-    await Promise.all([cargarReferencias(), cargarConfig()]);
+    await Promise.all([cargarReferencias(), cargarConfig(), cargarImagenesTN()]);
     await cargarProductos();
     $('conn-dot').className = 'conn-dot ok';
     $('conn-label').textContent = allProducts.length + ' productos';
@@ -523,7 +531,11 @@ function getPrecio(p) {
 }
 
 function getImagen(p) {
-  // Intentamos todos los campos conocidos de Gestión Nube y variantes comunes
+  // Primero intentar desde Tienda Nube usando el SKU
+  const sku = (p.code || p.sku || p.codigo || '').trim().toLowerCase();
+  if (sku && tnImageMap[sku]) return tnImageMap[sku];
+
+  // Fallback: campos propios de Gestión Nube
   if (p.image_url) return p.image_url;
   if (p.imagen_url) return p.imagen_url;
   if (p.imagen) return p.imagen;
