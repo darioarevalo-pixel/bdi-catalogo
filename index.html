@@ -350,16 +350,19 @@ function renderVariantRowsHTML(productId, dims, selectedDim1, nomEsc, precio, im
     const maxAttr = vs !== null ? ' max="' + vs + '"' : '';
     const vnEsc = v.dim2.replace(/'/g,"\\'").replace(/"/g,'&quot;');
     const fullVnEsc = v.size.replace(/'/g,"\\'").replace(/"/g,'&quot;');
-    const inputId = 'q-m-' + productId + '-' + v.size_id;
+    const cartKey = productId + '-' + v.size_id;
+    const currentQty = cart[cartKey]?.qty || 0;
+    const inputId = 'q-m-' + cartKey;
+    const chArgs = '\'' + cartKey + '\',' + productId + ',\'' + nomEsc + '\',' + precio + ',' + v.size_id + ',\'' + fullVnEsc + '\',\'' + imgEsc + '\'';
     return '<div class="modal-variant-row">' +
       '<div class="modal-variant-info">' +
         '<div class="modal-variant-name">' + v.dim2 + '</div>' +
         '<div class="modal-variant-stock ' + sClass + '">' + sTxt + '</div>' +
       '</div>' +
       '<div class="modal-vqty-wrap">' +
-        '<button class="modal-vqty-btn minus" onclick="chQty(\'m-' + productId + '-' + v.size_id + '\',-1)">−</button>' +
-        '<input class="modal-vqty-num" type="number" id="' + inputId + '" value="1" min="1"' + maxAttr + ' />' +
-        '<button class="modal-vqty-btn plus" onclick="addCartVariant(\'' + productId + '\',\'' + nomEsc + '\',' + precio + ',' + v.size_id + ',\'' + fullVnEsc + '\',\'' + imgEsc + '\')">+</button>' +
+        '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1)">−</button>' +
+        '<input class="modal-vqty-num" type="number" id="' + inputId + '" value="' + currentQty + '" min="0"' + maxAttr + ' />' +
+        '<button class="modal-vqty-btn plus" onclick="chQty(' + chArgs + ',1)">+</button>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -671,14 +674,26 @@ function renderProductos() {
   }).join('');
 }
 
-function chQty(id, d) {
-  const el = $('q-' + id);
-  if (!el) return;
-  let v = parseInt(el.value) + d;
-  if (v < 1) v = 1;
-  const max = el.max ? parseInt(el.max) : null;
-  if (max !== null && v > max) v = max;
-  el.value = v;
+// Cambia la cantidad directamente en el carrito y actualiza el input
+function chQty(cartKey, productId, nombre, precio, sizeId, varNombre, img, d) {
+  const current = cart[cartKey]?.qty || 0;
+  const el = $('q-m-' + cartKey);
+  const max = el?.max ? parseInt(el.max) : null;
+  let newQty = current + d;
+  if (newQty < 0) newQty = 0;
+  if (max !== null && newQty > max) newQty = max;
+
+  if (newQty === 0) {
+    delete cart[cartKey];
+  } else if (cart[cartKey]) {
+    cart[cartKey].qty = newQty;
+  } else {
+    cart[cartKey] = { id: parseInt(productId), nombre, varNombre: varNombre||'', precio, qty: newQty, sizeId: sizeId||null, img };
+  }
+
+  if (el) el.value = newQty;
+  updateCartUI();
+  renderProductos();
 }
 
 function renderGallery(idx, alt) {
@@ -787,32 +802,36 @@ function abrirModal(id) {
       '<div class="modal-variant-rows">' +
         variantes.map(v => {
           const vs = getStockVariante(v);
-          const vkey = 'm-' + id + '-' + v.size_id;
+          const cartKey = id + '-' + v.size_id;
           const vnEsc = v.size.replace(/'/g,"\\'").replace(/"/g,'&quot;');
           const pocas = vs !== null && vs < 10;
           const sClass = pocas ? 'low' : 'ok';
           const sTxt = pocas ? 'Últimas ' + vs + 'u' : 'Disponible';
           const maxAttr = vs !== null ? ' max="' + vs + '"' : '';
+          const currentQty = cart[cartKey]?.qty || 0;
+          const chArgs = '\'' + cartKey + '\',' + id + ',\'' + nomEsc + '\',' + precio + ',' + v.size_id + ',\'' + vnEsc + '\',\'' + imgEsc + '\'';
           return '<div class="modal-variant-row">' +
             '<div class="modal-variant-info">' +
               '<div class="modal-variant-name">' + v.size + '</div>' +
               '<div class="modal-variant-stock ' + sClass + '">' + sTxt + '</div>' +
             '</div>' +
             '<div class="modal-vqty-wrap">' +
-              '<button class="modal-vqty-btn minus" onclick="chQty(\'' + vkey + '\',-1)">−</button>' +
-              '<input class="modal-vqty-num" type="number" id="q-' + vkey + '" value="1" min="1"' + maxAttr + ' />' +
-              '<button class="modal-vqty-btn plus" onclick="addCartVariant(\'' + id + '\',\'' + nomEsc + '\',' + precio + ',' + v.size_id + ',\'' + vnEsc + '\',\'' + imgEsc + '\')">+</button>' +
+              '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1)">−</button>' +
+              '<input class="modal-vqty-num" type="number" id="q-m-' + cartKey + '" value="' + currentQty + '" min="0"' + maxAttr + ' />' +
+              '<button class="modal-vqty-btn plus" onclick="chQty(' + chArgs + ',1)">+</button>' +
             '</div>' +
           '</div>';
         }).join('') +
       '</div>';
   } else {
-    const qkey = 'm-' + id;
+    const cartKey = String(id);
+    const currentQty = cart[cartKey]?.qty || 0;
+    const chArgs = '\'' + cartKey + '\',' + id + ',\'' + nomEsc + '\',' + precio + ',null,\'\',\'' + imgEsc + '\'';
     wrap.innerHTML =
       '<div class="modal-no-variants">' +
-        '<button class="modal-vqty-btn minus" onclick="chQty(\'' + qkey + '\',-1)">−</button>' +
-        '<input class="modal-vqty-num" type="number" id="q-' + qkey + '" value="1" min="1" style="margin:0 6px" />' +
-        '<button class="modal-vqty-btn plus" onclick="addCart(\'' + id + '\',\'' + nomEsc + '\',' + precio + ',\'' + imgEsc + '\')">+</button>' +
+        '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1)">−</button>' +
+        '<input class="modal-vqty-num" type="number" id="q-m-' + cartKey + '" value="' + currentQty + '" min="0" style="margin:0 6px" />' +
+        '<button class="modal-vqty-btn plus" onclick="chQty(' + chArgs + ',1)">+</button>' +
         '<span style="font-size:13px;color:var(--text-muted);margin-left:8px">Agregar al pedido</span>' +
       '</div>';
   }
@@ -831,26 +850,6 @@ function getDescripcion(p) {
   return p.description || p.descripcion || p.details || p.detalle || '';
 }
 
-function addCart(id, nombre, precio, img) {
-  const qty = parseInt($('q-m-' + id)?.value || 1);
-  if (cart[id]) cart[id].qty += qty;
-  else cart[id] = { id: parseInt(id), nombre, varNombre: '', precio, qty, sizeId: null, img };
-  $('q-' + id) && ($('q-' + id).value = 1);
-  updateCartUI();
-  showToast(nombre + ' agregado', 'success');
-  renderProductos();
-}
-
-function addCartVariant(id, nombre, precio, sizeId, varNombre, img) {
-  const key = id + '-' + sizeId;
-  const qty = parseInt($('q-m-' + key)?.value || 1);
-  if (cart[key]) cart[key].qty += qty;
-  else cart[key] = { id: parseInt(id), nombre, varNombre, precio, qty, sizeId, img };
-  $('q-' + key) && ($('q-' + key).value = 1);
-  updateCartUI();
-  showToast(varNombre + ' · ' + nombre + ' agregado', 'success');
-  renderProductos();
-}
 
 function removeCart(id) {
   delete cart[id];
