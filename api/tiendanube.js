@@ -18,7 +18,7 @@ module.exports = async (req, res) => {
     let all = [];
     let page = 1;
     while (true) {
-      const r = await fetch(`${API_BASE}/products?per_page=200&page=${page}&fields=id,variants,images`, {
+      const r = await fetch(`${API_BASE}/products?per_page=200&page=${page}&fields=id,name,variants,images`, {
         headers: {
           'Authentication': `bearer ${TOKEN}`,
           'User-Agent': `BDI Catalogo (darioarevalo@arebensrl.com)`,
