@@ -944,7 +944,8 @@ function updateCartUI() {
   } else {
     bar.classList.remove('visible');
   }
-  renderCartItems();
+  // Solo reconstruir el drawer si está abierto
+  if ($('cart-drawer')?.classList.contains('open')) renderCartItems();
 }
 
 function renderCartItems() {
@@ -975,6 +976,7 @@ function renderCartItems() {
 function abrirCarrito() {
   $('overlay').classList.add('open');
   $('cart-drawer').classList.add('open');
+  renderCartItems();
 }
 
 function cerrarCarrito() {
