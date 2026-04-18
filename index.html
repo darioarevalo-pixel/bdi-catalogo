@@ -41,6 +41,14 @@
   .cart-btn { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: var(--accent); border: none; border-radius: var(--radius-sm); font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; color: white; transition: opacity 0.15s; }
   .cart-btn:hover { opacity: 0.9; }
   .cart-badge { background: white; color: var(--accent); font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 20px; min-width: 20px; text-align: center; }
+  /* Barra flotante de resumen */
+  .summary-bar { position: fixed; bottom: 0; left: 0; right: 0; background: var(--accent); color: white; display: none; align-items: center; justify-content: space-between; padding: 14px 20px; z-index: 90; box-shadow: 0 -2px 12px rgba(0,0,0,0.18); }
+  .summary-bar.visible { display: flex; }
+  .summary-bar-left { display: flex; flex-direction: column; gap: 2px; }
+  .summary-bar-units { font-size: 12px; opacity: 0.75; }
+  .summary-bar-total { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
+  .summary-bar-btn { background: white; color: var(--accent); border: none; border-radius: var(--radius-sm); padding: 10px 20px; font-family: inherit; font-size: 14px; font-weight: 700; cursor: pointer; white-space: nowrap; transition: opacity 0.15s; }
+  .summary-bar-btn:hover { opacity: 0.85; }
 
   .layout { display: flex; min-height: calc(100vh - 60px); }
   .token-input-wrap input { width: 100%; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text); background: var(--bg); outline: none; transition: border-color 0.15s; margin-bottom: 8px; }
@@ -306,6 +314,15 @@
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- Barra flotante de resumen -->
+<div class="summary-bar" id="summary-bar">
+  <div class="summary-bar-left">
+    <div class="summary-bar-units" id="summary-units"></div>
+    <div class="summary-bar-total" id="summary-total"></div>
+  </div>
+  <button class="summary-bar-btn" onclick="abrirCarrito()">Ver pedido →</button>
+</div>
 
 <!-- Lightbox -->
 <div class="lightbox" id="lightbox" onclick="closeLightbox(event)">
@@ -916,8 +933,19 @@ function removeCart(id) {
 
 function updateCartUI() {
   const items = Object.values(cart);
-  $('cart-badge').textContent = items.reduce((s,i) => s + i.qty, 0);
-  $('total-amount').textContent = formatPrecio(items.reduce((s,i) => s + i.precio * i.qty, 0));
+  const totalUnits = items.reduce((s,i) => s + i.qty, 0);
+  const totalAmount = items.reduce((s,i) => s + i.precio * i.qty, 0);
+  $('cart-badge').textContent = totalUnits;
+  $('total-amount').textContent = formatPrecio(totalAmount);
+  // Barra flotante
+  const bar = $('summary-bar');
+  if (totalUnits > 0) {
+    $('summary-units').textContent = totalUnits + (totalUnits === 1 ? ' producto' : ' productos');
+    $('summary-total').textContent = formatPrecio(totalAmount);
+    bar.classList.add('visible');
+  } else {
+    bar.classList.remove('visible');
+  }
   renderCartItems();
 }
 
