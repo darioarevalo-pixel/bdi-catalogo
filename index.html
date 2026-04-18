@@ -181,10 +181,12 @@
   .cart-empty { text-align: center; padding: 3rem 1rem; color: var(--text-muted); font-size: 13px; }
   .cart-item { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
   .cart-item-info { flex: 1; min-width: 0; }
-  .cart-item-name { font-size: 13px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .cart-item-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
-  .cart-item-price { font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap; }
-  .cart-item-del { background: none; border: none; cursor: pointer; color: var(--text-hint); font-size: 16px; padding: 0 2px; transition: color 0.12s; }
+  .cart-item-name { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cart-item-subtotal { font-size: 12px; font-weight: 600; color: var(--text); white-space: nowrap; margin-top: 4px; }
+  .cart-variant-row { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+  .cart-variant-name { font-size: 12px; color: var(--text-muted); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cart-variant-qty { font-size: 12px; color: var(--text); font-weight: 500; white-space: nowrap; }
+  .cart-item-del { background: none; border: none; cursor: pointer; color: var(--text-hint); font-size: 14px; padding: 0 2px; transition: color 0.12s; line-height: 1; }
   .cart-item-del:hover { color: var(--danger); }
   .drawer-footer { padding: 1.25rem 1.5rem; border-top: 1px solid var(--border); }
   .total-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 1rem; }
@@ -958,19 +960,37 @@ function renderCartItems() {
     return;
   }
   footer.style.display = 'block';
-  body.innerHTML = items.map(i =>
-    '<div class="cart-item">' +
+
+  // Agrupar por producto (id numérico)
+  const groups = {};
+  for (const i of items) {
+    if (!groups[i.id]) groups[i.id] = { nombre: i.nombre, img: i.img, precio: i.precio, variantes: [] };
+    groups[i.id].variantes.push(i);
+  }
+
+  body.innerHTML = Object.values(groups).map(g => {
+    const subtotal = g.variantes.reduce((s, v) => s + v.precio * v.qty, 0);
+    const varRows = g.variantes.map(v => {
+      const cartKey = v.sizeId ? v.id + '-' + v.sizeId : String(v.id);
+      const label = v.varNombre || 'Sin variante';
+      return '<div class="cart-variant-row">' +
+        '<span class="cart-variant-name">' + label + '</span>' +
+        '<span class="cart-variant-qty">x' + v.qty + ' · ' + formatPrecio(v.precio * v.qty) + '</span>' +
+        '<button class="cart-item-del" onclick="removeCart(\'' + cartKey + '\')">×</button>' +
+      '</div>';
+    }).join('');
+
+    return '<div class="cart-item">' +
       '<div style="width:44px;height:44px;border-radius:6px;background:var(--bg);flex-shrink:0;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text-hint)">' +
-        (i.img ? '<img src="' + i.img + '" style="width:100%;height:100%;object-fit:cover">' : '—') +
+        (g.img ? '<img src="' + g.img + '" style="width:100%;height:100%;object-fit:contain">' : '—') +
       '</div>' +
       '<div class="cart-item-info">' +
-        '<div class="cart-item-name">' + i.nombre + '</div>' +
-        '<div class="cart-item-meta">' + (i.varNombre ? i.varNombre + ' · ' : '') + 'x' + i.qty + ' · ' + formatPrecio(i.precio) + ' c/u</div>' +
+        '<div class="cart-item-name">' + g.nombre + '</div>' +
+        varRows +
+        (g.variantes.length > 1 ? '<div class="cart-item-subtotal">' + formatPrecio(subtotal) + '</div>' : '') +
       '</div>' +
-      '<div class="cart-item-price">' + formatPrecio(i.precio * i.qty) + '</div>' +
-      '<button class="cart-item-del" onclick="removeCart(\'' + (i.sizeId ? i.id + '-' + i.sizeId : i.id) + '\')">×</button>' +
-    '</div>'
-  ).join('');
+    '</div>';
+  }).join('');
 }
 
 function abrirCarrito() {
