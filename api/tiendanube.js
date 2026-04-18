@@ -32,12 +32,14 @@ module.exports = async (req, res) => {
       page++;
     }
 
-    // Construir mapa SKU -> imagen principal
+    // Construir mapa nombre_normalizado -> imagen principal
     const imgMap = {};
     for (const p of all) {
       const img = p.images?.[0]?.src || null;
       if (!img) continue;
-      // Indexar por cada variante SKU
+      const nombre = (p.name?.es || p.name?.pt || Object.values(p.name || {})[0] || '').trim().toLowerCase();
+      if (nombre) imgMap[nombre] = img;
+      // También indexar por SKU si existe en alguna variante
       if (Array.isArray(p.variants)) {
         for (const v of p.variants) {
           if (v.sku) imgMap[v.sku.trim().toLowerCase()] = img;

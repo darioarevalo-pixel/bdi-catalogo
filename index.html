@@ -531,9 +531,11 @@ function getPrecio(p) {
 }
 
 function getImagen(p) {
-  // Primero intentar desde Tienda Nube usando el SKU
+  // Primero intentar desde Tienda Nube por SKU o nombre
   const sku = (p.code || p.sku || p.codigo || '').trim().toLowerCase();
   if (sku && tnImageMap[sku]) return tnImageMap[sku];
+  const nombre = (p.name || p.nombre || p.product_name || '').trim().toLowerCase();
+  if (nombre && tnImageMap[nombre]) return tnImageMap[nombre];
 
   // Fallback: campos propios de Gestión Nube
   if (p.image_url) return p.image_url;
