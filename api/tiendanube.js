@@ -18,7 +18,7 @@ module.exports = async (req, res) => {
     let all = [];
     let page = 1;
     while (true) {
-      const r = await fetch(`${API_BASE}/products?per_page=200&page=${page}&fields=id,name,variants,images`, {
+      const r = await fetch(`${API_BASE}/products?per_page=200&page=${page}&fields=id,name,description,variants,images`, {
         headers: {
           'Authentication': `bearer ${TOKEN}`,
           'User-Agent': `BDI Catalogo (darioarevalo@arebensrl.com)`,
@@ -32,22 +32,24 @@ module.exports = async (req, res) => {
       page++;
     }
 
-    // Construir mapa nombre_normalizado -> array de imágenes
-    const imgMap = {};
+    // Construir mapa nombre_normalizado -> { imgs, desc }
+    const map = {};
     for (const p of all) {
       const imgs = (p.images || []).map(i => i.src).filter(Boolean);
-      if (!imgs.length) continue;
       const nombre = (p.name?.es || p.name?.pt || Object.values(p.name || {})[0] || '').trim().toLowerCase();
-      if (nombre) imgMap[nombre] = imgs;
-      // También indexar por SKU si existe en alguna variante
+      const rawDesc = p.description?.es || p.description?.pt || Object.values(p.description || {})[0] || '';
+      // Limpiar HTML de la descripción
+      const desc = rawDesc.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+      const entry = { imgs, desc };
+      if (nombre) map[nombre] = entry;
       if (Array.isArray(p.variants)) {
         for (const v of p.variants) {
-          if (v.sku) imgMap[v.sku.trim().toLowerCase()] = imgs;
+          if (v.sku) map[v.sku.trim().toLowerCase()] = entry;
         }
       }
     }
 
-    res.json(imgMap);
+    res.json(map);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

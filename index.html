@@ -106,6 +106,18 @@
   .gallery-dots { display: flex; justify-content: center; gap: 6px; padding: 8px 0 4px; background: var(--bg); flex-shrink: 0; }
   .gallery-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border-strong); border: none; cursor: pointer; padding: 0; transition: background 0.15s; }
   .gallery-dot.active { background: var(--accent); }
+  .gallery-expand-btn { position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,0.35); color: white; border: none; border-radius: var(--radius-sm); padding: 5px 9px; font-size: 13px; cursor: pointer; z-index: 2; transition: background 0.15s; }
+  .gallery-expand-btn:hover { background: rgba(0,0,0,0.6); }
+  /* Lightbox */
+  .lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.92); z-index: 1000; align-items: center; justify-content: center; flex-direction: column; gap: 12px; }
+  .lightbox.open { display: flex; }
+  .lightbox img { max-width: 92vw; max-height: 82vh; object-fit: contain; border-radius: var(--radius-sm); }
+  .lightbox-close { position: absolute; top: 16px; right: 20px; background: none; border: none; color: white; font-size: 28px; cursor: pointer; line-height: 1; }
+  .lightbox-arrow { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.15); color: white; border: none; border-radius: 50%; width: 44px; height: 44px; font-size: 22px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.15s; }
+  .lightbox-arrow:hover { background: rgba(255,255,255,0.3); }
+  .lightbox-arrow.prev { left: 16px; }
+  .lightbox-arrow.next { right: 16px; }
+  .lightbox-counter { color: rgba(255,255,255,0.6); font-size: 13px; }
   .modal-scroll { flex: 1; overflow-y: auto; }
   .modal-info { padding: 1.25rem 1.25rem 0; }
   .modal-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 4px; }
@@ -295,6 +307,15 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox(event)">
+  <button class="lightbox-close" onclick="closeLightbox()">×</button>
+  <button class="lightbox-arrow prev" id="lb-prev" onclick="lbGo(-1);event.stopPropagation()">&#8249;</button>
+  <img id="lb-img" src="" alt="" />
+  <button class="lightbox-arrow next" id="lb-next" onclick="lbGo(1);event.stopPropagation()">&#8250;</button>
+  <div class="lightbox-counter" id="lb-counter"></div>
+</div>
+
 <script>
 let allProducts = [];
 let cart = {};
@@ -303,7 +324,7 @@ let categoria = 'todas';
 let references = null;
 let adminConfig = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false };
 let variantDimsCache = {};
-let tnImageMap = {}; // nombre/SKU -> array de imágenes de Tienda Nube
+let tnImageMap = {}; // nombre/SKU -> { imgs: [], desc: '' }
 let modalGallery = [];
 
 const COLOR_WORDS = ['negro','blanco','rojo','azul','verde','amarillo','rosa','naranja','violeta','gris','plateado','dorado','celeste','bordó','bordo','turquesa','beige','crema','lila','fucsia','marrón','marron','nude'];
@@ -543,8 +564,8 @@ function getPrecio(p) {
   return w > 0 ? w : r;
 }
 
-function getImagenes(p) {
-  // Retorna array de imágenes desde Tienda Nube, o array con una desde GN, o []
+function tnLookup(p) {
+  // Busca en el mapa de TN por SKU, nombre exacto o nombre parcial
   const sku = (p.code || p.sku || p.codigo || '').trim().toLowerCase();
   if (sku && tnImageMap[sku]) return tnImageMap[sku];
   const nombre = (p.name || p.nombre || p.product_name || '').trim().toLowerCase();
@@ -561,9 +582,18 @@ function getImagenes(p) {
     }
     if (bestMatch) return tnImageMap[bestMatch];
   }
-  // Fallback campos propios de GN
+  return null;
+}
+
+function getImagenes(p) {
+  const entry = tnLookup(p);
+  if (entry?.imgs?.length) return entry.imgs;
   const single = getImagenGN(p);
   return single ? [single] : [];
+}
+
+function getDescripcionTN(p) {
+  return tnLookup(p)?.desc || '';
 }
 
 function getImagen(p) {
@@ -711,7 +741,9 @@ function renderGallery(idx, alt) {
     : '';
   wrap.innerHTML = arrows +
     '<img src="' + imgs[idx] + '" alt="' + (alt||'') + '" data-idx="' + idx + '" ' +
-    'onerror="this.parentNode.innerHTML=\'<div class=\\\'modal-no-img\\\'>Sin imagen</div>\'">';
+    'style="cursor:zoom-in" onclick="openLightbox(' + idx + ')" ' +
+    'onerror="this.parentNode.innerHTML=\'<div class=\\\'modal-no-img\\\'>Sin imagen</div>\'">' +
+    '<button class="gallery-expand-btn" onclick="openLightbox(' + idx + ')">⤢ Ver</button>';
   if (imgs.length > 1) {
     dots.style.display = 'flex';
     dots.innerHTML = imgs.map((_, i) =>
@@ -731,6 +763,30 @@ function galleryGo(dir) {
   renderGallery(next);
 }
 
+let lbIdx = 0;
+function openLightbox(idx) {
+  const imgs = modalGallery;
+  if (!imgs.length) return;
+  lbIdx = idx || 0;
+  $('lb-img').src = imgs[lbIdx];
+  $('lb-prev').style.display = imgs.length > 1 ? 'flex' : 'none';
+  $('lb-next').style.display = imgs.length > 1 ? 'flex' : 'none';
+  $('lb-counter').textContent = imgs.length > 1 ? (lbIdx + 1) + ' / ' + imgs.length : '';
+  $('lightbox').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function lbGo(dir) {
+  const imgs = modalGallery;
+  lbIdx = (lbIdx + dir + imgs.length) % imgs.length;
+  $('lb-img').src = imgs[lbIdx];
+  $('lb-counter').textContent = imgs.length > 1 ? (lbIdx + 1) + ' / ' + imgs.length : '';
+}
+function closeLightbox(e) {
+  if (e && e.target !== $('lightbox') && e.target !== $('lb-img')) return;
+  $('lightbox').classList.remove('open');
+  document.body.style.overflow = 'hidden'; // el modal sigue abierto
+}
+
 function abrirModal(id) {
   const p = allProducts.find(x => (x.id || x.product_id) == id);
   if (!p) return;
@@ -741,7 +797,7 @@ function abrirModal(id) {
   const imgs = getImagenes(p);
   const img = imgs[0] || null;
   const cat = p.category || '';
-  const desc = getDescripcion(p);
+  const desc = getDescripcionTN(p) || getDescripcion(p);
   const hiddenVars = (adminConfig.hiddenVariants || {})[String(id)] || [];
   const variantes = (p.variantes || []).filter(v => {
     if (hiddenVars.some(hid => hid == v.size_id)) return false;
