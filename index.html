@@ -1358,7 +1358,7 @@ async function confirmarPedido() {
     };
 
     const data = await fetchProxy('/ventas', { method: 'POST', body });
-    console.log('GN sale response:', JSON.stringify(data));
+    alert('DEBUG (borrar luego): ' + JSON.stringify(data));
     const pedidoId = data.id || data.sale_id || data.number || data.numero || data.nro || data.venta_id || data.nro_venta || data.sale_number || (data.data && (data.data.id || data.data.number)) || null;
     cart = {};
     $('client-name').value = '';
