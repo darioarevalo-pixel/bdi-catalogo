@@ -1358,8 +1358,7 @@ async function confirmarPedido() {
     };
 
     const data = await fetchProxy('/ventas', { method: 'POST', body });
-    alert('DEBUG (borrar luego): ' + JSON.stringify(data));
-    const pedidoId = data.id || data.sale_id || data.number || data.numero || data.nro || data.venta_id || data.nro_venta || data.sale_number || (data.data && (data.data.id || data.data.number)) || null;
+    const pedidoId = (data.data && (data.data.number || data.data.id)) || data.id || data.number || null;
     cart = {};
     $('client-name').value = '';
     $('client-phone').value = '';
