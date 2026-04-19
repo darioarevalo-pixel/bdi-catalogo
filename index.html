@@ -1358,7 +1358,8 @@ async function confirmarPedido() {
     };
 
     const data = await fetchProxy('/ventas', { method: 'POST', body });
-    const pedidoId = data.id || data.sale_id || data.number || 'OK';
+    console.log('GN sale response:', JSON.stringify(data));
+    const pedidoId = data.id || data.sale_id || data.number || data.numero || data.nro || data.venta_id || data.nro_venta || data.sale_number || (data.data && (data.data.id || data.data.number)) || null;
     cart = {};
     $('client-name').value = '';
     $('client-phone').value = '';
@@ -1368,11 +1369,11 @@ async function confirmarPedido() {
     validarTelefono();
     updateCartUI();
     cerrarCarrito();
-    showToast('Pedido #' + pedidoId + ' creado correctamente', 'success', 4000);
+    showToast('Pedido' + (pedidoId ? ' #' + pedidoId : '') + ' creado correctamente', 'success', 4000);
 
     // Abrir WhatsApp con mensaje automático
     const waMsg = '¡Hola! Acabo de realizar un pedido en el catálogo mayorista de BDI Accesorios.' +
-      '\n\n📦 Pedido N°: ' + pedidoId +
+      (pedidoId ? '\n\n📦 Pedido N°: ' + pedidoId : '\n') +
       '\n👤 Nombre: ' + clientName +
       '\n📱 Teléfono: ' + phone +
       '\n💳 Pago: ' + payment +
