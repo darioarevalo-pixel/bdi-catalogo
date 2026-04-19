@@ -204,6 +204,19 @@
   .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
   .note-small { font-size: 11px; color: var(--text-hint); margin-bottom: 12px; line-height: 1.4; }
 
+  /* Modal de pedido confirmado */
+  .confirm-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 400; align-items: center; justify-content: center; padding: 1rem; }
+  .confirm-overlay.open { display: flex; }
+  .confirm-box { background: var(--surface); border-radius: var(--radius); width: 100%; max-width: 400px; padding: 2rem 1.75rem; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+  .confirm-icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
+  .confirm-title { font-size: 18px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+  .confirm-number { font-size: 13px; color: var(--text-muted); margin-bottom: 1rem; }
+  .confirm-desc { font-size: 13px; color: var(--text-muted); line-height: 1.6; margin-bottom: 1.5rem; padding: 12px; background: var(--bg); border-radius: var(--radius-sm); }
+  .btn-whatsapp { width: 100%; padding: 12px; background: #25D366; color: white; border: none; border-radius: var(--radius-sm); font-family: inherit; font-size: 15px; font-weight: 700; cursor: pointer; margin-bottom: 10px; transition: opacity 0.15s; }
+  .btn-whatsapp:hover { opacity: 0.9; }
+  .btn-skip { width: 100%; padding: 10px; background: transparent; color: var(--text-muted); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; cursor: pointer; transition: background 0.12s; }
+  .btn-skip:hover { background: var(--bg); }
+
   .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(10px); background: var(--text); color: white; padding: 10px 18px; border-radius: var(--radius); font-size: 13px; font-weight: 500; opacity: 0; transition: opacity 0.2s, transform 0.2s; pointer-events: none; z-index: 500; white-space: nowrap; }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   .toast.success { background: var(--accent); }
@@ -343,6 +356,22 @@
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- Modal pedido confirmado -->
+<div class="confirm-overlay" id="confirm-overlay">
+  <div class="confirm-box">
+    <div class="confirm-icon">✅</div>
+    <div class="confirm-title">¡Pedido confirmado!</div>
+    <div class="confirm-number" id="confirm-number"></div>
+    <div class="confirm-desc">
+      Avisarnos por WhatsApp nos permite procesar y preparar tu pedido más rápido.
+    </div>
+    <button class="btn-whatsapp" id="btn-whatsapp-confirm" onclick="abrirWhatsApp()">
+      Avisarnos por WhatsApp
+    </button>
+    <button class="btn-skip" onclick="cerrarConfirm()">Ya lo hago después</button>
+  </div>
+</div>
 
 <!-- Barra flotante de resumen -->
 <div class="summary-bar" id="summary-bar">
@@ -1201,6 +1230,17 @@ function renderCartItems() {
   }).join('');
 }
 
+function abrirWhatsApp() {
+  const url = $('btn-whatsapp-confirm').dataset.waUrl;
+  if (url) window.open(url, '_blank');
+  cerrarConfirm();
+}
+
+function cerrarConfirm() {
+  $('confirm-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
 function abrirCarrito() {
   $('overlay').classList.add('open');
   $('cart-drawer').classList.add('open');
@@ -1368,20 +1408,19 @@ async function confirmarPedido() {
     validarTelefono();
     updateCartUI();
     cerrarCarrito();
-    showToast('Pedido' + (pedidoId ? ' #' + pedidoId : '') + ' creado correctamente', 'success', 4000);
-
-    // Abrir WhatsApp con mensaje automático
+    // Armar mensaje de WhatsApp y mostrar popup
     const waMsg = '¡Hola! Acabo de realizar un pedido en el catálogo mayorista de BDI Accesorios.' +
-      (pedidoId ? '\n\n📦 Pedido N°: ' + pedidoId : '\n') +
+      (pedidoId ? '\n\n📦 Pedido N°: ' + pedidoId : '') +
       '\n👤 Nombre: ' + clientName +
       '\n📱 Teléfono: ' + phone +
       '\n💳 Pago: ' + payment +
       '\n🚚 Entrega: ' + delivery +
       (obs ? '\n📝 Obs: ' + obs : '') +
       '\n\nQuedo a la espera para coordinar.';
-    setTimeout(() => {
-      window.open('https://wa.me/5493415851474?text=' + encodeURIComponent(waMsg), '_blank');
-    }, 800);
+    $('btn-whatsapp-confirm').dataset.waUrl = 'https://wa.me/5493415851474?text=' + encodeURIComponent(waMsg);
+    $('confirm-number').textContent = pedidoId ? 'Pedido N° ' + pedidoId : '';
+    $('confirm-overlay').classList.add('open');
+    document.body.style.overflow = 'hidden';
     renderProductos();
   } catch(e) {
     showToast('Error: ' + e.message, 'error', 4000);
