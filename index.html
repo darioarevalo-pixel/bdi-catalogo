@@ -308,19 +308,26 @@
       <span class="total-label">Total del pedido</span>
       <span class="total-amount" id="total-amount">$0</span>
     </div>
-    <div class="form-grid">
-      <div class="form-group">
-        <label>Nombre del cliente *</label>
-        <input type="text" id="client-name" placeholder="Ej: Kiosco El Sol" />
-      </div>
-      <div class="form-group">
-        <label>Teléfono o email</label>
-        <input type="text" id="client-contact" placeholder="Ej: 341-555-1234" />
-      </div>
+    <div class="form-group">
+      <label>Nombre y Apellido *</label>
+      <input type="text" id="client-name" placeholder="Ej: Juan García" />
+    </div>
+    <div class="form-group">
+      <label>Teléfono *</label>
+      <input type="tel" id="client-phone" placeholder="Ej: 3415551234" oninput="validarTelefono()" />
+      <div id="phone-hint" style="font-size:11px;color:var(--text-hint);margin-top:3px">Ingresá solo números, sin guiones ni espacios.</div>
+    </div>
+    <div class="form-group">
+      <label>Forma de pago *</label>
+      <select id="client-payment" style="width:100%;padding:8px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font-family:inherit;font-size:13px;color:var(--text);background:var(--bg);outline:none">
+        <option value="">— Seleccioná una opción —</option>
+        <option value="Efectivo">Efectivo (solo válido para Rosario)</option>
+        <option value="Transferencia bancaria">Transferencia bancaria</option>
+      </select>
     </div>
     <div class="form-group">
       <label>Observaciones</label>
-      <input type="text" id="client-obs" placeholder="Ej: Enviar el jueves, paga en efectivo" />
+      <input type="text" id="client-obs" placeholder="Ej: Enviar el jueves" />
     </div>
     <p class="note-small">El pedido se registrará como venta en Gestión Nube con el canal mayorista.</p>
     <button class="btn btn-accent" onclick="confirmarPedido()" id="btn-confirmar">Confirmar pedido</button>
@@ -1236,11 +1243,40 @@ async function verificarStock() {
   return problemas;
 }
 
+function validarTelefono() {
+  const input = $('client-phone');
+  const hint = $('phone-hint');
+  const digits = (input.value.replace(/\D/g, ''));
+  if (!input.value) {
+    hint.style.color = 'var(--text-hint)';
+    hint.textContent = 'Ingresá solo números, sin guiones ni espacios.';
+  } else if (digits.length < 8 || digits.length > 15) {
+    hint.style.color = 'var(--danger)';
+    hint.textContent = 'Verificá que el número esté completo (' + digits.length + ' dígitos ingresados).';
+  } else {
+    hint.style.color = 'var(--stock-ok)';
+    hint.textContent = 'Número válido (' + digits.length + ' dígitos).';
+  }
+}
+
 async function confirmarPedido() {
   const items = Object.values(cart);
   if (!items.length) { showToast('El pedido está vacío', 'error'); return; }
+
   const clientName = $('client-name').value.trim();
-  if (!clientName) { showToast('Ingresá el nombre del cliente', 'error'); return; }
+  if (!clientName) { showToast('Ingresá tu nombre y apellido', 'error'); $('client-name').focus(); return; }
+
+  const phone = $('client-phone').value.trim();
+  const phoneDigits = phone.replace(/\D/g, '');
+  if (!phone) { showToast('Ingresá tu número de teléfono', 'error'); $('client-phone').focus(); return; }
+  if (phoneDigits.length < 8 || phoneDigits.length > 15) {
+    alert('El número de teléfono parece incorrecto (' + phoneDigits.length + ' dígitos).\nVerificá que esté completo antes de confirmar el pedido.');
+    $('client-phone').focus();
+    return;
+  }
+
+  const payment = $('client-payment').value;
+  if (!payment) { showToast('Seleccioná una forma de pago', 'error'); $('client-payment').focus(); return; }
 
   const minPurchase = Number(adminConfig.minPurchase) || 0;
   if (minPurchase > 0) {
@@ -1252,7 +1288,7 @@ async function confirmarPedido() {
   }
 
   const obs = $('client-obs').value.trim();
-  const contact = $('client-contact').value.trim();
+  const contact = phone;
 
   const btn = $('btn-confirmar');
   btn.innerHTML = '<span class="spinner"></span>Verificando stock...';
@@ -1306,13 +1342,18 @@ async function confirmarPedido() {
       store_id: storeId,
       sale_state_id: 1,
       discount_inventory: true,
-      comments: [clientName, contact, obs].filter(Boolean).join(' — '),
+      comments: [clientName, contact, 'Pago: ' + payment, obs].filter(Boolean).join(' — '),
       items: items.map(i => ({ product_id: i.id, ...(i.sizeId ? { size_id: i.sizeId } : {}), quantity: i.qty, unit_price: i.precio }))
     };
 
     const data = await fetchProxy('/ventas', { method: 'POST', body });
     const pedidoId = data.id || data.sale_id || data.number || 'OK';
     cart = {};
+    $('client-name').value = '';
+    $('client-phone').value = '';
+    $('client-payment').value = '';
+    $('client-obs').value = '';
+    validarTelefono();
     updateCartUI();
     cerrarCarrito();
     showToast('Pedido #' + pedidoId + ' creado correctamente', 'success', 4000);
