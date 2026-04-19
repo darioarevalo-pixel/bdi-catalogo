@@ -83,9 +83,10 @@
   .search-wrap input:focus { border-color: var(--accent); }
   .search-icon { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--text-hint); font-size: 15px; pointer-events: none; }
   .sort-select { padding: 9px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; background: var(--surface); color: var(--text); outline: none; cursor: pointer; }
-  .view-toggle { display: flex; border: 1.5px solid var(--border-strong); border-radius: var(--radius-sm); overflow: hidden; flex-shrink: 0; }
-  .view-toggle-btn { padding: 7px 12px; border: none; background: var(--surface); font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; color: var(--text-muted); transition: all 0.15s; white-space: nowrap; }
-  .view-toggle-btn.active { background: var(--accent); color: white; }
+  .view-label-wrap { display: flex; flex-direction: column; gap: 3px; flex-shrink: 0; }
+  .view-label { font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; text-align: center; }
+  .vcard-colors { display: flex; flex-wrap: wrap; gap: 5px; padding: 6px 10px 2px; }
+  .vcard-variants { padding: 0 6px 6px; display: flex; flex-direction: column; gap: 3px; }
 
   .products-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(195px, 1fr)); gap: 12px; align-items: stretch; }
   .product-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; transition: box-shadow 0.15s; }
@@ -251,9 +252,12 @@
           <option value="name">Nombre A-Z</option>
           <option value="default">Orden original</option>
         </select>
-        <div class="view-toggle">
-          <button class="view-toggle-btn active" id="vt-product" onclick="setViewMode('product')">Producto</button>
-          <button class="view-toggle-btn" id="vt-variants" onclick="setViewMode('variants')">Variantes</button>
+        <div class="view-label-wrap">
+          <span class="view-label">Vista</span>
+          <select class="sort-select" id="view-select" onchange="setViewMode(this.value)" style="padding:7px 10px;font-size:12px">
+            <option value="product">Producto</option>
+            <option value="variants">Variantes</option>
+          </select>
         </div>
       </div>
       <div class="cat-pills" id="cat-pills"></div>
@@ -351,6 +355,7 @@ let viewMode = 'product';
 let references = null;
 let adminConfig = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0 };
 let variantDimsCache = {};
+let cardVariantState = {};
 let tnImageMap = {}; // nombre/SKU -> { imgs: [], desc: '' }
 let modalGallery = [];
 
@@ -737,9 +742,41 @@ function renderProductos() {
 
 function setViewMode(mode) {
   viewMode = mode;
-  $('vt-product').classList.toggle('active', mode === 'product');
-  $('vt-variants').classList.toggle('active', mode === 'variants');
+  const sel = $('view-select');
+  if (sel) sel.value = mode;
   renderProductos();
+}
+
+function renderCardVariantRows(id, dims, selectedColor, nomEsc, precio, imgEsc) {
+  const filtered = dims.filter(d => d.dim1 === selectedColor && (getStockVariante(d) === null || getStockVariante(d) > 0));
+  if (!filtered.length) return '<div style="padding:6px 4px;font-size:12px;color:var(--text-muted)">Sin stock para esta selección.</div>';
+  return filtered.map(v => {
+    const cartKey = id + '-' + v.size_id;
+    const currentQty = cart[cartKey]?.qty || 0;
+    const vs = getStockVariante(v);
+    const maxAttr = vs !== null ? ' max="' + vs + '"' : '';
+    const fullVnEsc = v.size.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+    const chArgs = '\'' + cartKey + '\',' + id + ',\'' + nomEsc + '\',' + precio + ',' + v.size_id + ',\'' + fullVnEsc + '\',\'' + imgEsc + '\'';
+    return '<div class="modal-variant-row">' +
+      '<div class="modal-variant-info"><div class="modal-variant-name" style="font-size:12px">' + v.dim2 + '</div></div>' +
+      '<div class="modal-vqty-wrap">' +
+        '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1);event.stopPropagation()">−</button>' +
+        '<input class="modal-vqty-num" type="number" id="q-m-' + cartKey + '" value="' + currentQty + '" min="0"' + maxAttr + ' />' +
+        '<button class="modal-vqty-btn plus" onclick="chQty(' + chArgs + ',1);event.stopPropagation()">+</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function setCardColor(id, color) {
+  if (!cardVariantState[id]) return;
+  cardVariantState[id].selectedColor = color;
+  const pillsEl = $('vcard-colors-' + id);
+  if (pillsEl) pillsEl.querySelectorAll('.vdim-pill').forEach(p => p.classList.toggle('active', p.dataset.dim === color));
+  const rowsEl = $('vcard-variants-' + id);
+  if (!rowsEl) return;
+  const s = cardVariantState[id];
+  rowsEl.innerHTML = renderCardVariantRows(id, s.dims, color, s.nomEsc, s.precio, s.imgEsc);
 }
 
 function renderVariantesGrid(prods) {
@@ -749,8 +786,11 @@ function renderVariantesGrid(prods) {
     const nombre = p.name || p.nombre || p.product_name || 'Sin nombre';
     const cod = p.code || p.sku || p.codigo || '';
     const precio = getPrecio(p);
-    const img = getImagen(p);
+    const imgs = getImagenes(p);
+    const img = imgs[0] || null;
     const cat = p.category || '';
+    const nomEsc = nombre.replace(/'/g,"\\'");
+    const imgEsc = (img||'').replace(/'/g,"\\'");
     const hiddenVars = (adminConfig.hiddenVariants || {})[String(id)] || [];
     const variantes = (p.variantes || []).filter(v => {
       if (hiddenVars.some(hid => hid == v.size_id)) return false;
@@ -759,64 +799,72 @@ function renderVariantesGrid(prods) {
     });
 
     const dims = parseVariantDimensions(variantes);
+    let variantsHTML = '';
 
     if (dims) {
-      // 2D (color+modelo): una tarjeta por color
+      // 2D: pills de color + filas de modelos con cantidad
       const colors = [...new Set(dims.map(d => d.dim1))];
-      for (const color of colors) {
-        const modelsCount = dims.filter(d => d.dim1 === color).length;
-        const colorEsc = color.replace(/'/g,"\\'");
-        cards.push(
-          '<div class="product-card" onclick="abrirModalConColor(' + id + ',\'' + colorEsc + '\')" style="cursor:pointer">' +
-            '<div class="product-img-wrap">' +
-              (img ? '<img src="' + img + '" alt="' + nombre + '" loading="lazy" onerror="this.parentNode.innerHTML=\'<div class=\\\'no-img\\\'>Sin imagen</div>\'">' : '<div class="no-img">Sin imagen</div>') +
-            '</div>' +
-            '<div class="product-body">' +
-              (cat ? '<div class="product-cat">' + cat + '</div>' : '') +
-              '<div class="product-name">' + nombre + '</div>' +
-              '<div class="product-code">' + color + '</div>' +
-              '<div class="product-price">' + formatPrecio(precio) + '</div>' +
-            '</div>' +
-            '<div class="product-card-footer"><button class="btn-ver" onclick="abrirModalConColor(' + id + ',\'' + colorEsc + '\');event.stopPropagation()">' + modelsCount + ' modelo' + (modelsCount !== 1 ? 's' : '') + '</button></div>' +
-          '</div>'
-        );
-      }
+      const prev = cardVariantState[id]?.selectedColor;
+      const selectedColor = (prev && colors.includes(prev)) ? prev : colors[0];
+      cardVariantState[id] = { dims, selectedColor, nomEsc, precio, imgEsc };
+
+      variantsHTML =
+        '<div class="vcard-colors" id="vcard-colors-' + id + '">' +
+          colors.map(c =>
+            '<button class="vdim-pill' + (c === selectedColor ? ' active' : '') + '" style="font-size:11px;padding:3px 10px" data-dim="' + c.replace(/"/g,'&quot;') + '" onclick="setCardColor(' + id + ',\'' + c.replace(/'/g,"\\'") + '\');event.stopPropagation()">' + c + '</button>'
+          ).join('') +
+        '</div>' +
+        '<div class="vcard-variants" id="vcard-variants-' + id + '">' +
+          renderCardVariantRows(id, dims, selectedColor, nomEsc, precio, imgEsc) +
+        '</div>';
     } else if (variantes.length > 0) {
-      // 1D: una tarjeta por variante
-      for (const v of variantes) {
-        const vEsc = v.size.replace(/'/g,"\\'");
-        cards.push(
-          '<div class="product-card" onclick="abrirModal(' + id + ')" style="cursor:pointer">' +
-            '<div class="product-img-wrap">' +
-              (img ? '<img src="' + img + '" alt="' + nombre + '" loading="lazy" onerror="this.parentNode.innerHTML=\'<div class=\\\'no-img\\\'>Sin imagen</div>\'">' : '<div class="no-img">Sin imagen</div>') +
+      // 1D: todas las variantes con cantidad
+      variantsHTML = '<div class="vcard-variants" id="vcard-variants-' + id + '">' +
+        variantes.map(v => {
+          const vs = getStockVariante(v);
+          const cartKey = id + '-' + v.size_id;
+          const currentQty = cart[cartKey]?.qty || 0;
+          const maxAttr = vs !== null ? ' max="' + vs + '"' : '';
+          const vnEsc = v.size.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+          const chArgs = '\'' + cartKey + '\',' + id + ',\'' + nomEsc + '\',' + precio + ',' + v.size_id + ',\'' + vnEsc + '\',\'' + imgEsc + '\'';
+          return '<div class="modal-variant-row">' +
+            '<div class="modal-variant-info"><div class="modal-variant-name" style="font-size:12px">' + v.size + '</div></div>' +
+            '<div class="modal-vqty-wrap">' +
+              '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1);event.stopPropagation()">−</button>' +
+              '<input class="modal-vqty-num" type="number" id="q-m-' + cartKey + '" value="' + currentQty + '" min="0"' + maxAttr + ' />' +
+              '<button class="modal-vqty-btn plus" onclick="chQty(' + chArgs + ',1);event.stopPropagation()">+</button>' +
             '</div>' +
-            '<div class="product-body">' +
-              (cat ? '<div class="product-cat">' + cat + '</div>' : '') +
-              '<div class="product-name">' + nombre + '</div>' +
-              '<div class="product-code">' + v.size + '</div>' +
-              '<div class="product-price">' + formatPrecio(precio) + '</div>' +
-            '</div>' +
-            '<div class="product-card-footer"><button class="btn-ver" onclick="abrirModal(' + id + ');event.stopPropagation()">Ver producto</button></div>' +
-          '</div>'
-        );
-      }
+          '</div>';
+        }).join('') +
+      '</div>';
     } else {
-      // Sin variantes: igual que vista producto
-      cards.push(
-        '<div class="product-card" onclick="abrirModal(' + id + ')" style="cursor:pointer">' +
-          '<div class="product-img-wrap">' +
-            (img ? '<img src="' + img + '" alt="' + nombre + '" loading="lazy" onerror="this.parentNode.innerHTML=\'<div class=\\\'no-img\\\'>Sin imagen</div>\'">' : '<div class="no-img">Sin imagen</div>') +
-          '</div>' +
-          '<div class="product-body">' +
-            (cat ? '<div class="product-cat">' + cat + '</div>' : '') +
-            '<div class="product-name">' + nombre + '</div>' +
-            (cod ? '<div class="product-code">' + cod + '</div>' : '') +
-            '<div class="product-price">' + formatPrecio(precio) + '</div>' +
-          '</div>' +
-          '<div class="product-card-footer"><button class="btn-ver" onclick="abrirModal(' + id + ');event.stopPropagation()">Ver producto</button></div>' +
-        '</div>'
-      );
+      // Sin variantes: selector único
+      const cartKey = String(id);
+      const currentQty = cart[cartKey]?.qty || 0;
+      const chArgs = '\'' + cartKey + '\',' + id + ',\'' + nomEsc + '\',' + precio + ',null,\'\',\'' + imgEsc + '\'';
+      variantsHTML = '<div style="padding:6px 10px 8px;display:flex;align-items:center;gap:6px">' +
+        '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1);event.stopPropagation()">−</button>' +
+        '<input class="modal-vqty-num" type="number" id="q-m-' + cartKey + '" value="' + currentQty + '" min="0" style="margin:0 2px" />' +
+        '<button class="modal-vqty-btn plus" onclick="chQty(' + chArgs + ',1);event.stopPropagation()">+</button>' +
+        '<span style="font-size:12px;color:var(--text-muted);margin-left:4px">Agregar</span>' +
+      '</div>';
     }
+
+    cards.push(
+      '<div class="product-card" style="cursor:default">' +
+        '<div class="product-img-wrap" style="cursor:pointer" onclick="abrirModalSoloGaleria(' + id + ')">' +
+          (img ? '<img src="' + img + '" alt="' + nombre + '" loading="lazy" onerror="this.parentNode.innerHTML=\'<div class=\\\'no-img\\\'>Sin imagen</div>\'">' : '<div class="no-img">Sin imagen</div>') +
+        '</div>' +
+        '<div class="product-body" style="cursor:pointer" onclick="abrirModalSoloGaleria(' + id + ')">' +
+          (cat ? '<div class="product-cat">' + cat + '</div>' : '') +
+          '<div class="product-name">' + nombre + '</div>' +
+          (cod ? '<div class="product-code">' + cod + '</div>' : '') +
+          '<div class="product-price">' + formatPrecio(precio) + '</div>' +
+        '</div>' +
+        variantsHTML +
+        '<div class="product-card-footer"><button class="btn-ver" style="background:transparent;color:var(--accent);border-color:var(--accent)" onclick="abrirModalSoloGaleria(' + id + ')">Ver producto</button></div>' +
+      '</div>'
+    );
   }
   return cards.join('');
 }
@@ -934,6 +982,7 @@ function abrirModal(id) {
   $('modal-code').textContent = cod;
   $('modal-code').style.display = cod ? 'block' : 'none';
   $('modal-price').textContent = formatPrecio(precio);
+  $('modal-price').style.display = 'block';
 
   // Descripción
   if (desc) {
@@ -1012,10 +1061,35 @@ function abrirModal(id) {
   document.body.style.overflow = 'hidden';
 }
 
-function abrirModalConColor(id, color) {
-  abrirModal(id);
-  // Si el modal tiene variantes 2D, pre-seleccionar el color
-  if (variantDimsCache[id]) setVariantDim(id, color);
+function abrirModalSoloGaleria(id) {
+  const p = allProducts.find(x => (x.id || x.product_id) == id);
+  if (!p) return;
+  const nombre = p.name || p.nombre || p.product_name || 'Sin nombre';
+  const cod = p.code || p.sku || p.codigo || '';
+  const cat = p.category || '';
+  const imgs = getImagenes(p);
+  const desc = getDescripcionTN(p) || getDescripcion(p);
+
+  modalGallery = imgs;
+  renderGallery(0, nombre);
+
+  $('modal-cat').textContent = cat;
+  $('modal-cat').style.display = cat ? 'block' : 'none';
+  $('modal-title').textContent = nombre;
+  $('modal-code').textContent = cod;
+  $('modal-code').style.display = cod ? 'block' : 'none';
+  $('modal-price').style.display = 'none';
+
+  if (desc) {
+    $('modal-desc').textContent = desc;
+    $('modal-desc').style.display = 'block';
+  } else {
+    $('modal-desc').style.display = 'none';
+  }
+
+  $('modal-variants-wrap').innerHTML = '';
+  $('modal-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
 }
 
 function cerrarModal(e) {
