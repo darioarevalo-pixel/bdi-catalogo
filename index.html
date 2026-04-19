@@ -158,7 +158,8 @@
   .modal-vqty-btn.minus:hover { background: #B0B7C0; }
   .modal-vqty-btn.plus { background: var(--accent); color: white; }
   .modal-vqty-btn.plus:hover { opacity: 0.85; }
-  .modal-vqty-num { width: 34px; text-align: center; border: 1px solid var(--border-strong); border-radius: 4px; font-family: 'DM Mono', monospace; font-size: 13px; background: var(--surface); color: var(--text); height: 28px; outline: none; padding: 0; }
+  .modal-vqty-num { width: 34px; text-align: center; border: 1px solid var(--border-strong); border-radius: 4px; font-family: 'DM Sans', sans-serif; font-size: 13px; background: var(--surface); color: var(--text); height: 28px; outline: none; padding: 0; }
+  .modal-vqty-btn.plus:disabled { opacity: 0.3; cursor: default; }
   .modal-no-variants { padding: 0 1.25rem 1rem; display: flex; align-items: center; gap: 8px; }
   .modal-close { width: 32px; height: 32px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); cursor: pointer; font-size: 18px; color: var(--text-muted); display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.12s; }
   .modal-close:hover { background: var(--bg); }
@@ -405,6 +406,7 @@ function renderVariantRowsHTML(productId, dims, selectedDim1, nomEsc, precio, im
     const fullVnEsc = v.size.replace(/'/g,"\\'").replace(/"/g,'&quot;');
     const cartKey = productId + '-' + v.size_id;
     const currentQty = cart[cartKey]?.qty || 0;
+    const atMax = vs !== null && currentQty >= vs;
     const inputId = 'q-m-' + cartKey;
     const chArgs = '\'' + cartKey + '\',' + productId + ',\'' + nomEsc + '\',' + precio + ',' + v.size_id + ',\'' + fullVnEsc + '\',\'' + imgEsc + '\'';
     return '<div class="modal-variant-row">' +
@@ -415,7 +417,7 @@ function renderVariantRowsHTML(productId, dims, selectedDim1, nomEsc, precio, im
       '<div class="modal-vqty-wrap">' +
         '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1)">−</button>' +
         '<input class="modal-vqty-num" type="number" id="' + inputId + '" value="' + currentQty + '" min="0"' + maxAttr + ' />' +
-        '<button class="modal-vqty-btn plus" onclick="chQty(' + chArgs + ',1)">+</button>' +
+        '<button class="modal-vqty-btn plus"' + (atMax ? ' disabled' : '') + ' onclick="chQty(' + chArgs + ',1)">+</button>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -755,6 +757,7 @@ function renderCardVariantRows(id, dims, selectedColor, nomEsc, precio, imgEsc) 
     const currentQty = cart[cartKey]?.qty || 0;
     const vs = getStockVariante(v);
     const maxAttr = vs !== null ? ' max="' + vs + '"' : '';
+    const atMax = vs !== null && currentQty >= vs;
     const fullVnEsc = v.size.replace(/'/g,"\\'").replace(/"/g,'&quot;');
     const chArgs = '\'' + cartKey + '\',' + id + ',\'' + nomEsc + '\',' + precio + ',' + v.size_id + ',\'' + fullVnEsc + '\',\'' + imgEsc + '\'';
     return '<div class="modal-variant-row">' +
@@ -762,7 +765,7 @@ function renderCardVariantRows(id, dims, selectedColor, nomEsc, precio, imgEsc) 
       '<div class="modal-vqty-wrap">' +
         '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1);event.stopPropagation()">−</button>' +
         '<input class="modal-vqty-num" type="number" id="q-m-' + cartKey + '" value="' + currentQty + '" min="0"' + maxAttr + ' />' +
-        '<button class="modal-vqty-btn plus" onclick="chQty(' + chArgs + ',1);event.stopPropagation()">+</button>' +
+        '<button class="modal-vqty-btn plus"' + (atMax ? ' disabled' : '') + ' onclick="chQty(' + chArgs + ',1);event.stopPropagation()">+</button>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -825,6 +828,7 @@ function renderVariantesGrid(prods) {
           const cartKey = id + '-' + v.size_id;
           const currentQty = cart[cartKey]?.qty || 0;
           const maxAttr = vs !== null ? ' max="' + vs + '"' : '';
+          const atMax = vs !== null && currentQty >= vs;
           const vnEsc = v.size.replace(/'/g,"\\'").replace(/"/g,'&quot;');
           const chArgs = '\'' + cartKey + '\',' + id + ',\'' + nomEsc + '\',' + precio + ',' + v.size_id + ',\'' + vnEsc + '\',\'' + imgEsc + '\'';
           return '<div class="modal-variant-row">' +
@@ -832,7 +836,7 @@ function renderVariantesGrid(prods) {
             '<div class="modal-vqty-wrap">' +
               '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1);event.stopPropagation()">−</button>' +
               '<input class="modal-vqty-num" type="number" id="q-m-' + cartKey + '" value="' + currentQty + '" min="0"' + maxAttr + ' />' +
-              '<button class="modal-vqty-btn plus" onclick="chQty(' + chArgs + ',1);event.stopPropagation()">+</button>' +
+              '<button class="modal-vqty-btn plus"' + (atMax ? ' disabled' : '') + ' onclick="chQty(' + chArgs + ',1);event.stopPropagation()">+</button>' +
             '</div>' +
           '</div>';
         }).join('') +
@@ -855,11 +859,11 @@ function renderVariantesGrid(prods) {
         '<div class="product-img-wrap" style="cursor:pointer" onclick="abrirModalSoloGaleria(' + id + ')">' +
           (img ? '<img src="' + img + '" alt="' + nombre + '" loading="lazy" onerror="this.parentNode.innerHTML=\'<div class=\\\'no-img\\\'>Sin imagen</div>\'">' : '<div class="no-img">Sin imagen</div>') +
         '</div>' +
-        '<div class="product-body" style="cursor:pointer" onclick="abrirModalSoloGaleria(' + id + ')">' +
+        '<div class="product-body" style="cursor:pointer;flex:0 0 auto" onclick="abrirModalSoloGaleria(' + id + ')">' +
           (cat ? '<div class="product-cat">' + cat + '</div>' : '') +
           '<div class="product-name">' + nombre + '</div>' +
           (cod ? '<div class="product-code">' + cod + '</div>' : '') +
-          '<div class="product-price">' + formatPrecio(precio) + '</div>' +
+          '<div class="product-price" style="margin-top:4px">' + formatPrecio(precio) + '</div>' +
         '</div>' +
         variantsHTML +
         '<div class="product-card-footer"><button class="btn-ver" style="background:transparent;color:var(--accent);border-color:var(--accent)" onclick="abrirModalSoloGaleria(' + id + ')">Ver producto</button></div>' +
@@ -886,7 +890,14 @@ function chQty(cartKey, productId, nombre, precio, sizeId, varNombre, img, d) {
     cart[cartKey] = { id: parseInt(productId), nombre, varNombre: varNombre||'', precio, qty: newQty, sizeId: sizeId||null, img };
   }
 
-  if (el) el.value = newQty;
+  if (el) {
+    el.value = newQty;
+    const maxVal = el.max ? parseInt(el.max) : null;
+    const plusBtn = el.nextElementSibling;
+    if (plusBtn && plusBtn.classList.contains('plus')) {
+      plusBtn.disabled = maxVal !== null && newQty >= maxVal;
+    }
+  }
   updateCartUI();
 }
 
@@ -1030,6 +1041,7 @@ function abrirModal(id) {
           const sTxt = pocas ? 'Últimas ' + vs + 'u' : 'Disponible';
           const maxAttr = vs !== null ? ' max="' + vs + '"' : '';
           const currentQty = cart[cartKey]?.qty || 0;
+          const atMax = vs !== null && currentQty >= vs;
           const chArgs = '\'' + cartKey + '\',' + id + ',\'' + nomEsc + '\',' + precio + ',' + v.size_id + ',\'' + vnEsc + '\',\'' + imgEsc + '\'';
           return '<div class="modal-variant-row">' +
             '<div class="modal-variant-info">' +
@@ -1039,7 +1051,7 @@ function abrirModal(id) {
             '<div class="modal-vqty-wrap">' +
               '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1)">−</button>' +
               '<input class="modal-vqty-num" type="number" id="q-m-' + cartKey + '" value="' + currentQty + '" min="0"' + maxAttr + ' />' +
-              '<button class="modal-vqty-btn plus" onclick="chQty(' + chArgs + ',1)">+</button>' +
+              '<button class="modal-vqty-btn plus"' + (atMax ? ' disabled' : '') + ' onclick="chQty(' + chArgs + ',1)">+</button>' +
             '</div>' +
           '</div>';
         }).join('') +
