@@ -83,6 +83,9 @@
   .search-wrap input:focus { border-color: var(--accent); }
   .search-icon { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--text-hint); font-size: 15px; pointer-events: none; }
   .sort-select { padding: 9px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; background: var(--surface); color: var(--text); outline: none; cursor: pointer; }
+  .view-toggle { display: flex; border: 1.5px solid var(--border-strong); border-radius: var(--radius-sm); overflow: hidden; flex-shrink: 0; }
+  .view-toggle-btn { padding: 7px 12px; border: none; background: var(--surface); font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; color: var(--text-muted); transition: all 0.15s; white-space: nowrap; }
+  .view-toggle-btn.active { background: var(--accent); color: white; }
 
   .products-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(195px, 1fr)); gap: 12px; align-items: stretch; }
   .product-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; transition: box-shadow 0.15s; }
@@ -248,6 +251,10 @@
           <option value="name">Nombre A-Z</option>
           <option value="default">Orden original</option>
         </select>
+        <div class="view-toggle">
+          <button class="view-toggle-btn active" id="vt-product" onclick="setViewMode('product')">Producto</button>
+          <button class="view-toggle-btn" id="vt-variants" onclick="setViewMode('variants')">Variantes</button>
+        </div>
       </div>
       <div class="cat-pills" id="cat-pills"></div>
     </div>
@@ -340,8 +347,9 @@ let allProducts = [];
 let cart = {};
 let filtro = 'todos';
 let categoria = 'todas';
+let viewMode = 'product';
 let references = null;
-let adminConfig = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false };
+let adminConfig = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0 };
 let variantDimsCache = {};
 let tnImageMap = {}; // nombre/SKU -> { imgs: [], desc: '' }
 let modalGallery = [];
@@ -700,6 +708,10 @@ function renderProductos() {
     grid.innerHTML = '<div class="state-msg"><div class="icon">⊘</div><h3>Sin resultados</h3><p>Probá con otro filtro o término de búsqueda.</p></div>';
     return;
   }
+  if (viewMode === 'variants') {
+    grid.innerHTML = renderVariantesGrid(prods);
+    return;
+  }
   grid.innerHTML = prods.map(p => {
     const id = p.id || p.product_id;
     const nombre = p.name || p.nombre || p.product_name || 'Sin nombre';
@@ -721,6 +733,92 @@ function renderProductos() {
       '<div class="product-card-footer"><button class="btn-ver" onclick="abrirModal(' + id + ');event.stopPropagation()">Ver producto</button></div>' +
     '</div>';
   }).join('');
+}
+
+function setViewMode(mode) {
+  viewMode = mode;
+  $('vt-product').classList.toggle('active', mode === 'product');
+  $('vt-variants').classList.toggle('active', mode === 'variants');
+  renderProductos();
+}
+
+function renderVariantesGrid(prods) {
+  const cards = [];
+  for (const p of prods) {
+    const id = p.id || p.product_id;
+    const nombre = p.name || p.nombre || p.product_name || 'Sin nombre';
+    const cod = p.code || p.sku || p.codigo || '';
+    const precio = getPrecio(p);
+    const img = getImagen(p);
+    const cat = p.category || '';
+    const hiddenVars = (adminConfig.hiddenVariants || {})[String(id)] || [];
+    const variantes = (p.variantes || []).filter(v => {
+      if (hiddenVars.some(hid => hid == v.size_id)) return false;
+      const vs = getStockVariante(v);
+      return vs === null || vs > 0;
+    });
+
+    const dims = parseVariantDimensions(variantes);
+
+    if (dims) {
+      // 2D (color+modelo): una tarjeta por color
+      const colors = [...new Set(dims.map(d => d.dim1))];
+      for (const color of colors) {
+        const modelsCount = dims.filter(d => d.dim1 === color).length;
+        const colorEsc = color.replace(/'/g,"\\'");
+        cards.push(
+          '<div class="product-card" onclick="abrirModalConColor(' + id + ',\'' + colorEsc + '\')" style="cursor:pointer">' +
+            '<div class="product-img-wrap">' +
+              (img ? '<img src="' + img + '" alt="' + nombre + '" loading="lazy" onerror="this.parentNode.innerHTML=\'<div class=\\\'no-img\\\'>Sin imagen</div>\'">' : '<div class="no-img">Sin imagen</div>') +
+            '</div>' +
+            '<div class="product-body">' +
+              (cat ? '<div class="product-cat">' + cat + '</div>' : '') +
+              '<div class="product-name">' + nombre + '</div>' +
+              '<div class="product-code">' + color + '</div>' +
+              '<div class="product-price">' + formatPrecio(precio) + '</div>' +
+            '</div>' +
+            '<div class="product-card-footer"><button class="btn-ver" onclick="abrirModalConColor(' + id + ',\'' + colorEsc + '\');event.stopPropagation()">' + modelsCount + ' modelo' + (modelsCount !== 1 ? 's' : '') + '</button></div>' +
+          '</div>'
+        );
+      }
+    } else if (variantes.length > 0) {
+      // 1D: una tarjeta por variante
+      for (const v of variantes) {
+        const vEsc = v.size.replace(/'/g,"\\'");
+        cards.push(
+          '<div class="product-card" onclick="abrirModal(' + id + ')" style="cursor:pointer">' +
+            '<div class="product-img-wrap">' +
+              (img ? '<img src="' + img + '" alt="' + nombre + '" loading="lazy" onerror="this.parentNode.innerHTML=\'<div class=\\\'no-img\\\'>Sin imagen</div>\'">' : '<div class="no-img">Sin imagen</div>') +
+            '</div>' +
+            '<div class="product-body">' +
+              (cat ? '<div class="product-cat">' + cat + '</div>' : '') +
+              '<div class="product-name">' + nombre + '</div>' +
+              '<div class="product-code">' + v.size + '</div>' +
+              '<div class="product-price">' + formatPrecio(precio) + '</div>' +
+            '</div>' +
+            '<div class="product-card-footer"><button class="btn-ver" onclick="abrirModal(' + id + ');event.stopPropagation()">Ver producto</button></div>' +
+          '</div>'
+        );
+      }
+    } else {
+      // Sin variantes: igual que vista producto
+      cards.push(
+        '<div class="product-card" onclick="abrirModal(' + id + ')" style="cursor:pointer">' +
+          '<div class="product-img-wrap">' +
+            (img ? '<img src="' + img + '" alt="' + nombre + '" loading="lazy" onerror="this.parentNode.innerHTML=\'<div class=\\\'no-img\\\'>Sin imagen</div>\'">' : '<div class="no-img">Sin imagen</div>') +
+          '</div>' +
+          '<div class="product-body">' +
+            (cat ? '<div class="product-cat">' + cat + '</div>' : '') +
+            '<div class="product-name">' + nombre + '</div>' +
+            (cod ? '<div class="product-code">' + cod + '</div>' : '') +
+            '<div class="product-price">' + formatPrecio(precio) + '</div>' +
+          '</div>' +
+          '<div class="product-card-footer"><button class="btn-ver" onclick="abrirModal(' + id + ');event.stopPropagation()">Ver producto</button></div>' +
+        '</div>'
+      );
+    }
+  }
+  return cards.join('');
 }
 
 // Cambia la cantidad directamente en el carrito y actualiza el input
@@ -914,6 +1012,12 @@ function abrirModal(id) {
   document.body.style.overflow = 'hidden';
 }
 
+function abrirModalConColor(id, color) {
+  abrirModal(id);
+  // Si el modal tiene variantes 2D, pre-seleccionar el color
+  if (variantDimsCache[id]) setVariantDim(id, color);
+}
+
 function cerrarModal(e) {
   if (e && e.target !== $('modal-overlay')) return;
   $('modal-overlay').classList.remove('open');
@@ -1048,6 +1152,16 @@ async function confirmarPedido() {
   if (!items.length) { showToast('El pedido está vacío', 'error'); return; }
   const clientName = $('client-name').value.trim();
   if (!clientName) { showToast('Ingresá el nombre del cliente', 'error'); return; }
+
+  const minPurchase = adminConfig.minPurchase || 0;
+  if (minPurchase > 0) {
+    const totalAmount = items.reduce((s,i) => s + i.precio * i.qty, 0);
+    if (totalAmount < minPurchase) {
+      showToast('Compra mínima: ' + formatPrecio(minPurchase), 'error', 3500);
+      return;
+    }
+  }
+
   const obs = $('client-obs').value.trim();
   const contact = $('client-contact').value.trim();
 

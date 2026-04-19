@@ -168,6 +168,16 @@
         </div>
         <button class="toggle" id="toggle-hide-no-stock" onclick="toggleSetting('hideNoStock')"></button>
       </div>
+      <div class="setting-row" style="flex-wrap:wrap;gap:8px">
+        <div class="setting-info">
+          <div class="setting-label">Compra mínima</div>
+          <div class="setting-desc">Monto mínimo requerido para confirmar un pedido. Ingresá 0 para desactivar.</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+          <span style="font-size:14px;color:var(--text-muted)">$</span>
+          <input type="number" id="input-min-purchase" min="0" step="1000" style="width:130px;padding:8px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font-family:inherit;font-size:14px;outline:none" oninput="config.minPurchase=parseInt(this.value)||0" />
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -177,7 +187,7 @@
 <script>
 let allAdminProducts = [];
 const ALL_KEY = '__todas__';
-let config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false };
+let config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0 };
 let adminPassword = '';
 
 function $(id) { return document.getElementById(id); }
@@ -209,7 +219,7 @@ async function login() {
       return;
     }
     const loaded = await r.json();
-    config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, ...loaded };
+    config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, ...loaded };
     adminPassword = pwd;
     $('login-screen').style.display = 'none';
     $('admin-panel').style.display = 'block';
@@ -595,6 +605,8 @@ function setTab(tab) {
 function renderSettings() {
   const tog = $('toggle-hide-no-stock');
   if (tog) tog.classList.toggle('on', !!(config.hideNoStock));
+  const minInput = $('input-min-purchase');
+  if (minInput) minInput.value = config.minPurchase || 0;
 }
 
 function toggleSetting(key) {
