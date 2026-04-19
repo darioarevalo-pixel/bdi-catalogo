@@ -326,6 +326,14 @@
       </select>
     </div>
     <div class="form-group">
+      <label>Forma de entrega *</label>
+      <select id="client-delivery" style="width:100%;padding:8px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font-family:inherit;font-size:13px;color:var(--text);background:var(--bg);outline:none">
+        <option value="">— Seleccioná una opción —</option>
+        <option value="Envío a todo el país">Envío a todo el país</option>
+        <option value="Retiro en Rosario">Retiro en Rosario</option>
+      </select>
+    </div>
+    <div class="form-group">
       <label>Observaciones</label>
       <input type="text" id="client-obs" placeholder="Ej: Enviar el jueves" />
     </div>
@@ -1278,6 +1286,9 @@ async function confirmarPedido() {
   const payment = $('client-payment').value;
   if (!payment) { showToast('Seleccioná una forma de pago', 'error'); $('client-payment').focus(); return; }
 
+  const delivery = $('client-delivery').value;
+  if (!delivery) { showToast('Seleccioná una forma de entrega', 'error'); $('client-delivery').focus(); return; }
+
   const minPurchase = Number(adminConfig.minPurchase) || 0;
   if (minPurchase > 0) {
     const totalAmount = items.reduce((s,i) => s + i.precio * i.qty, 0);
@@ -1342,7 +1353,7 @@ async function confirmarPedido() {
       store_id: storeId,
       sale_state_id: 1,
       discount_inventory: true,
-      comments: [clientName, contact, 'Pago: ' + payment, obs].filter(Boolean).join(' — '),
+      comments: [clientName, contact, 'Pago: ' + payment, 'Entrega: ' + delivery, obs].filter(Boolean).join(' — '),
       items: items.map(i => ({ product_id: i.id, ...(i.sizeId ? { size_id: i.sizeId } : {}), quantity: i.qty, unit_price: i.precio }))
     };
 
@@ -1352,11 +1363,25 @@ async function confirmarPedido() {
     $('client-name').value = '';
     $('client-phone').value = '';
     $('client-payment').value = '';
+    $('client-delivery').value = '';
     $('client-obs').value = '';
     validarTelefono();
     updateCartUI();
     cerrarCarrito();
     showToast('Pedido #' + pedidoId + ' creado correctamente', 'success', 4000);
+
+    // Abrir WhatsApp con mensaje automático
+    const waMsg = '¡Hola! Acabo de realizar un pedido en el catálogo mayorista de BDI Accesorios.' +
+      '\n\n📦 Pedido N°: ' + pedidoId +
+      '\n👤 Nombre: ' + clientName +
+      '\n📱 Teléfono: ' + phone +
+      '\n💳 Pago: ' + payment +
+      '\n🚚 Entrega: ' + delivery +
+      (obs ? '\n📝 Obs: ' + obs : '') +
+      '\n\nQuedo a la espera para coordinar.';
+    setTimeout(() => {
+      window.open('https://wa.me/5493415851474?text=' + encodeURIComponent(waMsg), '_blank');
+    }, 800);
     renderProductos();
   } catch(e) {
     showToast('Error: ' + e.message, 'error', 4000);
