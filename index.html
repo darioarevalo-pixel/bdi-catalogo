@@ -466,7 +466,10 @@ async function fetchProxy(path, opts={}) {
 async function cargarConfig() {
   try {
     const r = await fetch('/api/config');
-    if (r.ok) adminConfig = await r.json();
+    if (r.ok) {
+      const loaded = await r.json();
+      adminConfig = { ...adminConfig, ...loaded };
+    }
   } catch(e) {}
 }
 
@@ -1239,11 +1242,11 @@ async function confirmarPedido() {
   const clientName = $('client-name').value.trim();
   if (!clientName) { showToast('Ingresá el nombre del cliente', 'error'); return; }
 
-  const minPurchase = adminConfig.minPurchase || 0;
+  const minPurchase = Number(adminConfig.minPurchase) || 0;
   if (minPurchase > 0) {
     const totalAmount = items.reduce((s,i) => s + i.precio * i.qty, 0);
     if (totalAmount < minPurchase) {
-      showToast('Compra mínima: ' + formatPrecio(minPurchase), 'error', 3500);
+      alert('El pedido no alcanza el mínimo de compra de ' + formatPrecio(minPurchase) + '.\n\nTotal actual: ' + formatPrecio(totalAmount));
       return;
     }
   }

@@ -41,7 +41,7 @@ module.exports = async (req, res) => {
         return res.status(401).json({ error: 'Contraseña incorrecta' });
     }
     try {
-      const config = (await kvGet()) || DEFAULT;
+      const config = { ...DEFAULT, ...(await kvGet() || {}) };
       return res.json(config);
     } catch (e) {
       return res.json(DEFAULT);
