@@ -39,7 +39,7 @@
   .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
 
   /* Content */
-  .admin-content { max-width: 860px; margin: 0 auto; padding: 1.5rem; }
+  .admin-content { max-width: 1600px; margin: 0 auto; padding: 1.5rem; }
 
   /* Toolbar */
   .admin-toolbar { display: flex; gap: 8px; margin-bottom: 1rem; }
@@ -48,7 +48,7 @@
   .admin-select { padding: 9px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; outline: none; background: var(--surface); cursor: pointer; }
 
   /* Product rows */
-  #products-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  #products-list { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
   .product-row { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; transition: opacity 0.15s; }
   .product-row[draggable="true"] { cursor: grab; }
   .product-row[draggable="true"]:active { cursor: grabbing; }
@@ -112,8 +112,9 @@
   .loading-state { text-align: center; padding: 3rem; color: var(--text-muted); font-size: 13px; }
   .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.4); border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block; vertical-align: middle; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  @media (max-width: 900px) { #products-list { grid-template-columns: repeat(2, 1fr); } }
-  @media (max-width: 600px) { #products-list { grid-template-columns: 1fr; } }
+  @media (max-width: 1100px) { #products-list { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 750px) { #products-list { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 500px) { #products-list { grid-template-columns: 1fr; } }
   .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(10px); background: var(--text); color: white; padding: 10px 18px; border-radius: var(--radius); font-size: 13px; font-weight: 500; opacity: 0; transition: opacity 0.2s, transform 0.2s; pointer-events: none; z-index: 500; }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   .toast.success { background: var(--success); }
