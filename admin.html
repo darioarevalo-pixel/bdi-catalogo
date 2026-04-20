@@ -309,10 +309,7 @@ function toggleProduct(id) {
   } else {
     config.hiddenProducts.push(parseInt(id));
   }
-  const hidden = isHidden(id);
-  $('prod-row-' + id)?.classList.toggle('hidden-row', hidden);
-  const tog = $('prod-toggle-' + id);
-  if (tog) tog.classList.toggle('on', !hidden);
+  renderProductList();
 }
 
 function toggleVariant(productId, variantId) {
@@ -364,11 +361,17 @@ function renderProductList() {
 
   // Start from globally ordered list, then filter
   const ordered = getOrderedAllProducts();
-  const prods = ordered.filter(p => {
+  let prods = ordered.filter(p => {
     const name = (p.name || p.nombre || '').toLowerCase();
     const code = (p.code || p.sku || '').toLowerCase();
     const pcat = p.category || '';
     return (!q || name.includes(q) || code.includes(q)) && (!cat || pcat === cat);
+  });
+  // Productos ocultos siempre al final
+  prods.sort((a, b) => {
+    const ha = isHidden(a.id || a.product_id) ? 1 : 0;
+    const hb = isHidden(b.id || b.product_id) ? 1 : 0;
+    return ha - hb;
   });
 
   const container = $('products-list');
