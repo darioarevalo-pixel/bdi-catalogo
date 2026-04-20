@@ -54,12 +54,12 @@
   .product-row[draggable="true"]:active { cursor: grabbing; }
   .product-row.dragging { opacity: 0.4; }
   .product-row.drag-over { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(17,24,39,0.15); }
-  .product-row-header { display: flex; align-items: center; gap: 7px; padding: 8px 10px; }
-  .product-info { flex: 1; min-width: 0; }
-  .product-row-name { font-size: 12px; font-weight: 600; line-height: 1.3; word-break: break-word; }
+  .product-row-header { display: flex; align-items: center; gap: 6px; padding: 7px 8px 5px; flex-wrap: wrap; }
+  .product-row-body { padding: 0 8px 7px; }
+  .product-row-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .product-row.hidden-row .product-row-name { color: var(--text-hint); text-decoration: line-through; }
   .product-row-cat { font-size: 10px; color: var(--text-muted); margin-top: 1px; }
-  .expand-btn { font-size: 10px; color: var(--text-hint); background: var(--bg); border: 1px solid var(--border); cursor: pointer; padding: 2px 6px; border-radius: 20px; white-space: nowrap; font-family: inherit; transition: color 0.12s; flex-shrink: 0; }
+  .expand-btn { font-size: 10px; color: var(--text-hint); background: var(--bg); border: 1px solid var(--border); cursor: pointer; padding: 2px 6px; border-radius: 20px; white-space: nowrap; font-family: inherit; transition: color 0.12s; flex-shrink: 0; margin-left: auto; }
   .expand-btn:hover { color: var(--text); border-color: var(--border-strong); }
 
   /* Toggle */
@@ -416,11 +416,11 @@ function renderProductList() {
         (!filtered ? '<div class="move-btns"><button class="move-btn" title="Subir" onclick="moveProduct(\'' + id + '\',-1)">▲</button><button class="move-btn" title="Bajar" onclick="moveProduct(\'' + id + '\',1)">▼</button></div>' : '') +
         (!filtered ? '<input class="pos-input" type="number" min="1" max="' + totalOrdered + '" value="' + pos + '" title="Escribí la posición y presioná Enter" onkeydown="if(event.key===\'Enter\')moveProductToPos(\'' + id + '\',this.value)" onblur="moveProductToPos(\'' + id + '\',this.value)" onclick="event.stopPropagation();this.select()" />' : '') +
         '<button class="toggle' + (hidden ? '' : ' on') + '" id="prod-toggle-' + id + '" onclick="toggleProduct(' + id + ')"></button>' +
-        '<div class="product-info">' +
-          '<div class="product-row-name">' + name + '</div>' +
-          (pcat ? '<div class="product-row-cat">' + pcat + '</div>' : '') +
-        '</div>' +
-        (variants.length ? '<button class="expand-btn" id="expand-btn-' + id + '" onclick="toggleExpand(' + id + ')">Ver variantes</button>' : '') +
+        (variants.length ? '<button class="expand-btn" id="expand-btn-' + id + '" onclick="toggleExpand(' + id + ')">Variantes</button>' : '') +
+      '</div>' +
+      '<div class="product-row-body">' +
+        '<div class="product-row-name">' + name + '</div>' +
+        (pcat ? '<div class="product-row-cat">' + pcat + '</div>' : '') +
       '</div>' +
       (variants.length ? '<div class="variant-rows" id="var-rows-' + id + '">' + varRows + '</div>' : '') +
     '</div>';
