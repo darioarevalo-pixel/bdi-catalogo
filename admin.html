@@ -98,6 +98,8 @@
   .cat-prod-row.drag-over { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(17,24,39,0.15); }
   .cat-prod-name { flex: 1; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .cat-prod-pos { font-size: 11px; color: var(--text-hint); font-family: monospace; flex-shrink: 0; width: 20px; text-align: right; }
+  .pos-input { width: 36px; text-align: center; border: 1px solid var(--border-strong); border-radius: 3px; font-family: monospace; font-size: 12px; color: var(--text); background: var(--bg); padding: 2px 2px; height: 24px; outline: none; flex-shrink: 0; }
+  .pos-input:focus { border-color: var(--accent); background: white; }
   .prod-drag-handle { color: var(--text-hint); font-size: 14px; cursor: grab; user-select: none; flex-shrink: 0; }
   .prod-drag-handle:active { cursor: grabbing; }
   .move-btns { display: flex; flex-direction: column; gap: 1px; flex-shrink: 0; }
@@ -412,7 +414,7 @@ function renderProductList() {
       '<div class="product-row-header">' +
         (!filtered ? '<span class="prod-drag-handle" title="Arrastrar para reordenar">⠿</span>' : '') +
         (!filtered ? '<div class="move-btns"><button class="move-btn" title="Subir" onclick="moveProduct(\'' + id + '\',-1)">▲</button><button class="move-btn" title="Bajar" onclick="moveProduct(\'' + id + '\',1)">▼</button></div>' : '') +
-        (!filtered ? '<div class="cat-prod-pos" style="width:24px">' + pos + '</div>' : '') +
+        (!filtered ? '<input class="pos-input" type="number" min="1" max="' + totalOrdered + '" value="' + pos + '" title="Escribí la posición y presioná Enter" onkeydown="if(event.key===\'Enter\')moveProductToPos(\'' + id + '\',this.value)" onblur="moveProductToPos(\'' + id + '\',this.value)" onclick="event.stopPropagation();this.select()" />' : '') +
         '<button class="toggle' + (hidden ? '' : ' on') + '" id="prod-toggle-' + id + '" onclick="toggleProduct(' + id + ')"></button>' +
         '<div class="product-info">' +
           '<div class="product-row-name">' + name + '</div>' +
@@ -458,6 +460,26 @@ function prodListDrop(e, toIdx) {
   config.productOrder[ALL_KEY] = ids;
   dragAllFrom = null;
   renderProductList();
+}
+
+function moveProductToPos(id, rawVal) {
+  if (!config.productOrder) config.productOrder = {};
+  const prods = getOrderedAllProducts();
+  const ids = prods.map(p => String(p.id || p.product_id));
+  const currentIdx = ids.indexOf(String(id));
+  if (currentIdx === -1) return;
+  let newIdx = parseInt(rawVal) - 1;
+  if (isNaN(newIdx)) return;
+  newIdx = Math.max(0, Math.min(ids.length - 1, newIdx));
+  if (newIdx === currentIdx) return;
+  ids.splice(currentIdx, 1);
+  ids.splice(newIdx, 0, String(id));
+  config.productOrder[ALL_KEY] = ids;
+  renderProductList();
+  setTimeout(() => {
+    const el = $('prod-row-' + id);
+    if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, 50);
 }
 
 function moveProduct(id, dir) {
