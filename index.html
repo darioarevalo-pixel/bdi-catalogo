@@ -89,6 +89,7 @@
   .vcard-variants { padding: 0 6px 6px; display: flex; flex-direction: column; gap: 3px; }
 
   .products-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(195px, 1fr)); gap: 12px; align-items: stretch; }
+  .products-grid.variants-grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
   .product-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; transition: box-shadow 0.15s; }
   .product-card:hover { box-shadow: var(--shadow); }
   .product-img-wrap { width: 100%; height: 160px; flex-shrink: 0; background: var(--bg); overflow: hidden; display: flex; align-items: center; justify-content: center; position: relative; }
@@ -269,8 +270,8 @@
         <div class="view-label-wrap">
           <span class="view-label">Vista</span>
           <select class="sort-select" id="view-select" onchange="setViewMode(this.value)" style="padding:7px 10px;font-size:12px">
-            <option value="product">Producto</option>
             <option value="variants">Variantes</option>
+            <option value="product">Producto</option>
           </select>
         </div>
       </div>
@@ -396,7 +397,7 @@ let allProducts = [];
 let cart = {};
 let filtro = 'todos';
 let categoria = 'todas';
-let viewMode = 'product';
+let viewMode = 'variants';
 let references = null;
 let adminConfig = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0 };
 let variantDimsCache = {};
@@ -758,6 +759,7 @@ function renderProductos() {
   else if (sort === 'name') prods.sort((a,b) => (a.name||'').localeCompare(b.name||''));
 
   const grid = $('products-grid');
+  grid.classList.toggle('variants-grid', viewMode === 'variants');
   if (!prods.length) {
     grid.innerHTML = '<div class="state-msg"><div class="icon">⊘</div><h3>Sin resultados</h3><p>Probá con otro filtro o término de búsqueda.</p></div>';
     return;
@@ -807,8 +809,14 @@ function renderCardVariantRows(id, dims, selectedColor, nomEsc, precio, imgEsc) 
     const atMax = vs !== null && currentQty >= vs;
     const fullVnEsc = v.size.replace(/'/g,"\\'").replace(/"/g,'&quot;');
     const chArgs = '\'' + cartKey + '\',' + id + ',\'' + nomEsc + '\',' + precio + ',' + v.size_id + ',\'' + fullVnEsc + '\',\'' + imgEsc + '\'';
+    const pocas = vs !== null && vs < 10;
+    const sClass = pocas ? 'low' : 'ok';
+    const sTxt = pocas ? 'Últimas ' + vs + 'u' : 'Disponible';
     return '<div class="modal-variant-row">' +
-      '<div class="modal-variant-info"><div class="modal-variant-name" style="font-size:12px">' + v.dim2 + '</div></div>' +
+      '<div class="modal-variant-info">' +
+        '<div class="modal-variant-name" style="font-size:12px">' + v.dim2 + '</div>' +
+        '<div class="modal-variant-stock ' + sClass + '">' + sTxt + '</div>' +
+      '</div>' +
       '<div class="modal-vqty-wrap">' +
         '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1);event.stopPropagation()">−</button>' +
         '<input class="modal-vqty-num" type="number" id="q-m-' + cartKey + '" value="' + currentQty + '" min="0"' + maxAttr + ' />' +
@@ -876,10 +884,16 @@ function renderVariantesGrid(prods) {
           const currentQty = cart[cartKey]?.qty || 0;
           const maxAttr = vs !== null ? ' max="' + vs + '"' : '';
           const atMax = vs !== null && currentQty >= vs;
+          const pocas = vs !== null && vs < 10;
+          const sClass = pocas ? 'low' : 'ok';
+          const sTxt = pocas ? 'Últimas ' + vs + 'u' : 'Disponible';
           const vnEsc = v.size.replace(/'/g,"\\'").replace(/"/g,'&quot;');
           const chArgs = '\'' + cartKey + '\',' + id + ',\'' + nomEsc + '\',' + precio + ',' + v.size_id + ',\'' + vnEsc + '\',\'' + imgEsc + '\'';
           return '<div class="modal-variant-row">' +
-            '<div class="modal-variant-info"><div class="modal-variant-name" style="font-size:12px">' + v.size + '</div></div>' +
+            '<div class="modal-variant-info">' +
+              '<div class="modal-variant-name" style="font-size:12px">' + v.size + '</div>' +
+              '<div class="modal-variant-stock ' + sClass + '">' + sTxt + '</div>' +
+            '</div>' +
             '<div class="modal-vqty-wrap">' +
               '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1);event.stopPropagation()">−</button>' +
               '<input class="modal-vqty-num" type="number" id="q-m-' + cartKey + '" value="' + currentQty + '" min="0"' + maxAttr + ' />' +
