@@ -18,7 +18,7 @@ module.exports = async (req, res) => {
     let page = 1;
     while (true) {
       const r = await fetch(
-        `${API_BASE}/products?per_page=200&page=${page}&fields=id,name,description,images,variants,published`,
+        `${API_BASE}/products?per_page=200&page=${page}&fields=id,name,handle,description,images,variants,published`,
         { headers: { 'Authentication': `bearer ${TOKEN}`, 'User-Agent': 'BDI Catalogo (darioarevalo@arebensrl.com)' } }
       );
       if (!r.ok) break;
@@ -36,9 +36,12 @@ module.exports = async (req, res) => {
       const images  = (p.images || []).map(i => i.src).filter(Boolean);
       const sku     = (p.variants || [])[0]?.sku || null;
 
+      const handle = p.handle?.es || p.handle?.pt || Object.values(p.handle || {})[0] || null;
+
       return {
         id:          p.id,
         name,
+        handle,
         sku,
         published:   p.published ?? true,
         image_count: images.length,
