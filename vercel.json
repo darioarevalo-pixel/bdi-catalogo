@@ -2,7 +2,8 @@
   "functions": {
     "api/proxy.js": { "maxDuration": 15 },
     "api/config.js": { "maxDuration": 10 },
-    "api/tiendanube.js": { "maxDuration": 15 }
+    "api/tiendanube.js": { "maxDuration": 15 },
+    "api/tiendanube-audit.js": { "maxDuration": 20 }
   },
   "rewrites": [
     { "source": "/admin", "destination": "/admin.html" }
