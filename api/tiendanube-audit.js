@@ -48,6 +48,7 @@ module.exports = async (req, res) => {
         images,
         has_desc:    desc.length > 10,
         desc_length: desc.length,
+        desc,
       };
     });
 
