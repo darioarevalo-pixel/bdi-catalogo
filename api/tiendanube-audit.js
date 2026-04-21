@@ -65,6 +65,7 @@ function mapProduct(p) {
     has_desc:    desc.length > 10,
     desc_length: desc.length,
     desc,
+    raw_desc: rawDesc || '',
   };
 }
 
