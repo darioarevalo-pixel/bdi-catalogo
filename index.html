@@ -506,7 +506,10 @@ async function fetchProxy(path, opts={}) {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || err.message || 'HTTP ' + res.status);
+    const msg = err.detalle ? (err.error + ':\n\n' + err.detalle) : (err.error || err.message || 'HTTP ' + res.status);
+    const e = new Error(msg);
+    e.problemas = err.problemas || null;
+    throw e;
   }
   return res.json();
 }
