@@ -206,6 +206,22 @@
   .confirm-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 400; align-items: center; justify-content: center; padding: 1rem; }
   .confirm-overlay.open { display: flex; }
   .confirm-box { background: var(--surface); border-radius: var(--radius); width: 100%; max-width: 400px; padding: 2rem 1.75rem; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+
+  /* Modal de stock insuficiente */
+  .stock-alert-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 400; align-items: center; justify-content: center; padding: 1rem; }
+  .stock-alert-overlay.open { display: flex; }
+  .stock-alert-box { background: var(--surface); border-radius: var(--radius); width: 100%; max-width: 420px; padding: 2rem 1.75rem; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+  .stock-alert-icon { font-size: 2rem; margin-bottom: 0.75rem; text-align: center; }
+  .stock-alert-title { font-size: 17px; font-weight: 700; color: var(--text); margin-bottom: 6px; text-align: center; }
+  .stock-alert-sub { font-size: 13px; color: var(--text-muted); text-align: center; margin-bottom: 1.25rem; }
+  .stock-alert-list { margin-bottom: 1.25rem; display: flex; flex-direction: column; gap: 8px; }
+  .stock-alert-item { padding: 10px 12px; border-radius: var(--radius-sm); font-size: 13px; line-height: 1.4; }
+  .stock-alert-item.eliminado { background: var(--danger-light); border: 1px solid #FECACA; }
+  .stock-alert-item.reducido { background: var(--warning-light); border: 1px solid #FDE68A; }
+  .stock-alert-item-name { font-weight: 600; color: var(--text); }
+  .stock-alert-item-detail { color: var(--text-muted); margin-top: 2px; }
+  .stock-alert-note { font-size: 12px; color: var(--text-hint); text-align: center; margin-bottom: 1.25rem; line-height: 1.5; }
+  .stock-alert-actions { display: flex; flex-direction: column; gap: 8px; }
   .confirm-icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
   .confirm-title { font-size: 18px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
   .confirm-number { font-size: 13px; color: var(--text-muted); margin-bottom: 1rem; }
@@ -360,6 +376,21 @@
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- Modal stock insuficiente -->
+<div class="stock-alert-overlay" id="stock-alert-overlay">
+  <div class="stock-alert-box">
+    <div class="stock-alert-icon">⚠️</div>
+    <div class="stock-alert-title">Algunos artículos se agotaron</div>
+    <div class="stock-alert-sub">Mientras confirmabas, el stock cambió.</div>
+    <div class="stock-alert-list" id="stock-alert-list"></div>
+    <div class="stock-alert-note" id="stock-alert-note"></div>
+    <div class="stock-alert-actions">
+      <button class="btn btn-accent" id="btn-stock-confirmar" onclick="stockAlertConfirmar()" style="display:none">Confirmar pedido actualizado</button>
+      <button class="btn btn-outline" onclick="stockAlertCerrar()">Revisar pedido</button>
+    </div>
+  </div>
+</div>
 
 <!-- Modal pedido confirmado -->
 <div class="confirm-overlay" id="confirm-overlay">
@@ -1443,10 +1474,77 @@ async function confirmarPedido() {
     document.body.style.overflow = 'hidden';
     renderProductos();
   } catch(e) {
-    showToast('Error: ' + e.message, 'error', 4000);
+    btn.innerHTML = 'Confirmar pedido';
+    btn.disabled = false;
+    if (e.problemas && e.problemas.length > 0) {
+      mostrarAlertaStock(e.problemas);
+    } else {
+      showToast('Error al confirmar: ' + e.message, 'error', 5000);
+    }
+    return;
   }
   btn.innerHTML = 'Confirmar pedido';
   btn.disabled = false;
+}
+
+function mostrarAlertaStock(problemas) {
+  // Ajustar carrito según lo que reportó el servidor
+  for (const prob of problemas) {
+    const key = Object.keys(cart).find(k => {
+      const i = cart[k];
+      return String(i.id) === String(prob.product_id) &&
+             String(i.sizeId || '') === String(prob.size_id || '');
+    });
+    if (!key) continue;
+    if (prob.disponible === 0) delete cart[key];
+    else cart[key].qty = prob.disponible;
+  }
+  updateCartUI();
+
+  // Construir lista de cambios
+  const eliminados = problemas.filter(p => p.disponible === 0);
+  const reducidos  = problemas.filter(p => p.disponible > 0);
+
+  document.getElementById('stock-alert-list').innerHTML = [
+    ...eliminados.map(p => `
+      <div class="stock-alert-item eliminado">
+        <div class="stock-alert-item-name">${p.nombre}${p.variante ? ' — ' + p.variante : ''}</div>
+        <div class="stock-alert-item-detail">Sin stock disponible — lo eliminamos de tu pedido.</div>
+      </div>`),
+    ...reducidos.map(p => `
+      <div class="stock-alert-item reducido">
+        <div class="stock-alert-item-name">${p.nombre}${p.variante ? ' — ' + p.variante : ''}</div>
+        <div class="stock-alert-item-detail">Solo quedan ${p.disponible} unidad${p.disponible !== 1 ? 'es' : ''} — ajustamos la cantidad.</div>
+      </div>`),
+  ].join('');
+
+  const cartCount = Object.keys(cart).length;
+  const note = document.getElementById('stock-alert-note');
+  const btnConfirmar = document.getElementById('btn-stock-confirmar');
+
+  if (cartCount === 0) {
+    note.textContent = 'Tu pedido quedó vacío. Podés seguir eligiendo artículos del catálogo.';
+    btnConfirmar.style.display = 'none';
+  } else {
+    note.textContent = '¿Querés confirmar el pedido con los artículos restantes, o preferís revisar y agregar otros?';
+    btnConfirmar.style.display = '';
+  }
+
+  document.getElementById('stock-alert-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function stockAlertCerrar() {
+  document.getElementById('stock-alert-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+  abrirCarrito();
+}
+
+function stockAlertConfirmar() {
+  document.getElementById('stock-alert-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+  abrirCarrito();
+  confirmarPedido();
 }
 
 </script>
