@@ -98,6 +98,14 @@
   .product-name { font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.3; text-transform: uppercase; }
   .product-code { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-hint); flex-shrink: 0; }
   .product-price { font-size: 17px; font-weight: 700; color: var(--accent); padding-top: 4px; flex-shrink: 0; margin-top: auto; }
+  .product-price-wrap { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; padding-top: 4px; flex-shrink: 0; margin-top: auto; }
+  .product-price-wrap .product-price { padding-top: 0; margin-top: 0; }
+  .product-price-old { font-size: 12px; color: var(--text-muted); text-decoration: line-through; font-weight: 500; }
+  .product-discount-badge { font-size: 11px; font-weight: 700; color: var(--danger); background: rgba(220, 38, 38, 0.1); padding: 2px 6px; border-radius: 4px; }
+  .product-img-badge { position: absolute; top: 8px; left: 8px; background: var(--danger); color: white; font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 4px; z-index: 2; box-shadow: 0 2px 8px rgba(220, 38, 38, 0.35); letter-spacing: 0.3px; }
+  .modal-price-old { font-size: 14px; color: var(--text-muted); text-decoration: line-through; font-weight: 500; margin-right: 8px; }
+  .modal-price-current { font-size: 24px; font-weight: 700; color: var(--accent); }
+  .modal-discount-badge { font-size: 12px; font-weight: 700; color: var(--danger); background: rgba(220, 38, 38, 0.1); padding: 3px 8px; border-radius: 4px; margin-left: 8px; vertical-align: middle; }
   .product-card-footer { padding: 0 12px 12px; flex-shrink: 0; }
   .btn-ver { width: 100%; padding: 7px; border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; border: 1.5px solid var(--accent); background: var(--accent); color: white; transition: opacity 0.15s; }
   .btn-ver:hover { opacity: 0.85; }
@@ -433,7 +441,7 @@ let filtro = 'todos';
 let categoria = 'todas';
 let viewMode = 'variants';
 let references = null;
-let adminConfig = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0 };
+let adminConfig = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {} };
 let variantDimsCache = {};
 let cardVariantState = {};
 let tnImageMap = {}; // nombre/SKU -> { imgs: [], desc: '' }
@@ -742,6 +750,30 @@ function formatPrecio(n) {
   return '$' + Math.round(n).toLocaleString('es-AR');
 }
 
+function getPrecioAnterior(p) {
+  const refs = adminConfig.referencePrices || {};
+  const id = p.id || p.product_id;
+  const ref = parseFloat(refs[id] || refs[String(id)] || 0);
+  return ref > 0 ? ref : 0;
+}
+
+function getDescuentoPct(precioActual, precioAnterior) {
+  if (!precioAnterior || precioAnterior <= precioActual) return 0;
+  return Math.round((1 - precioActual / precioAnterior) * 100);
+}
+
+function precioCardHTML(precio, precioAnterior) {
+  const pct = getDescuentoPct(precio, precioAnterior);
+  if (pct > 0) {
+    return '<div class="product-price-wrap">' +
+      '<span class="product-price-old">' + formatPrecio(precioAnterior) + '</span>' +
+      '<span class="product-price">' + formatPrecio(precio) + '</span>' +
+      '<span class="product-discount-badge">-' + pct + '%</span>' +
+    '</div>';
+  }
+  return '<div class="product-price">' + formatPrecio(precio) + '</div>';
+}
+
 
 function applyCustomProductOrder(prods, cat) {
   const orderMap = (adminConfig.productOrder || {})[cat] || [];
@@ -810,18 +842,21 @@ function renderProductos() {
     const nombre = p.name || p.nombre || p.product_name || 'Sin nombre';
     const cod = p.code || p.sku || p.codigo || '';
     const precio = getPrecio(p);
+    const precioAnt = getPrecioAnterior(p);
+    const pctDisc = getDescuentoPct(precio, precioAnt);
     const img = getImagen(p);
     const cat = p.category || '';
 
     return '<div class="product-card" onclick="abrirModal(' + id + ')" style="cursor:pointer">' +
       '<div class="product-img-wrap">' +
+        (pctDisc > 0 ? '<div class="product-img-badge">-' + pctDisc + '%</div>' : '') +
         (img ? '<img src="' + img + '" alt="' + nombre + '" loading="lazy" onerror="this.parentNode.innerHTML=\'<div class=\\\'no-img\\\'>Sin imagen</div>\'">' : '<div class="no-img">Sin imagen</div>') +
       '</div>' +
       '<div class="product-body">' +
         (cat ? '<div class="product-cat">' + cat + '</div>' : '') +
         '<div class="product-name">' + nombre + '</div>' +
         (cod ? '<div class="product-code">' + cod + '</div>' : '') +
-        '<div class="product-price">' + formatPrecio(precio) + '</div>' +
+        precioCardHTML(precio, precioAnt) +
       '</div>' +
       '<div class="product-card-footer"><button class="btn-ver" onclick="abrirModal(' + id + ');event.stopPropagation()">Ver producto</button></div>' +
     '</div>';
@@ -881,6 +916,8 @@ function renderVariantesGrid(prods) {
     const nombre = p.name || p.nombre || p.product_name || 'Sin nombre';
     const cod = p.code || p.sku || p.codigo || '';
     const precio = getPrecio(p);
+    const precioAnt = getPrecioAnterior(p);
+    const pctDisc = getDescuentoPct(precio, precioAnt);
     const imgs = getImagenes(p);
     const img = imgs[0] || null;
     const cat = p.category || '';
@@ -955,13 +992,16 @@ function renderVariantesGrid(prods) {
     cards.push(
       '<div class="product-card" style="cursor:default">' +
         '<div class="product-img-wrap" style="cursor:pointer" onclick="abrirModalSoloGaleria(' + id + ')">' +
+          (pctDisc > 0 ? '<div class="product-img-badge">-' + pctDisc + '%</div>' : '') +
           (img ? '<img src="' + img + '" alt="' + nombre + '" loading="lazy" onerror="this.parentNode.innerHTML=\'<div class=\\\'no-img\\\'>Sin imagen</div>\'">' : '<div class="no-img">Sin imagen</div>') +
         '</div>' +
         '<div class="product-body" style="cursor:pointer;flex:0 0 auto" onclick="abrirModalSoloGaleria(' + id + ')">' +
           (cat ? '<div class="product-cat">' + cat + '</div>' : '') +
           '<div class="product-name">' + nombre + '</div>' +
           (cod ? '<div class="product-code">' + cod + '</div>' : '') +
-          '<div class="product-price" style="margin-top:4px">' + formatPrecio(precio) + '</div>' +
+          (pctDisc > 0
+            ? '<div class="product-price-wrap" style="margin-top:4px"><span class="product-price-old">' + formatPrecio(precioAnt) + '</span><span class="product-price">' + formatPrecio(precio) + '</span><span class="product-discount-badge">-' + pctDisc + '%</span></div>'
+            : '<div class="product-price" style="margin-top:4px">' + formatPrecio(precio) + '</div>') +
         '</div>' +
         variantsHTML +
         '<div class="product-card-footer"><button class="btn-ver" style="background:transparent;color:var(--accent);border-color:var(--accent)" onclick="abrirModalSoloGaleria(' + id + ')">Ver producto</button></div>' +
@@ -1090,7 +1130,16 @@ function abrirModal(id) {
   $('modal-title').textContent = nombre;
   $('modal-code').textContent = cod;
   $('modal-code').style.display = cod ? 'block' : 'none';
-  $('modal-price').textContent = formatPrecio(precio);
+  const precioAntModal = getPrecioAnterior(p);
+  const pctDiscModal = getDescuentoPct(precio, precioAntModal);
+  if (pctDiscModal > 0) {
+    $('modal-price').innerHTML =
+      '<span class="modal-price-old">' + formatPrecio(precioAntModal) + '</span>' +
+      '<span class="modal-price-current">' + formatPrecio(precio) + '</span>' +
+      '<span class="modal-discount-badge">-' + pctDiscModal + '%</span>';
+  } else {
+    $('modal-price').textContent = formatPrecio(precio);
+  }
   $('modal-price').style.display = 'block';
 
   // Descripción

@@ -121,6 +121,25 @@
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   .toast.success { background: var(--success); }
   .toast.error { background: var(--danger); }
+  /* Tab Precios */
+  .price-row { display: grid; grid-template-columns: 1fr 110px 130px 110px; gap: 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: white; margin-bottom: 6px; }
+  .price-row.has-discount { border-left: 3px solid var(--success); }
+  .price-row.has-ref-no-disc { border-left: 3px solid var(--border-strong); }
+  .price-info { min-width: 0; }
+  .price-info .pname { font-size: 13px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .price-info .pmeta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .price-current { font-size: 13px; color: var(--text); font-weight: 500; text-align: right; }
+  .price-input-wrap { display: flex; align-items: center; gap: 4px; }
+  .price-input-wrap span { font-size: 13px; color: var(--text-muted); }
+  .price-input { width: 100%; padding: 7px 9px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; outline: none; text-align: right; }
+  .price-input:focus { border-color: var(--accent); }
+  .price-discount { font-size: 12px; font-weight: 600; text-align: right; }
+  .price-discount.active { color: var(--success); }
+  .price-discount.inactive { color: var(--text-muted); }
+  @media (max-width: 700px) {
+    .price-row { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .price-current, .price-discount { text-align: left; }
+  }
 </style>
 </head>
 <body>
@@ -149,6 +168,7 @@
   <div class="tabs">
     <button class="tab-btn active" onclick="setTab('products')">Productos</button>
     <button class="tab-btn" onclick="setTab('categories')">Categorías</button>
+    <button class="tab-btn" onclick="setTab('prices')">Precios</button>
     <button class="tab-btn" onclick="setTab('settings')">Configuración</button>
   </div>
 
@@ -167,6 +187,23 @@
     <div id="tab-categories" style="display:none">
       <p class="section-note">Arrastrá las categorías para definir el orden en que aparecen. Dentro de cada una podés ordenar los productos de esa categoría específica.</p>
       <div id="categories-list"><div class="loading-state">Cargando...</div></div>
+    </div>
+
+    <div id="tab-prices" style="display:none">
+      <p class="section-note">Cargá el "precio anterior" de cada producto. Si es mayor al precio mayorista actual, el catálogo va a mostrar el descuento al cliente. Dejá vacío para no mostrar descuento.</p>
+      <div class="admin-toolbar">
+        <input class="admin-search" type="text" id="prices-search" placeholder="Buscar producto..." oninput="renderPriceList()" />
+        <select class="admin-select" id="prices-cat-filter" onchange="renderPriceList()">
+          <option value="">Todas las categorías</option>
+        </select>
+        <select class="admin-select" id="prices-filter-state" onchange="renderPriceList()">
+          <option value="">Todos los productos</option>
+          <option value="with-ref">Con precio anterior</option>
+          <option value="discount">Con descuento activo</option>
+          <option value="no-ref">Sin precio anterior</option>
+        </select>
+      </div>
+      <div id="prices-list"><div class="loading-state">Cargando productos...</div></div>
     </div>
 
     <div id="tab-settings" style="display:none">
@@ -196,7 +233,7 @@
 <script>
 let allAdminProducts = [];
 const ALL_KEY = '__todas__';
-let config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0 };
+let config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {} };
 let adminPassword = '';
 
 function $(id) { return document.getElementById(id); }
@@ -228,7 +265,8 @@ async function login() {
       return;
     }
     const loaded = await r.json();
-    config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, ...loaded };
+    config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, ...loaded };
+    if (!config.referencePrices) config.referencePrices = {};
     adminPassword = pwd;
     $('login-screen').style.display = 'none';
     $('admin-panel').style.display = 'block';
@@ -648,11 +686,116 @@ function prodDrop(e, cat, catIdx, toProdIdx) {
 function setTab(tab) {
   $('tab-products').style.display = tab === 'products' ? 'block' : 'none';
   $('tab-categories').style.display = tab === 'categories' ? 'block' : 'none';
+  $('tab-prices').style.display = tab === 'prices' ? 'block' : 'none';
   $('tab-settings').style.display = tab === 'settings' ? 'block' : 'none';
   document.querySelectorAll('.tab-btn').forEach((btn, i) => {
-    btn.classList.toggle('active', ['products','categories','settings'][i] === tab);
+    btn.classList.toggle('active', ['products','categories','prices','settings'][i] === tab);
   });
   if (tab === 'settings') renderSettings();
+  if (tab === 'prices') {
+    populatePriceCatFilter();
+    renderPriceList();
+  }
+}
+
+function getCurrentPrice(p) {
+  const w = parseFloat(p.wholesaler_price || 0);
+  const r = parseFloat(p.retailer_price || p.price || 0);
+  return w > 0 ? w : r;
+}
+
+function fmtAR(n) {
+  return '$' + Math.round(n).toLocaleString('es-AR');
+}
+
+function populatePriceCatFilter() {
+  const sel = $('prices-cat-filter');
+  if (!sel || sel.options.length > 1) return;
+  const cats = [...new Set(allAdminProducts.map(p => p.category || '').filter(Boolean))].sort();
+  cats.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c; opt.textContent = c;
+    sel.appendChild(opt);
+  });
+}
+
+function renderPriceList() {
+  const q = ($('prices-search')?.value || '').toLowerCase();
+  const cat = $('prices-cat-filter')?.value || '';
+  const state = $('prices-filter-state')?.value || '';
+  const refs = config.referencePrices || {};
+
+  let prods = allAdminProducts.filter(p => {
+    const id = p.id || p.product_id;
+    const name = (p.name || p.nombre || '').toLowerCase();
+    const code = (p.code || p.sku || '').toLowerCase();
+    const pcat = p.category || '';
+    if (q && !name.includes(q) && !code.includes(q)) return false;
+    if (cat && pcat !== cat) return false;
+    const ref = parseFloat(refs[id] || 0);
+    const cur = getCurrentPrice(p);
+    if (state === 'with-ref' && !(ref > 0)) return false;
+    if (state === 'no-ref' && ref > 0) return false;
+    if (state === 'discount' && !(ref > 0 && cur > 0 && ref > cur)) return false;
+    return true;
+  });
+
+  const container = $('prices-list');
+  if (!prods.length) {
+    container.innerHTML = '<div class="loading-state">Sin resultados</div>';
+    return;
+  }
+
+  container.innerHTML = prods.map(p => {
+    const id = p.id || p.product_id;
+    const name = p.name || p.nombre || 'Sin nombre';
+    const cod = p.code || p.sku || '';
+    const cur = getCurrentPrice(p);
+    const ref = refs[id] != null ? refs[id] : '';
+    const refNum = parseFloat(ref) || 0;
+    const hasDisc = refNum > 0 && cur > 0 && refNum > cur;
+    const pct = hasDisc ? Math.round((1 - cur / refNum) * 100) : 0;
+    const rowCls = hasDisc ? ' has-discount' : (refNum > 0 ? ' has-ref-no-disc' : '');
+    const discTxt = hasDisc ? '-' + pct + '%' : (refNum > 0 ? 'Sin descuento' : '—');
+    const discCls = hasDisc ? 'active' : 'inactive';
+
+    return '<div class="price-row' + rowCls + '" data-pid="' + id + '">' +
+      '<div class="price-info">' +
+        '<div class="pname">' + name.replace(/</g,'&lt;') + '</div>' +
+        '<div class="pmeta">' + (cod ? cod + ' · ' : '') + (p.category || '') + '</div>' +
+      '</div>' +
+      '<div class="price-current">' + (cur > 0 ? fmtAR(cur) : '—') + '</div>' +
+      '<div class="price-input-wrap"><span>$</span>' +
+        '<input class="price-input" type="number" min="0" step="100" value="' + (ref === '' ? '' : ref) + '" ' +
+          'placeholder="Anterior" oninput="setRefPrice(' + id + ',this.value)" />' +
+      '</div>' +
+      '<div class="price-discount ' + discCls + '">' + discTxt + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function setRefPrice(productId, value) {
+  if (!config.referencePrices) config.referencePrices = {};
+  const v = parseFloat(value);
+  if (!v || v <= 0) delete config.referencePrices[productId];
+  else config.referencePrices[productId] = v;
+
+  const p = allAdminProducts.find(x => (x.id || x.product_id) == productId);
+  if (!p) return;
+  const cur = getCurrentPrice(p);
+  const ref = v || 0;
+  const hasDisc = ref > 0 && cur > 0 && ref > cur;
+  const pct = hasDisc ? Math.round((1 - cur / ref) * 100) : 0;
+  const row = document.querySelector('#prices-list .price-row[data-pid="' + productId + '"]');
+  if (!row) return;
+  row.classList.remove('has-discount', 'has-ref-no-disc');
+  if (hasDisc) row.classList.add('has-discount');
+  else if (ref > 0) row.classList.add('has-ref-no-disc');
+  const disc = row.querySelector('.price-discount');
+  if (disc) {
+    disc.textContent = hasDisc ? '-' + pct + '%' : (ref > 0 ? 'Sin descuento' : '—');
+    disc.className = 'price-discount ' + (hasDisc ? 'active' : 'inactive');
+  }
 }
 
 function renderSettings() {
