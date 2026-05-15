@@ -1,7 +1,7 @@
 const KV_URL = process.env.KV_REST_API_URL || process.env.STORAGE_KV_REST_API_URL;
 const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.STORAGE_KV_REST_API_TOKEN;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'bdi2024';
-const CONFIG_KEY = 'catalog-config';
+const CONFIG_KEY = process.env.CONFIG_KEY || 'catalog-config';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
