@@ -166,6 +166,23 @@
     .recargo-row { grid-template-columns: 1fr 1fr; gap: 8px; }
     .recargo-cost, .recargo-final { text-align: left; }
   }
+  /* Tab Banners */
+  .banner-card { display: grid; grid-template-columns: 140px 1fr auto; gap: 16px; align-items: start; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: white; margin-bottom: 10px; }
+  .banner-card.inactive { opacity: 0.55; background: #fafafa; }
+  .banner-preview { width: 140px; aspect-ratio: 16/9; background: var(--bg); border-radius: var(--radius-sm); overflow: hidden; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--text-hint); }
+  .banner-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .banner-fields { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .banner-fields label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--text-muted); }
+  .banner-fields input[type=text], .banner-fields input[type=url] { padding: 7px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; outline: none; }
+  .banner-fields input:focus { border-color: var(--accent); }
+  .banner-actions { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+  .banner-actions .move-btns { display: flex; gap: 4px; }
+  .banner-actions .move-btn { width: 28px; height: 28px; padding: 0; border: 1px solid var(--border-strong); background: white; border-radius: var(--radius-sm); cursor: pointer; font-size: 12px; }
+  .banner-actions .move-btn:hover { background: var(--bg); }
+  .banner-actions .btn-del { background: transparent; color: var(--danger); border: 1px solid var(--danger); padding: 5px 10px; border-radius: var(--radius-sm); cursor: pointer; font-size: 12px; font-family: inherit; }
+  .banner-actions .btn-del:hover { background: var(--danger-light); }
+  .banner-actions .toggle-row { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); }
+  @media (max-width: 700px) { .banner-card { grid-template-columns: 1fr; } .banner-preview { width: 100%; } .banner-actions { flex-direction: row; flex-wrap: wrap; } }
 </style>
 </head>
 <body>
@@ -196,6 +213,7 @@
     <button class="tab-btn" onclick="setTab('categories')">Categorías</button>
     <button class="tab-btn" id="tab-btn-prices" onclick="setTab('prices')">Precios</button>
     <button class="tab-btn" id="tab-btn-recargos" onclick="setTab('recargos')" style="display:none">Recargos</button>
+    <button class="tab-btn" onclick="setTab('banners')">Banners</button>
     <button class="tab-btn" onclick="setTab('settings')">Configuración</button>
   </div>
 
@@ -236,6 +254,12 @@
         </select>
       </div>
       <div id="prices-list"><div class="loading-state">Cargando productos...</div></div>
+    </div>
+
+    <div id="tab-banners" style="display:none">
+      <p class="section-note">Cargá banners para mostrar en la parte superior del catálogo. Subí la imagen a TiendaNube (u otro hosting), copiá la URL y pegala acá. El catálogo los rota automáticamente cada 5 segundos.</p>
+      <button class="btn-save" onclick="addBanner()" style="margin-bottom:14px">+ Agregar banner</button>
+      <div id="banners-admin-list"><div class="loading-state">Sin banners cargados</div></div>
     </div>
 
     <div id="tab-recargos" style="display:none">
@@ -287,7 +311,7 @@
 <script>
 let allAdminProducts = [];
 const ALL_KEY = '__todas__';
-let config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, recargos: {} };
+let config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, recargos: {}, banners: [] };
 let isDistribuidor = false; // se detecta al cargar productos (si vienen con unit_cost)
 let adminPassword = '';
 
@@ -320,9 +344,10 @@ async function login() {
       return;
     }
     const loaded = await r.json();
-    config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, recargos: {}, ...loaded };
+    config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, recargos: {}, banners: [], ...loaded };
     if (!config.referencePrices) config.referencePrices = {};
     if (!config.recargos) config.recargos = {};
+    if (!Array.isArray(config.banners)) config.banners = [];
     adminPassword = pwd;
     $('login-screen').style.display = 'none';
     $('admin-panel').style.display = 'block';
@@ -754,6 +779,7 @@ function setTab(tab) {
   $('tab-categories').style.display = tab === 'categories' ? 'block' : 'none';
   $('tab-prices').style.display = tab === 'prices' ? 'block' : 'none';
   $('tab-recargos').style.display = tab === 'recargos' ? 'block' : 'none';
+  $('tab-banners').style.display = tab === 'banners' ? 'block' : 'none';
   $('tab-settings').style.display = tab === 'settings' ? 'block' : 'none';
   document.querySelectorAll('.tab-btn').forEach(btn => {
     const onclickStr = btn.getAttribute('onclick') || '';
@@ -769,6 +795,94 @@ function setTab(tab) {
     populateRecargoCatFilter();
     renderRecargosList();
   }
+  if (tab === 'banners') renderBannersAdmin();
+}
+
+function renderBannersAdmin() {
+  const container = $('banners-admin-list');
+  if (!container) return;
+  const banners = (config.banners || []).slice().sort((a, b) => (a.orden || 0) - (b.orden || 0));
+  if (!banners.length) {
+    container.innerHTML = '<div class="loading-state">Sin banners cargados. Apretá "+ Agregar banner" para empezar.</div>';
+    return;
+  }
+  const total = banners.length;
+  container.innerHTML = banners.map((b, i) => {
+    const id = b.id || '';
+    const imgEsc = (b.imagen || '').replace(/"/g, '&quot;');
+    const titEsc = (b.titulo || '').replace(/"/g, '&quot;');
+    const linkEsc = (b.link || '').replace(/"/g, '&quot;');
+    const inactive = b.activo === false ? ' inactive' : '';
+    const preview = b.imagen
+      ? '<img src="' + imgEsc + '" alt="banner" onerror="this.parentNode.innerHTML=\'⚠ No carga\'">'
+      : 'Sin imagen';
+    return '<div class="banner-card' + inactive + '" data-id="' + id + '">' +
+      '<div class="banner-preview">' + preview + '</div>' +
+      '<div class="banner-fields">' +
+        '<label>URL de imagen<input type="url" value="' + imgEsc + '" placeholder="https://..." oninput="updateBannerField(\'' + id + '\',\'imagen\',this.value)" /></label>' +
+        '<label>Título (opcional)<input type="text" value="' + titEsc + '" placeholder="Promo / Texto sobre banner" oninput="updateBannerField(\'' + id + '\',\'titulo\',this.value)" /></label>' +
+        '<label>Link al hacer click (opcional)<input type="url" value="' + linkEsc + '" placeholder="https://..." oninput="updateBannerField(\'' + id + '\',\'link\',this.value)" /></label>' +
+      '</div>' +
+      '<div class="banner-actions">' +
+        '<div class="move-btns">' +
+          '<button class="move-btn" onclick="moveBanner(\'' + id + '\',-1)" ' + (i === 0 ? 'disabled' : '') + ' title="Subir">▲</button>' +
+          '<button class="move-btn" onclick="moveBanner(\'' + id + '\',1)" ' + (i === total - 1 ? 'disabled' : '') + ' title="Bajar">▼</button>' +
+        '</div>' +
+        '<label class="toggle-row"><button class="toggle' + (b.activo !== false ? ' on' : '') + '" onclick="toggleBannerActive(\'' + id + '\')"></button>' + (b.activo !== false ? 'Activo' : 'Inactivo') + '</label>' +
+        '<button class="btn-del" onclick="removeBanner(\'' + id + '\')">Eliminar</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function addBanner() {
+  if (!Array.isArray(config.banners)) config.banners = [];
+  const id = 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const maxOrden = config.banners.reduce((m, b) => Math.max(m, b.orden || 0), 0);
+  config.banners.push({ id, imagen: '', titulo: '', link: '', activo: true, orden: maxOrden + 1 });
+  renderBannersAdmin();
+}
+
+function removeBanner(id) {
+  if (!confirm('¿Eliminar este banner? Esta acción no se puede deshacer (después de guardar).')) return;
+  config.banners = (config.banners || []).filter(b => b.id !== id);
+  renderBannersAdmin();
+}
+
+function toggleBannerActive(id) {
+  const b = (config.banners || []).find(x => x.id === id);
+  if (!b) return;
+  b.activo = b.activo === false ? true : false;
+  renderBannersAdmin();
+}
+
+function updateBannerField(id, field, value) {
+  const b = (config.banners || []).find(x => x.id === id);
+  if (!b) return;
+  b[field] = value;
+  // Actualizar solo el preview si cambia la imagen (sin re-render completo para no perder foco)
+  if (field === 'imagen') {
+    const card = document.querySelector('.banner-card[data-id="' + id + '"]');
+    if (card) {
+      const preview = card.querySelector('.banner-preview');
+      if (preview) preview.innerHTML = value
+        ? '<img src="' + value.replace(/"/g, '&quot;') + '" alt="banner" onerror="this.parentNode.innerHTML=\'⚠ No carga\'">'
+        : 'Sin imagen';
+    }
+  }
+}
+
+function moveBanner(id, delta) {
+  const banners = (config.banners || []).slice().sort((a, b) => (a.orden || 0) - (b.orden || 0));
+  const idx = banners.findIndex(b => b.id === id);
+  if (idx < 0) return;
+  const newIdx = idx + delta;
+  if (newIdx < 0 || newIdx >= banners.length) return;
+  // Swap orders
+  const tmp = banners[idx].orden;
+  banners[idx].orden = banners[newIdx].orden;
+  banners[newIdx].orden = tmp;
+  renderBannersAdmin();
 }
 
 function populateRecargoCatFilter() {

@@ -75,6 +75,23 @@
 
   .main { flex: 1; padding: 1.5rem; overflow-y: auto; }
   .toolbar { display: flex; gap: 8px; margin-bottom: 1.25rem; align-items: center; }
+  /* Banners */
+  .banners-section { position: relative; width: 100%; margin-bottom: 1.25rem; border-radius: var(--radius); overflow: hidden; background: var(--surface); }
+  .banners-track { position: relative; aspect-ratio: 16 / 6; min-height: 180px; max-height: 380px; background: var(--bg); }
+  .banner-slide { position: absolute; inset: 0; opacity: 0; transition: opacity 0.5s ease; cursor: default; }
+  .banner-slide.active { opacity: 1; }
+  .banner-slide a, .banner-slide .banner-inner { display: block; width: 100%; height: 100%; }
+  .banner-slide.has-link a { cursor: pointer; }
+  .banner-slide img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .banner-title { position: absolute; bottom: 20px; left: 24px; right: 24px; color: white; font-size: 22px; font-weight: 700; text-shadow: 0 2px 10px rgba(0,0,0,0.5); }
+  .banner-dots { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; z-index: 5; }
+  .banner-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.5); border: none; cursor: pointer; padding: 0; transition: background 0.2s; }
+  .banner-dot.active { background: white; width: 20px; border-radius: 4px; }
+  .banner-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; border-radius: 50%; background: rgba(0,0,0,0.4); color: white; border: none; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; z-index: 5; transition: background 0.2s; }
+  .banner-nav:hover { background: rgba(0,0,0,0.6); }
+  .banner-nav.prev { left: 12px; }
+  .banner-nav.next { right: 12px; }
+  @media (max-width: 600px) { .banner-title { font-size: 16px; bottom: 28px; } .banner-nav { display: none; } }
   .search-wrap { flex: 1; position: relative; }
   .search-wrap input { width: 100%; padding: 9px 12px 9px 36px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 14px; background: var(--surface); color: var(--text); outline: none; transition: border-color 0.15s; }
   .search-wrap input:focus { border-color: var(--accent); }
@@ -280,6 +297,7 @@
 <div class="layout">
 
   <main class="main">
+    <div id="banners-section" style="display:none"></div>
     <div id="toolbar" style="display:none">
       <div class="toolbar">
         <div class="search-wrap">
@@ -561,6 +579,59 @@ async function cargarConfig() {
       adminConfig = { ...adminConfig, ...loaded };
     }
   } catch(e) {}
+  renderBanners();
+}
+
+let bannerIdx = 0, bannerTimer = null;
+function renderBanners() {
+  const section = $('banners-section');
+  if (!section) return;
+  const banners = (adminConfig.banners || [])
+    .filter(b => b && b.activo !== false && b.imagen)
+    .sort((a, b) => (a.orden || 0) - (b.orden || 0));
+  if (!banners.length) { section.style.display = 'none'; section.innerHTML = ''; return; }
+  section.style.display = 'block';
+  section.className = 'banners-section';
+
+  const slides = banners.map((b, i) => {
+    const imgEsc = (b.imagen || '').replace(/"/g, '&quot;');
+    const titleEsc = (b.titulo || '').replace(/</g, '&lt;');
+    const linkEsc = (b.link || '').replace(/"/g, '&quot;');
+    const inner = '<img src="' + imgEsc + '" alt="' + titleEsc + '" loading="lazy">' +
+      (titleEsc ? '<div class="banner-title">' + titleEsc + '</div>' : '');
+    const wrapped = linkEsc
+      ? '<a href="' + linkEsc + '" target="_blank" rel="noopener">' + inner + '</a>'
+      : '<div class="banner-inner">' + inner + '</div>';
+    return '<div class="banner-slide' + (i === 0 ? ' active' : '') + (linkEsc ? ' has-link' : '') + '" data-idx="' + i + '">' + wrapped + '</div>';
+  }).join('');
+
+  const dots = banners.length > 1
+    ? '<div class="banner-dots">' + banners.map((_, i) =>
+        '<button class="banner-dot' + (i === 0 ? ' active' : '') + '" onclick="setBannerSlide(' + i + ')" aria-label="Banner ' + (i + 1) + '"></button>'
+      ).join('') + '</div>'
+    : '';
+
+  const navs = banners.length > 1
+    ? '<button class="banner-nav prev" onclick="setBannerSlide(' + (banners.length === 0 ? 0 : -1) + ',true)" aria-label="Anterior">‹</button>' +
+      '<button class="banner-nav next" onclick="setBannerSlide(1,true)" aria-label="Siguiente">›</button>'
+    : '';
+
+  section.innerHTML = '<div class="banners-track">' + slides + navs + dots + '</div>';
+  bannerIdx = 0;
+  if (bannerTimer) clearInterval(bannerTimer);
+  if (banners.length > 1) {
+    bannerTimer = setInterval(() => setBannerSlide(1, true), 5000);
+  }
+}
+
+function setBannerSlide(target, isRelative) {
+  const slides = document.querySelectorAll('#banners-section .banner-slide');
+  const dots = document.querySelectorAll('#banners-section .banner-dot');
+  if (!slides.length) return;
+  const n = slides.length;
+  bannerIdx = isRelative ? ((bannerIdx + target) % n + n) % n : target;
+  slides.forEach((s, i) => s.classList.toggle('active', i === bannerIdx));
+  dots.forEach((d, i) => d.classList.toggle('active', i === bannerIdx));
 }
 
 async function cargarImagenesTN() {
