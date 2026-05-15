@@ -469,6 +469,41 @@ let modalGallery = [];
 
 const COLOR_WORDS = ['negro','blanco','rojo','azul','verde','amarillo','rosa','naranja','violeta','gris','plateado','dorado','celeste','bordó','bordo','turquesa','beige','crema','lila','fucsia','marrón','marron','nude'];
 
+// Orden de variantes: iPhones nuevos arriba, luego antiguos, y al final lo que no es iPhone.
+// Detecta el modelo y la línea (Pro Max > Pro > Plus > base > mini) en cualquier parte del string.
+function variantSortKey(name) {
+  if (!name) return 0;
+  const n = String(name).toLowerCase();
+  // iPhone numerado (11, 12, 13, ..., 16, etc.)
+  const m = n.match(/iphone\s*(\d+)/);
+  if (m) {
+    const model = parseInt(m[1], 10);
+    let tier = 1; // base
+    if (n.includes('pro max')) tier = 4;
+    else if (n.includes('pro')) tier = 3;
+    else if (n.includes('plus')) tier = 2;
+    else if (n.includes('mini')) tier = 0;
+    return model * 10 + tier;
+  }
+  // iPhone X series (entre iPhone 10 y iPhone 11)
+  if (/iphone\s*xs\s*max/.test(n)) return 105;
+  if (/iphone\s*xs/.test(n)) return 103;
+  if (/iphone\s*xr/.test(n)) return 102;
+  if (/iphone\s*x(\b|[^a-z0-9])/.test(n)) return 101;
+  // iPhone SE
+  if (/iphone\s*se/.test(n)) return 90;
+  return 0; // no iPhone → al final
+}
+
+function sortVariantsByModel(variantes) {
+  return [...variantes].sort((a, b) => {
+    const ka = variantSortKey(a && a.size);
+    const kb = variantSortKey(b && b.size);
+    if (ka !== kb) return kb - ka; // desc: mayor (más nuevo) primero
+    return ((a && a.size) || '').localeCompare((b && b.size) || '');
+  });
+}
+
 function parseVariantDimensions(variantes) {
   const seps = [' / ', ' - '];
   let sep = null;
@@ -1010,11 +1045,11 @@ function renderVariantesGrid(prods) {
     const nomEsc = nombre.replace(/'/g,"\\'");
     const imgEsc = (img||'').replace(/'/g,"\\'");
     const hiddenVars = (adminConfig.hiddenVariants || {})[String(id)] || [];
-    const variantes = (p.variantes || []).filter(v => {
+    const variantes = sortVariantsByModel((p.variantes || []).filter(v => {
       if (hiddenVars.some(hid => hid == v.size_id)) return false;
       const vs = getStockVariante(v);
       return vs === null || vs > 0;
-    });
+    }));
 
     const dims = parseVariantDimensions(variantes);
     let variantsHTML = '';
@@ -1198,11 +1233,11 @@ function abrirModal(id) {
   const cat = p.category || '';
   const desc = getDescripcionTN(p) || getDescripcion(p);
   const hiddenVars = (adminConfig.hiddenVariants || {})[String(id)] || [];
-  const variantes = (p.variantes || []).filter(v => {
+  const variantes = sortVariantsByModel((p.variantes || []).filter(v => {
     if (hiddenVars.some(hid => hid == v.size_id)) return false;
     const vs = getStockVariante(v);
     return vs === null || vs > 0;
-  });
+  }));
   const nomEsc = nombre.replace(/'/g,"\\'");
   const imgEsc = (img||'').replace(/'/g,"\\'");
 
