@@ -125,9 +125,13 @@
   .price-row { display: grid; grid-template-columns: 1fr 110px 130px 110px; gap: 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: white; margin-bottom: 6px; }
   .price-row.has-discount { border-left: 3px solid var(--success); }
   .price-row.has-ref-no-disc { border-left: 3px solid var(--border-strong); }
+  .price-row.is-hidden { opacity: 0.55; background: #fafafa; }
   .price-info { min-width: 0; }
-  .price-info .pname { font-size: 13px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .price-info .pname { font-size: 13px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .price-info .pname > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
   .price-info .pmeta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .price-badge-hidden { display: inline-block; font-size: 9px; font-weight: 700; color: white; background: var(--danger); padding: 2px 6px; border-radius: 3px; letter-spacing: 0.4px; flex-shrink: 0; }
+  .price-badge-hidden.cat { background: var(--text-muted); }
   .price-current { font-size: 13px; color: var(--text); font-weight: 500; text-align: right; }
   .price-input-wrap { display: flex; align-items: center; gap: 4px; }
   .price-input-wrap span { font-size: 13px; color: var(--text-muted); }
@@ -201,6 +205,11 @@
           <option value="with-ref">Con precio anterior</option>
           <option value="discount">Con descuento activo</option>
           <option value="no-ref">Sin precio anterior</option>
+        </select>
+        <select class="admin-select" id="prices-filter-vis" onchange="renderPriceList()">
+          <option value="">Visibles y ocultos</option>
+          <option value="visible">Solo visibles</option>
+          <option value="hidden">Solo ocultos</option>
         </select>
       </div>
       <div id="prices-list"><div class="loading-state">Cargando productos...</div></div>
@@ -719,10 +728,21 @@ function populatePriceCatFilter() {
   });
 }
 
+function getVisibilityStatus(p) {
+  const id = p.id || p.product_id;
+  const pcat = p.category || '';
+  const prodHidden = (config.hiddenProducts || []).some(x => x == id);
+  const catHidden = (config.hiddenCategories || []).includes(pcat);
+  if (prodHidden) return 'prod';   // oculto manualmente
+  if (catHidden) return 'cat';     // oculto por categoría
+  return 'visible';
+}
+
 function renderPriceList() {
   const q = ($('prices-search')?.value || '').toLowerCase();
   const cat = $('prices-cat-filter')?.value || '';
   const state = $('prices-filter-state')?.value || '';
+  const vis = $('prices-filter-vis')?.value || '';
   const refs = config.referencePrices || {};
 
   let prods = allAdminProducts.filter(p => {
@@ -737,6 +757,9 @@ function renderPriceList() {
     if (state === 'with-ref' && !(ref > 0)) return false;
     if (state === 'no-ref' && ref > 0) return false;
     if (state === 'discount' && !(ref > 0 && cur > 0 && ref > cur)) return false;
+    const visStatus = getVisibilityStatus(p);
+    if (vis === 'visible' && visStatus !== 'visible') return false;
+    if (vis === 'hidden' && visStatus === 'visible') return false;
     return true;
   });
 
@@ -759,9 +782,17 @@ function renderPriceList() {
     const discTxt = hasDisc ? '-' + pct + '%' : (refNum > 0 ? 'Sin descuento' : '—');
     const discCls = hasDisc ? 'active' : 'inactive';
 
-    return '<div class="price-row' + rowCls + '" data-pid="' + id + '">' +
+    const visStatus = getVisibilityStatus(p);
+    const visBadge = visStatus === 'prod'
+      ? '<span class="price-badge-hidden" title="Producto oculto desde la pestaña Productos">OCULTO</span>'
+      : visStatus === 'cat'
+      ? '<span class="price-badge-hidden cat" title="Categoría oculta">CATEGORÍA OCULTA</span>'
+      : '';
+    const visRowCls = visStatus !== 'visible' ? ' is-hidden' : '';
+
+    return '<div class="price-row' + rowCls + visRowCls + '" data-pid="' + id + '">' +
       '<div class="price-info">' +
-        '<div class="pname">' + name.replace(/</g,'&lt;') + '</div>' +
+        '<div class="pname">' + visBadge + '<span>' + name.replace(/</g,'&lt;') + '</span></div>' +
         '<div class="pmeta">' + (cod ? cod + ' · ' : '') + (p.category || '') + '</div>' +
       '</div>' +
       '<div class="price-current">' + (cur > 0 ? fmtAR(cur) : '—') + '</div>' +
