@@ -441,7 +441,7 @@ let filtro = 'todos';
 let categoria = 'todas';
 let viewMode = 'variants';
 let references = null;
-let adminConfig = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {} };
+let adminConfig = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, recargos: {} };
 let variantDimsCache = {};
 let cardVariantState = {};
 let tnImageMap = {}; // nombre/SKU -> { imgs: [], desc: '' }
@@ -686,6 +686,15 @@ function stockText(stock) {
 }
 
 function getPrecio(p) {
+  // Modo distribuidor: si el producto tiene unit_cost, usamos costo + recargo
+  const cost = parseFloat(p.unit_cost || 0);
+  if (cost > 0) {
+    const id = p.id || p.product_id;
+    const recargos = adminConfig.recargos || {};
+    const pct = parseFloat(recargos[id] || recargos[String(id)] || 0);
+    return cost * (1 + pct / 100);
+  }
+  // Modo mayorista: precio mayorista de GN
   const w = parseFloat(p.wholesaler_price || 0);
   const r = parseFloat(p.retailer_price || p.price || p.precio_mayorista || p.precio || 0);
   return w > 0 ? w : r;
