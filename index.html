@@ -77,22 +77,23 @@
   .toolbar { display: flex; gap: 8px; margin-bottom: 1.25rem; align-items: center; }
   /* Banners */
   .banners-section { position: relative; width: 100%; margin-bottom: 1.25rem; border-radius: var(--radius); overflow: hidden; background: var(--bg); }
-  .banners-track { position: relative; width: 100%; height: 320px; background: var(--bg); }
-  .banner-slide { position: absolute; inset: 0; opacity: 0; transition: opacity 0.5s ease; cursor: default; display: flex; align-items: center; justify-content: center; }
+  .banners-track { position: relative; width: 100%; aspect-ratio: 21 / 9; max-height: 520px; background: var(--bg); }
+  .banner-slide { position: absolute; inset: 0; opacity: 0; transition: opacity 0.5s ease; cursor: default; overflow: hidden; }
   .banner-slide.active { opacity: 1; }
-  .banner-slide a, .banner-slide .banner-inner { display: flex; width: 100%; height: 100%; align-items: center; justify-content: center; position: relative; }
+  .banner-slide-bg { position: absolute; inset: 0; background-position: center; background-size: cover; background-repeat: no-repeat; filter: blur(28px) brightness(0.85); transform: scale(1.1); z-index: 0; }
+  .banner-slide a, .banner-slide .banner-inner { display: flex; width: 100%; height: 100%; align-items: center; justify-content: center; position: relative; z-index: 1; }
   .banner-slide.has-link a { cursor: pointer; }
-  .banner-slide img { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; display: block; }
-  .banner-title { position: absolute; bottom: 20px; left: 24px; right: 24px; color: white; font-size: 22px; font-weight: 700; text-shadow: 0 2px 10px rgba(0,0,0,0.5); text-align: center; }
+  .banner-slide img.banner-img { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; display: block; box-shadow: 0 4px 30px rgba(0,0,0,0.18); border-radius: 4px; }
+  .banner-title { position: absolute; bottom: 20px; left: 24px; right: 24px; color: white; font-size: 22px; font-weight: 700; text-shadow: 0 2px 10px rgba(0,0,0,0.5); text-align: center; z-index: 2; }
   .banner-dots { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; z-index: 5; }
-  .banner-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(0,0,0,0.25); border: none; cursor: pointer; padding: 0; transition: background 0.2s; }
-  .banner-dot.active { background: var(--accent); width: 20px; border-radius: 4px; }
+  .banner-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.6); border: none; cursor: pointer; padding: 0; transition: background 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+  .banner-dot.active { background: white; width: 20px; border-radius: 4px; }
   .banner-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; border-radius: 50%; background: rgba(0,0,0,0.4); color: white; border: none; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; z-index: 5; transition: background 0.2s; }
   .banner-nav:hover { background: rgba(0,0,0,0.6); }
   .banner-nav.prev { left: 12px; }
   .banner-nav.next { right: 12px; }
-  @media (max-width: 900px) { .banners-track { height: 240px; } }
-  @media (max-width: 600px) { .banners-track { height: 180px; } .banner-title { font-size: 16px; bottom: 28px; } .banner-nav { display: none; } }
+  @media (max-width: 900px) { .banners-track { aspect-ratio: 16 / 9; max-height: 380px; } }
+  @media (max-width: 600px) { .banners-track { aspect-ratio: 4 / 3; max-height: 320px; } .banner-title { font-size: 16px; bottom: 28px; } .banner-nav { display: none; } }
   .search-wrap { flex: 1; position: relative; }
   .search-wrap input { width: 100%; padding: 9px 12px 9px 36px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 14px; background: var(--surface); color: var(--text); outline: none; transition: border-color 0.15s; }
   .search-wrap input:focus { border-color: var(--accent); }
@@ -580,7 +581,6 @@ async function cargarConfig() {
       adminConfig = { ...adminConfig, ...loaded };
     }
   } catch(e) {}
-  renderBanners();
 }
 
 let bannerIdx = 0, bannerTimer = null;
@@ -596,14 +596,18 @@ function renderBanners() {
 
   const slides = banners.map((b, i) => {
     const imgEsc = (b.imagen || '').replace(/"/g, '&quot;');
+    const imgCss = (b.imagen || '').replace(/"/g, '\\"').replace(/'/g, "\\'");
     const titleEsc = (b.titulo || '').replace(/</g, '&lt;');
     const linkEsc = (b.link || '').replace(/"/g, '&quot;');
-    const inner = '<img src="' + imgEsc + '" alt="' + titleEsc + '" loading="lazy">' +
-      (titleEsc ? '<div class="banner-title">' + titleEsc + '</div>' : '');
+    const bgDiv = '<div class="banner-slide-bg" style="background-image:url(\'' + imgCss + '\')"></div>';
+    const inner = '<img class="banner-img" src="' + imgEsc + '" alt="' + titleEsc + '" loading="lazy">';
     const wrapped = linkEsc
       ? '<a href="' + linkEsc + '" target="_blank" rel="noopener">' + inner + '</a>'
       : '<div class="banner-inner">' + inner + '</div>';
-    return '<div class="banner-slide' + (i === 0 ? ' active' : '') + (linkEsc ? ' has-link' : '') + '" data-idx="' + i + '">' + wrapped + '</div>';
+    const titleHtml = titleEsc ? '<div class="banner-title">' + titleEsc + '</div>' : '';
+    return '<div class="banner-slide' + (i === 0 ? ' active' : '') + (linkEsc ? ' has-link' : '') + '" data-idx="' + i + '">' +
+      bgDiv + wrapped + titleHtml +
+    '</div>';
   }).join('');
 
   const dots = banners.length > 1
@@ -649,6 +653,7 @@ async function conectar() {
     $('conn-dot').className = 'conn-dot ok';
     $('conn-label').textContent = allProducts.length + ' productos';
     $('toolbar').style.display = 'block';
+    renderBanners();
   } catch(e) {
     $('conn-dot').className = 'conn-dot err';
     $('conn-label').textContent = 'Error de conexión';
