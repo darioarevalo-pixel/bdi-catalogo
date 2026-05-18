@@ -457,7 +457,22 @@
 
 <script>
 let allProducts = [];
-let cart = {};
+const CART_STORAGE_KEY = 'bdi_cart_v1';
+function loadCart() {
+  try {
+    const raw = localStorage.getItem(CART_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return (parsed && typeof parsed === 'object') ? parsed : {};
+  } catch(e) { return {}; }
+}
+function saveCart() {
+  try {
+    if (!cart || !Object.keys(cart).length) localStorage.removeItem(CART_STORAGE_KEY);
+    else localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+  } catch(e) {}
+}
+let cart = loadCart();
 let filtro = 'todos';
 let categoria = 'todas';
 let viewMode = 'variants';
@@ -690,6 +705,7 @@ async function conectar() {
     $('conn-label').textContent = allProducts.length + ' productos';
     $('toolbar').style.display = 'block';
     renderBanners();
+    updateCartUI();
   } catch(e) {
     $('conn-dot').className = 'conn-dot err';
     $('conn-label').textContent = 'Error de conexión';
@@ -1391,6 +1407,7 @@ function removeCart(id) {
 }
 
 function updateCartUI() {
+  saveCart();
   const items = Object.values(cart);
   const totalUnits = items.reduce((s,i) => s + i.qty, 0);
   const totalAmount = items.reduce((s,i) => s + i.precio * i.qty, 0);
@@ -1622,6 +1639,7 @@ async function confirmarPedido() {
     const data = await fetchProxy('/ventas', { method: 'POST', body });
     const pedidoId = (data.data && (data.data.number || data.data.id)) || data.id || data.number || null;
     cart = {};
+    saveCart();
     $('client-name').value = '';
     $('client-phone').value = '';
     $('client-payment').value = '';
