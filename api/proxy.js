@@ -90,6 +90,10 @@ async function verificarStockServer(items, token) {
 
 module.exports = async (req, res) => {
   Object.entries(CORS).forEach(([k, v]) => res.setHeader(k, v));
+  // Evitar que el navegador cachee respuestas del proxy.
+  // Crítico para verificar stock al confirmar pedidos: siempre debe leer
+  // datos frescos de Gestión Nube, no servir respuestas viejas en disco.
+  res.setHeader('Cache-Control', 'no-store, max-age=0, must-revalidate');
 
   if (req.method === 'OPTIONS') return res.status(204).end();
 
