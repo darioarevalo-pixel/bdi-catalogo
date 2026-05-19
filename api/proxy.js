@@ -30,12 +30,36 @@ async function verificarStockServer(items, token) {
   const problemas = [];
   for (const item of items) {
     const p = productos[item.product_id];
-    if (!p) continue;
     const qty = item.quantity || 1;
+
+    // Producto ya no existe en GN (borrado o inactivo)
+    if (!p) {
+      problemas.push({
+        product_id: item.product_id,
+        size_id: item.size_id || null,
+        nombre: null, // el frontend lo resuelve desde su carrito local
+        variante: null,
+        pedido: qty,
+        disponible: 0,
+        motivo: 'no_existe',
+      });
+      continue;
+    }
 
     if (item.size_id) {
       const variante = (p.variantes || []).find(v => String(v.size_id) === String(item.size_id));
-      if (variante) {
+      if (!variante) {
+        // Variante específica ya no existe
+        problemas.push({
+          product_id: item.product_id,
+          size_id: item.size_id,
+          nombre: p.name,
+          variante: null,
+          pedido: qty,
+          disponible: 0,
+          motivo: 'variante_no_existe',
+        });
+      } else {
         const stock = variante.available_quantity ?? variante.stock ?? 0;
         if (stock < qty) {
           problemas.push({

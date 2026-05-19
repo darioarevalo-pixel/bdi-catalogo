@@ -1677,6 +1677,22 @@ async function confirmarPedido() {
 }
 
 function mostrarAlertaStock(problemas) {
+  // Enriquecer cada problema con el nombre/variante del carrito local
+  // (necesario para los casos motivo=no_existe / variante_no_existe donde
+  // el proxy no puede obtener el nombre del producto desde GN).
+  for (const prob of problemas) {
+    const key = Object.keys(cart).find(k => {
+      const i = cart[k];
+      return String(i.id) === String(prob.product_id) &&
+             String(i.sizeId || '') === String(prob.size_id || '');
+    });
+    if (key) {
+      if (!prob.nombre) prob.nombre = cart[key].nombre;
+      if (!prob.variante) prob.variante = cart[key].varNombre || null;
+    }
+    if (!prob.nombre) prob.nombre = 'Producto #' + prob.product_id;
+  }
+
   // Ajustar carrito según lo que reportó el servidor
   for (const prob of problemas) {
     const key = Object.keys(cart).find(k => {
@@ -1694,11 +1710,17 @@ function mostrarAlertaStock(problemas) {
   const eliminados = problemas.filter(p => p.disponible === 0);
   const reducidos  = problemas.filter(p => p.disponible > 0);
 
+  const msgEliminado = (p) => {
+    if (p.motivo === 'no_existe')         return 'Este producto ya no está disponible — lo eliminamos de tu pedido.';
+    if (p.motivo === 'variante_no_existe') return 'Esta variante ya no está disponible — la eliminamos de tu pedido.';
+    return 'Sin stock disponible — lo eliminamos de tu pedido.';
+  };
+
   document.getElementById('stock-alert-list').innerHTML = [
     ...eliminados.map(p => `
       <div class="stock-alert-item eliminado">
         <div class="stock-alert-item-name">${p.nombre}${p.variante ? ' — ' + p.variante : ''}</div>
-        <div class="stock-alert-item-detail">Sin stock disponible — lo eliminamos de tu pedido.</div>
+        <div class="stock-alert-item-detail">${msgEliminado(p)}</div>
       </div>`),
     ...reducidos.map(p => `
       <div class="stock-alert-item reducido">
