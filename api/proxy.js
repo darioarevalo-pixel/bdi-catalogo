@@ -15,6 +15,22 @@ async function gnFetch(path, token) {
   catch { return { ok: r.ok, status: r.status, data: text }; }
 }
 
+// Lee stock de una variante usando stock_por_tienda (formato real de GN).
+// Prioriza "Deposito Minorista" si existe (es el que se descuenta al vender);
+// si no hay, suma stock de todas las tiendas como fallback.
+function stockDeVariante(variante) {
+  if (!variante || !variante.stock_por_tienda || !variante.stock_por_tienda.length) return 0;
+  const deposito = variante.stock_por_tienda.find(t => t.store_name === 'Deposito Minorista');
+  if (deposito) return deposito.stock_disponible || 0;
+  return variante.stock_por_tienda.reduce((s, t) => s + (t.stock_disponible || 0), 0);
+}
+
+function stockDeProducto(p) {
+  // Producto SIN variantes: si tuviera stock a nivel producto, GN lo devolvería como stock_total.
+  // Por seguridad también miramos available_quantity / stock por si la API cambia.
+  return p.available_quantity ?? p.stock ?? p.stock_total ?? 0;
+}
+
 async function verificarStockServer(items, token) {
   // Para cada product_id único, trae el producto con stock actualizado
   const productIds = [...new Set(items.map(i => i.product_id))];
@@ -60,7 +76,7 @@ async function verificarStockServer(items, token) {
           motivo: 'variante_no_existe',
         });
       } else {
-        const stock = variante.available_quantity ?? variante.stock ?? 0;
+        const stock = stockDeVariante(variante);
         if (stock < qty) {
           problemas.push({
             product_id: item.product_id,
@@ -73,7 +89,7 @@ async function verificarStockServer(items, token) {
         }
       }
     } else {
-      const stock = p.available_quantity ?? p.stock ?? 0;
+      const stock = stockDeProducto(p);
       if (stock < qty) {
         problemas.push({
           product_id: item.product_id,
