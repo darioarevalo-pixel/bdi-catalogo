@@ -32,16 +32,26 @@ function stockDeProducto(p) {
 }
 
 async function verificarStockServer(items, token) {
-  // Para cada product_id único, trae el producto con stock actualizado
-  const productIds = [...new Set(items.map(i => i.product_id))];
+  // Trae todos los productos paginando y filtra localmente por los IDs del carrito.
+  // GN ignora el parámetro ?id=X en /productos/obtener (siempre devuelve primeros
+  // por paginación). Una sola pasada por el catálogo es lo más eficiente y correcto.
+  const productIds = new Set(items.map(i => String(i.product_id)));
   const productos = {};
 
-  await Promise.all(productIds.map(async pid => {
-    const { data } = await gnFetch(`/productos/obtener?include_stock=1&include_variants=1&per_page=1&id=${pid}`, token);
+  let page = 1;
+  while (productIds.size > Object.keys(productos).length) {
+    const { data } = await gnFetch(`/productos/obtener?include_stock=1&include_variants=1&per_page=100&page=${page}`, token);
     const lista = Array.isArray(data) ? data : (data?.data || []);
-    const p = lista.find(p => String(p.id) === String(pid));
-    if (p) productos[pid] = p;
-  }));
+    if (!lista.length) break;
+    for (const p of lista) {
+      if (productIds.has(String(p.id))) productos[p.id] = p;
+    }
+    const hasMore = data?.meta?.has_more_pages !== false &&
+                    (data?.meta?.last_page ? page < data.meta.last_page : lista.length >= 100);
+    if (!hasMore) break;
+    page++;
+    if (page > 20) break; // safeguard contra loops infinitos
+  }
 
   const problemas = [];
   for (const item of items) {
