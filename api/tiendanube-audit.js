@@ -80,6 +80,9 @@ function mapProduct(p) {
 
 module.exports = async (req, res) => {
   Object.entries(CORS).forEach(([k, v]) => res.setHeader(k, v));
+  // Evitar caché del navegador: el caché real vive en KV del servidor (1h),
+  // los clientes deben pedir siempre y dejar que el servidor decida.
+  res.setHeader('Cache-Control', 'no-store, max-age=0, must-revalidate');
   if (req.method === 'OPTIONS') return res.status(204).end();
 
   // Determinar qué store usar
