@@ -44,14 +44,17 @@ async function kvSet(key, value) {
   } catch { /* ignorar error de caché */ }
 }
 
+function tnHeaders(token) {
+  return {
+    'Authentication': `bearer ${token}`,
+    'User-Agent': 'Monitor Areben (brunoarevalo@arebensrl.com)',
+  };
+}
+
 async function fetchPage(storeId, token, page) {
   const r = await fetch(
-    `https://api.tiendanube.com/v1/${storeId}/products?per_page=200&page=${page}&fields=id,name,handle,description,images,variants,published`,
-    { headers: {
-        'Authentication': `bearer ${token}`,
-        'User-Agent': 'Monitor Areben (brunoarevalo@arebensrl.com)',
-      }
-    }
+    `https://api.tiendanube.com/v1/${storeId}/products?per_page=200&page=${page}&fields=id,name,handle,description,images,variants,published,categories,created_at`,
+    { headers: tnHeaders(token) }
   );
   if (!r.ok) return { data: [], total: 0 };
   const total = parseInt(r.headers.get('X-Total-Count') || '0', 10);
@@ -59,13 +62,37 @@ async function fetchPage(storeId, token, page) {
   return { data: Array.isArray(data) ? data : [], total };
 }
 
-function mapProduct(p) {
+// Trae todas las categorías de la tienda paginando, devuelve map id -> nombre
+async function fetchAllCategories(storeId, token) {
+  const map = {};
+  let page = 1;
+  while (page <= 20) { // safeguard
+    const r = await fetch(
+      `https://api.tiendanube.com/v1/${storeId}/categories?per_page=200&page=${page}&fields=id,name,parent`,
+      { headers: tnHeaders(token) }
+    );
+    if (!r.ok) break;
+    const data = await r.json();
+    if (!Array.isArray(data) || data.length === 0) break;
+    for (const c of data) {
+      const n = c.name?.es || c.name?.pt || Object.values(c.name || {})[0] || `cat ${c.id}`;
+      map[c.id] = n;
+    }
+    if (data.length < 200) break;
+    page++;
+  }
+  return map;
+}
+
+function mapProduct(p, catMap) {
   const name    = p.name?.es    || p.name?.pt    || Object.values(p.name    || {})[0] || '(sin nombre)';
   const handle  = p.handle?.es  || p.handle?.pt  || Object.values(p.handle  || {})[0] || null;
   const rawDesc = p.description?.es || p.description?.pt || Object.values(p.description || {})[0] || '';
   const desc    = rawDesc.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
   const images  = (p.images   || []).map(i => i.src).filter(Boolean);
   const sku     = (p.variants || [])[0]?.sku || null;
+  const categoryIds = (p.categories || []).map(c => typeof c === 'object' ? c.id : c).filter(Boolean);
+  const categories  = categoryIds.map(id => catMap[id]).filter(Boolean);
   return {
     id: p.id, name, handle, sku,
     published:   p.published ?? true,
@@ -75,6 +102,9 @@ function mapProduct(p) {
     desc_length: desc.length,
     desc,
     raw_desc: rawDesc || '',
+    categories,           // nombres de categorías en TN
+    category_ids: categoryIds,
+    created_at: p.created_at || null,
   };
 }
 
@@ -102,9 +132,14 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const { data: first, total } = await fetchPage(cfg.storeId, cfg.token, 1);
+    // En paralelo: primera página de productos + map de categorías
+    const [firstResult, catMap] = await Promise.all([
+      fetchPage(cfg.storeId, cfg.token, 1),
+      fetchAllCategories(cfg.storeId, cfg.token),
+    ]);
+    const { data: first, total } = firstResult;
     if (!first.length) {
-      const empty = { store: storeKey, total: 0, products: [], cached_at: new Date().toISOString() };
+      const empty = { store: storeKey, total: 0, products: [], categories: catMap, cached_at: new Date().toISOString() };
       await kvSet(cfg.cacheKey, empty);
       return res.json(empty);
     }
@@ -114,8 +149,8 @@ module.exports = async (req, res) => {
     const rest = await Promise.all(restPages.map(p => fetchPage(cfg.storeId, cfg.token, p)));
 
     const all      = [first, ...rest.map(r => r.data)].flat();
-    const products = all.map(mapProduct);
-    const payload  = { store: storeKey, total: products.length, products, cached_at: new Date().toISOString() };
+    const products = all.map(p => mapProduct(p, catMap));
+    const payload  = { store: storeKey, total: products.length, products, categories: catMap, cached_at: new Date().toISOString() };
 
     await kvSet(cfg.cacheKey, payload);
     res.setHeader('X-Cache', 'MISS');
