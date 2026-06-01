@@ -258,6 +258,8 @@
   .btn-whatsapp:hover { opacity: 0.9; }
   .btn-skip { width: 100%; padding: 10px; background: transparent; color: var(--text-muted); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; cursor: pointer; transition: background 0.12s; }
   .btn-skip:hover { background: var(--bg); }
+  .btn-ver-pedido { display: block; width: 100%; padding: 12px; background: var(--accent); color: white; border: none; border-radius: var(--radius-sm); font-family: inherit; font-size: 15px; font-weight: 700; cursor: pointer; margin-bottom: 10px; text-decoration: none; box-sizing: border-box; transition: opacity 0.15s; }
+  .btn-ver-pedido:hover { opacity: 0.9; }
 
   .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(10px); background: var(--text); color: white; padding: 10px 18px; border-radius: var(--radius); font-size: 13px; font-weight: 500; opacity: 0; transition: opacity 0.2s, transform 0.2s; pointer-events: none; z-index: 500; white-space: nowrap; }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -476,8 +478,9 @@
     <div class="confirm-title">¡Pedido confirmado!</div>
     <div class="confirm-number" id="confirm-number"></div>
     <div class="confirm-desc">
-      Avisarnos por WhatsApp nos permite procesar y preparar tu pedido más rápido.
+      Avisarnos por WhatsApp nos permite procesar y preparar tu pedido más rápido. Guardá el detalle de tu pedido con el botón de abajo.
     </div>
+    <a class="btn-ver-pedido" id="btn-ver-pedido" href="#" target="_blank" rel="noopener" style="display:none">📄 Ver / descargar mi pedido</a>
     <button class="btn-whatsapp" id="btn-whatsapp-confirm" onclick="abrirWhatsApp()">
       Avisarnos por WhatsApp
     </button>
@@ -1706,6 +1709,28 @@ async function confirmarPedido() {
 
     const data = await fetchProxy('/ventas', { method: 'POST', body });
     const pedidoId = (data.data && (data.data.number || data.data.id)) || data.id || data.number || null;
+
+    // Guardamos el pedido para generar un link (dura 90 días) que el cliente y
+    // nosotros podemos abrir. Si esto falla, no rompe nada: la venta ya está en GN.
+    let pedidoUrl = '';
+    if (pedidoId) {
+      const pedidoDetalle = {
+        id: pedidoId,
+        fecha: new Date().toISOString(),
+        cliente: clientName,
+        telefono: phone,
+        pago: payment,
+        entrega: delivery,
+        obs: obs,
+        total: items.reduce((s, i) => s + i.precio * i.qty, 0),
+        items: items.map(i => ({ nombre: i.nombre, variante: i.varNombre || '', cantidad: i.qty, precio: i.precio, img: i.img || '' })),
+      };
+      try {
+        await fetch('/api/pedido', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(pedidoDetalle) });
+        pedidoUrl = location.origin + '/pedido/' + pedidoId;
+      } catch (e) { /* el link es opcional; si falla seguimos igual */ }
+    }
+
     cart = {};
     saveCart();
     $('client-name').value = '';
@@ -1716,7 +1741,7 @@ async function confirmarPedido() {
     validarTelefono();
     updateCartUI();
     cerrarCarrito();
-    // Armar mensaje de WhatsApp y mostrar popup
+    // Mensaje de WhatsApp cortito: el detalle completo va en el link del pedido.
     const waMsg = '¡Hola! Acabo de realizar un pedido en el catálogo mayorista de BDI Accesorios.' +
       (pedidoId ? '\n\n📦 Pedido N°: ' + pedidoId : '') +
       '\n👤 Nombre: ' + clientName +
@@ -1724,8 +1749,13 @@ async function confirmarPedido() {
       '\n💳 Pago: ' + payment +
       '\n🚚 Entrega: ' + delivery +
       (obs ? '\n📝 Obs: ' + obs : '') +
+      (pedidoUrl ? '\n\n📄 Detalle del pedido: ' + pedidoUrl : '') +
       '\n\nQuedo a la espera para coordinar.';
     $('btn-whatsapp-confirm').dataset.waUrl = 'https://wa.me/5493415851474?text=' + encodeURIComponent(waMsg);
+    // Botón "Ver / descargar mi pedido" (solo si se generó el link)
+    const verBtn = $('btn-ver-pedido');
+    if (pedidoUrl) { verBtn.href = pedidoUrl; verBtn.style.display = 'block'; }
+    else { verBtn.style.display = 'none'; }
     $('confirm-number').textContent = pedidoId ? 'Pedido N° ' + pedidoId : '';
     $('confirm-overlay').classList.add('open');
     document.body.style.overflow = 'hidden';
