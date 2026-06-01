@@ -75,6 +75,11 @@
   .variant-row:last-child { border-bottom: none; }
   .variant-row-name { flex: 1; font-size: 12px; color: var(--text); }
   .variant-row.hidden-var .variant-row-name { color: var(--text-hint); text-decoration: line-through; }
+  .vprice-wrap { display: flex; align-items: center; gap: 3px; flex-shrink: 0; }
+  .vprice-wrap > span { font-size: 12px; color: var(--text-muted); }
+  .vprice-input { width: 92px; padding: 5px 7px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 12px; outline: none; text-align: right; }
+  .vprice-input:focus { border-color: var(--accent); }
+  .variant-row.has-vprice .vprice-input { border-color: var(--success); background: #f0fdf4; font-weight: 600; }
 
   /* Category rows */
   .cat-section { margin-bottom: 6px; }
@@ -311,7 +316,7 @@
 <script>
 let allAdminProducts = [];
 const ALL_KEY = '__todas__';
-let config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, recargos: {}, banners: [] };
+let config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, recargos: {}, variantPrices: {}, banners: [] };
 let isDistribuidor = false; // se detecta al cargar productos (si vienen con unit_cost)
 let adminPassword = '';
 
@@ -344,9 +349,10 @@ async function login() {
       return;
     }
     const loaded = await r.json();
-    config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, recargos: {}, banners: [], ...loaded };
+    config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, recargos: {}, variantPrices: {}, banners: [], ...loaded };
     if (!config.referencePrices) config.referencePrices = {};
     if (!config.recargos) config.recargos = {};
+    if (!config.variantPrices) config.variantPrices = {};
     if (!Array.isArray(config.banners)) config.banners = [];
     adminPassword = pwd;
     $('login-screen').style.display = 'none';
@@ -523,11 +529,15 @@ function renderProductList() {
     const hidden = isHidden(id);
     const pos = posMap[String(id)] || (i + 1);
 
+    const baseAdmin = precioBaseAdmin(p);
+    const phPrecio = baseAdmin > 0 ? Math.round(baseAdmin).toLocaleString('es-AR') : 'especial';
     const varRows = variants.map(v => {
       const vh = isVariantHidden(id, v.size_id);
-      return '<div class="variant-row' + (vh ? ' hidden-var' : '') + '" id="var-row-' + id + '-' + v.size_id + '">' +
+      const vpVal = (config.variantPrices || {})[id + '-' + v.size_id];
+      return '<div class="variant-row' + (vh ? ' hidden-var' : '') + (vpVal != null ? ' has-vprice' : '') + '" id="var-row-' + id + '-' + v.size_id + '">' +
         '<button class="toggle' + (vh ? '' : ' on') + '" id="var-tog-' + id + '-' + v.size_id + '" onclick="toggleVariant(' + id + ',' + v.size_id + ')"></button>' +
         '<div class="variant-row-name">' + v.size + '</div>' +
+        '<div class="vprice-wrap"><span>$</span><input class="vprice-input" type="number" min="0" step="1" value="' + (vpVal != null ? vpVal : '') + '" placeholder="' + phPrecio + '" title="Precio especial para esta variante. Vacío = precio normal." onclick="event.stopPropagation()" oninput="setVariantPrice(' + id + ',' + v.size_id + ',this.value)" /></div>' +
         '</div>';
     }).join('');
 
@@ -992,6 +1002,27 @@ function getCurrentPrice(p) {
   const w = parseFloat(p.wholesaler_price || 0);
   const r = parseFloat(p.retailer_price || p.price || 0);
   return w > 0 ? w : r;
+}
+
+// Precio base que el cliente vería (sin precio especial), para mostrarlo de referencia.
+function precioBaseAdmin(p) {
+  if (isDistribuidor) {
+    const cost = parseFloat(p.unit_cost || 0);
+    const rec = parseFloat((config.recargos || {})[p.id || p.product_id] || 0);
+    return cost > 0 ? cost * (1 + rec / 100) : 0;
+  }
+  return getCurrentPrice(p);
+}
+
+// Precio especial por variante: clave "productId-sizeId". Vacío = sin precio especial.
+function setVariantPrice(productId, sizeId, value) {
+  if (!config.variantPrices) config.variantPrices = {};
+  const key = productId + '-' + sizeId;
+  const v = parseFloat(value);
+  if (!value || isNaN(v) || v <= 0) delete config.variantPrices[key];
+  else config.variantPrices[key] = v;
+  const row = $('var-row-' + productId + '-' + sizeId);
+  if (row) row.classList.toggle('has-vprice', config.variantPrices[key] != null);
 }
 
 function fmtAR(n) {
