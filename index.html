@@ -1710,6 +1710,8 @@ async function confirmarPedido() {
     const data = await fetchProxy('/ventas', { method: 'POST', body });
     const pedidoId = (data.data && (data.data.number || data.data.id)) || data.id || data.number || null;
 
+    const totalPedido = items.reduce((s, i) => s + i.precio * i.qty, 0);
+
     // Guardamos el pedido para generar un link (dura 90 días) que el cliente y
     // nosotros podemos abrir. Si esto falla, no rompe nada: la venta ya está en GN.
     let pedidoUrl = '';
@@ -1722,7 +1724,7 @@ async function confirmarPedido() {
         pago: payment,
         entrega: delivery,
         obs: obs,
-        total: items.reduce((s, i) => s + i.precio * i.qty, 0),
+        total: totalPedido,
         items: items.map(i => ({ nombre: i.nombre, variante: i.varNombre || '', cantidad: i.qty, precio: i.precio, img: i.img || '' })),
       };
       try {
@@ -1748,6 +1750,7 @@ async function confirmarPedido() {
       '\nTeléfono: ' + phone +
       '\nPago: ' + payment +
       '\nEntrega: ' + delivery +
+      '\nTotal: ' + formatPrecio(totalPedido) +
       (obs ? '\nObservaciones: ' + obs : '') +
       (pedidoUrl ? '\n\nDetalle del pedido: ' + pedidoUrl : '') +
       '\n\nQuedo a la espera para coordinar.';
