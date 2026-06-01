@@ -749,6 +749,12 @@ async function cargarImagenesTN() {
 }
 
 async function conectar() {
+  // El catálogo de distribuidores todavía no tiene su FAQ propia definida:
+  // ocultamos el botón solo en ese deploy (se detecta por el dominio).
+  if (/distribuidor/i.test(location.hostname)) {
+    const fb = document.querySelector('.faq-btn');
+    if (fb) fb.remove();
+  }
   try {
     // Config y referencias son rápidas y necesarias para filtrar/renderizar.
     await Promise.all([cargarReferencias(), cargarConfig()]);
