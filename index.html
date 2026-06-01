@@ -1743,13 +1743,13 @@ async function confirmarPedido() {
     cerrarCarrito();
     // Mensaje de WhatsApp cortito: el detalle completo va en el link del pedido.
     const waMsg = '¡Hola! Acabo de realizar un pedido en el catálogo mayorista de BDI Accesorios.' +
-      (pedidoId ? '\n\n📦 Pedido N°: ' + pedidoId : '') +
-      '\n👤 Nombre: ' + clientName +
-      '\n📱 Teléfono: ' + phone +
-      '\n💳 Pago: ' + payment +
-      '\n🚚 Entrega: ' + delivery +
-      (obs ? '\n📝 Obs: ' + obs : '') +
-      (pedidoUrl ? '\n\n📄 Detalle del pedido: ' + pedidoUrl : '') +
+      (pedidoId ? '\n\nPedido N°: ' + pedidoId : '') +
+      '\nNombre: ' + clientName +
+      '\nTeléfono: ' + phone +
+      '\nPago: ' + payment +
+      '\nEntrega: ' + delivery +
+      (obs ? '\nObservaciones: ' + obs : '') +
+      (pedidoUrl ? '\n\nDetalle del pedido: ' + pedidoUrl : '') +
       '\n\nQuedo a la espera para coordinar.';
     $('btn-whatsapp-confirm').dataset.waUrl = 'https://wa.me/5493415851474?text=' + encodeURIComponent(waMsg);
     // Botón "Ver / descargar mi pedido" (solo si se generó el link)
