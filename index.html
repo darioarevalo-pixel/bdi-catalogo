@@ -1148,7 +1148,7 @@ function renderProductos() {
         '<div class="product-name">' + nombre + '</div>' +
         (cod ? '<div class="product-code">' + cod + '</div>' : '') +
         (productoTienePrecioEspecial(p)
-          ? '<div class="product-price dif">' + formatPrecio(precioModaProducto(p)) + '</div>'
+          ? '<div class="product-price">' + formatPrecio(precioModaProducto(p)) + '</div>'
           : precioCardHTML(precio, precioAnt)) +
       '</div>' +
     '</div>';
@@ -1299,7 +1299,7 @@ function renderVariantesGrid(prods) {
           '<div class="product-name">' + nombre + '</div>' +
           (cod ? '<div class="product-code">' + cod + '</div>' : '') +
           (especial
-            ? '<div class="product-price dif" style="margin-top:4px">' + formatPrecio(precioModaProducto(p)) + '</div>'
+            ? '<div class="product-price" style="margin-top:4px">' + formatPrecio(precioModaProducto(p)) + '</div>'
             : pctDisc > 0
             ? '<div class="product-price-wrap" style="margin-top:4px"><span class="product-price-old">' + formatPrecio(precioAnt) + '</span><span class="product-price">' + formatPrecio(precio) + '</span><span class="product-discount-badge">-' + pctDisc + '%</span></div>'
             : '<div class="product-price" style="margin-top:4px">' + formatPrecio(precio) + '</div>') +
@@ -1434,7 +1434,7 @@ function abrirModal(id) {
   $('modal-code').style.display = cod ? 'block' : 'none';
   const precioAntModal = getPrecioAnterior(p);
   const pctDiscModal = getDescuentoPct(precio, precioAntModal);
-  $('modal-price').classList.toggle('dif', especial);
+  $('modal-price').classList.remove('dif');
   if (especial) {
     $('modal-price').textContent = formatPrecio(precioModaProducto(p));
   } else if (pctDiscModal > 0) {
