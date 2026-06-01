@@ -172,10 +172,9 @@
   .vdim-pill.active { background: var(--accent); border-color: var(--accent); color: white; }
   .modal-variant-row { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: var(--radius-sm); border: 1px solid var(--border); }
   .modal-variant-row:hover { border-color: var(--border-strong); background: var(--bg); }
-  .modal-variant-info { flex: 1; min-width: 0; }
-  .modal-variant-name { font-size: 13px; font-weight: 500; color: var(--text); }
-  .modal-variant-stock { font-size: 11px; font-weight: 500; margin-top: 1px; }
-  .modal-variant-stock.ok { color: var(--stock-ok); }
+  .modal-variant-info { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
+  .modal-variant-name { font-size: 13px; font-weight: 500; color: var(--text); flex: 1; min-width: 0; }
+  .modal-variant-stock { font-size: 11px; font-weight: 600; white-space: nowrap; flex-shrink: 0; }
   .modal-variant-stock.low { color: var(--warning); }
   .modal-vqty-wrap { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
   .modal-vqty-btn { width: 28px; height: 28px; border: none; border-radius: 50%; cursor: pointer; font-size: 18px; font-weight: 300; display: flex; align-items: center; justify-content: center; line-height: 1; transition: opacity 0.1s; }
@@ -608,8 +607,7 @@ function renderVariantRowsHTML(productId, dims, selectedDim1, nomEsc, precio, im
   return filtered.map(v => {
     const vs = getStockVariante(v);
     const pocas = vs !== null && vs < 10;
-    const sClass = pocas ? 'low' : 'ok';
-    const sTxt = pocas ? 'Últimas ' + vs + 'u' : 'Disponible';
+    const sTxt = pocas ? '<div class="modal-variant-stock low">Últimas ' + vs + '</div>' : '';
     const maxAttr = vs !== null ? ' max="' + vs + '"' : '';
     const vnEsc = v.dim2.replace(/'/g,"\\'").replace(/"/g,'&quot;');
     const fullVnEsc = v.size.replace(/'/g,"\\'").replace(/"/g,'&quot;');
@@ -621,7 +619,7 @@ function renderVariantRowsHTML(productId, dims, selectedDim1, nomEsc, precio, im
     return '<div class="modal-variant-row">' +
       '<div class="modal-variant-info">' +
         '<div class="modal-variant-name">' + v.dim2 + '</div>' +
-        '<div class="modal-variant-stock ' + sClass + '">' + sTxt + '</div>' +
+        sTxt +
       '</div>' +
       '<div class="modal-vqty-wrap">' +
         '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1)">−</button>' +
@@ -1091,12 +1089,11 @@ function renderCardVariantRows(id, dims, selectedColor, nomEsc, precio, imgEsc) 
     const fullVnEsc = v.size.replace(/'/g,"\\'").replace(/"/g,'&quot;');
     const chArgs = '\'' + cartKey + '\',' + id + ',\'' + nomEsc + '\',' + precio + ',' + v.size_id + ',\'' + fullVnEsc + '\',\'' + imgEsc + '\'';
     const pocas = vs !== null && vs < 10;
-    const sClass = pocas ? 'low' : 'ok';
-    const sTxt = pocas ? 'Últimas ' + vs + 'u' : 'Disponible';
+    const sTxt = pocas ? '<div class="modal-variant-stock low">Últimas ' + vs + '</div>' : '';
     return '<div class="modal-variant-row">' +
       '<div class="modal-variant-info">' +
         '<div class="modal-variant-name" style="font-size:12px">' + v.dim2 + '</div>' +
-        '<div class="modal-variant-stock ' + sClass + '">' + sTxt + '</div>' +
+        sTxt +
       '</div>' +
       '<div class="modal-vqty-wrap">' +
         '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1);event.stopPropagation()">−</button>' +
@@ -1168,14 +1165,13 @@ function renderVariantesGrid(prods) {
           const maxAttr = vs !== null ? ' max="' + vs + '"' : '';
           const atMax = vs !== null && currentQty >= vs;
           const pocas = vs !== null && vs < 10;
-          const sClass = pocas ? 'low' : 'ok';
-          const sTxt = pocas ? 'Últimas ' + vs + 'u' : 'Disponible';
+          const sTxt = pocas ? '<div class="modal-variant-stock low">Últimas ' + vs + '</div>' : '';
           const vnEsc = v.size.replace(/'/g,"\\'").replace(/"/g,'&quot;');
           const chArgs = '\'' + cartKey + '\',' + id + ',\'' + nomEsc + '\',' + precio + ',' + v.size_id + ',\'' + vnEsc + '\',\'' + imgEsc + '\'';
           return '<div class="modal-variant-row">' +
             '<div class="modal-variant-info">' +
               '<div class="modal-variant-name" style="font-size:12px">' + v.size + '</div>' +
-              '<div class="modal-variant-stock ' + sClass + '">' + sTxt + '</div>' +
+              sTxt +
             '</div>' +
             '<div class="modal-vqty-wrap">' +
               '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1);event.stopPropagation()">−</button>' +
@@ -1393,8 +1389,7 @@ function abrirModal(id) {
           const cartKey = id + '-' + v.size_id;
           const vnEsc = v.size.replace(/'/g,"\\'").replace(/"/g,'&quot;');
           const pocas = vs !== null && vs < 10;
-          const sClass = pocas ? 'low' : 'ok';
-          const sTxt = pocas ? 'Últimas ' + vs + 'u' : 'Disponible';
+          const sTxt = pocas ? '<div class="modal-variant-stock low">Últimas ' + vs + '</div>' : '';
           const maxAttr = vs !== null ? ' max="' + vs + '"' : '';
           const currentQty = cart[cartKey]?.qty || 0;
           const atMax = vs !== null && currentQty >= vs;
@@ -1402,7 +1397,7 @@ function abrirModal(id) {
           return '<div class="modal-variant-row">' +
             '<div class="modal-variant-info">' +
               '<div class="modal-variant-name">' + v.size + '</div>' +
-              '<div class="modal-variant-stock ' + sClass + '">' + sTxt + '</div>' +
+              sTxt +
             '</div>' +
             '<div class="modal-vqty-wrap">' +
               '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1)">−</button>' +
