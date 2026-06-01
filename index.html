@@ -543,6 +543,7 @@ let categoria = 'todas';
 let viewMode = 'variants';
 let references = null;
 let adminConfig = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, recargos: {}, variantPrices: {} };
+let esDistribuidor = null; // lo define el servidor (config.__esDistribuidor); null = aún no cargado
 let variantDimsCache = {};
 let cardVariantState = {};
 let tnImageMap = {}; // nombre/SKU -> { imgs: [], desc: '' }
@@ -699,6 +700,7 @@ async function cargarConfig() {
     if (r.ok) {
       const loaded = await r.json();
       adminConfig = { ...adminConfig, ...loaded };
+      if (typeof loaded.__esDistribuidor === 'boolean') esDistribuidor = loaded.__esDistribuidor;
     }
   } catch(e) {}
 }
@@ -908,9 +910,11 @@ function stockText(stock) {
 }
 
 function getPrecio(p) {
-  // Modo distribuidor: si el producto tiene unit_cost, usamos costo + recargo
+  // El modo lo define el servidor (esDistribuidor). Respaldo: si aún no cargó,
+  // se infiere por presencia de costo (comportamiento anterior).
   const cost = parseFloat(p.unit_cost || 0);
-  if (cost > 0) {
+  const modoDist = (esDistribuidor === null) ? (cost > 0) : esDistribuidor;
+  if (modoDist && cost > 0) {
     const id = p.id || p.product_id;
     const recargos = adminConfig.recargos || {};
     const pct = parseFloat(recargos[id] || recargos[String(id)] || 0);

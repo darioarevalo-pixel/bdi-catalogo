@@ -75,6 +75,9 @@
   .variant-row:last-child { border-bottom: none; }
   .variant-row-name { flex: 1; font-size: 12px; color: var(--text); }
   .variant-row.hidden-var .variant-row-name { color: var(--text-hint); text-decoration: line-through; }
+  .variant-cost-head { font-size: 12px; color: var(--text); padding: 2px 0 8px; margin-bottom: 6px; border-bottom: 1px dashed var(--border-strong); }
+  .variant-cost-head b { color: var(--success); }
+  .variant-cost-head .no-cost-hint { color: var(--text-muted); font-style: italic; }
   .variant-row-stock { font-size: 11px; color: var(--text-muted); flex-shrink: 0; white-space: nowrap; min-width: 54px; text-align: right; }
   .variant-row-stock.low { color: var(--danger); font-weight: 600; }
   .vprice-wrap { display: flex; align-items: center; gap: 3px; flex-shrink: 0; }
@@ -388,8 +391,11 @@ async function cargarProductos() {
   }
   allAdminProducts = all;
 
-  // Detectar modo distribuidor: si los productos vienen con unit_cost, somos el catálogo de distribuidores
-  isDistribuidor = all.some(p => p.unit_cost != null && parseFloat(p.unit_cost) > 0);
+  // El modo lo define el servidor (config.__esDistribuidor, según CONFIG_KEY).
+  // Respaldo: si no vino la bandera, se infiere por presencia de costo (como antes).
+  isDistribuidor = (typeof config.__esDistribuidor === 'boolean')
+    ? config.__esDistribuidor
+    : all.some(p => p.unit_cost != null && parseFloat(p.unit_cost) > 0);
   if (isDistribuidor) {
     const btnRec = $('tab-btn-recargos');
     if (btnRec) btnRec.style.display = '';
@@ -533,6 +539,12 @@ function renderProductList() {
 
     const baseAdmin = precioBaseAdmin(p);
     const phPrecio = baseAdmin > 0 ? Math.round(baseAdmin).toLocaleString('es-AR') : 'especial';
+    const costoProd = parseFloat(p.unit_cost || 0);
+    const costoHead = '<div class="variant-cost-head">' +
+      (costoProd > 0
+        ? 'Costo del producto: <b>' + fmtAR(costoProd) + '</b>'
+        : '<span class="no-cost-hint">Costo no disponible (el token de este catálogo no tiene permiso de costos)</span>') +
+      '</div>';
     const varRows = variants.map(v => {
       const vh = isVariantHidden(id, v.size_id);
       const vpVal = (config.variantPrices || {})[id + '-' + v.size_id];
@@ -567,7 +579,7 @@ function renderProductList() {
         '<div class="product-row-name">' + name + '</div>' +
         (pcat ? '<div class="product-row-cat">' + pcat + '</div>' : '') +
       '</div>' +
-      (variants.length ? '<div class="variant-rows" id="var-rows-' + id + '">' + varRows + '</div>' : '') +
+      (variants.length ? '<div class="variant-rows" id="var-rows-' + id + '">' + costoHead + varRows + '</div>' : '') +
     '</div>';
   }).join('');
 }

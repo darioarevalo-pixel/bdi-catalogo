@@ -42,9 +42,12 @@ module.exports = async (req, res) => {
     }
     try {
       const config = { ...DEFAULT, ...(await kvGet() || {}) };
+      // Bandera de modo según el CONFIG_KEY del proyecto (no según el costo).
+      // Así el catálogo no depende de que el token tenga permiso de costos.
+      config.__esDistribuidor = (CONFIG_KEY === 'distribuidor-config');
       return res.json(config);
     } catch (e) {
-      return res.json(DEFAULT);
+      return res.json({ ...DEFAULT, __esDistribuidor: (CONFIG_KEY === 'distribuidor-config') });
     }
   }
 
