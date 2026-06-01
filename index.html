@@ -749,7 +749,13 @@ async function cargarImagenesTN() {
 
 async function conectar() {
   try {
-    await Promise.all([cargarReferencias(), cargarConfig(), cargarImagenesTN()]);
+    // Config y referencias son rápidas y necesarias para filtrar/renderizar.
+    await Promise.all([cargarReferencias(), cargarConfig()]);
+
+    // Las imágenes de Tienda Nube son pesadas (~1MB) y NO deben bloquear:
+    // cargan en paralelo y, cuando llegan, se re-renderiza para mostrarlas.
+    cargarImagenesTN().then(() => { if (allProducts.length) renderProductos(); });
+
     await cargarProductos();
     $('conn-dot').className = 'conn-dot ok';
     $('conn-label').textContent = allProducts.length + ' productos';
@@ -796,25 +802,37 @@ function setCategoria(c) {
 }
 
 async function cargarProductos() {
+  const baseQs = 'per_page=100&include_stock=1&include_images=1&include_variants=1';
+  const extraer = d => Array.isArray(d) ? d : (d.data || d.products || d.items || []);
+
+  // Página 1: además de traer datos, nos dice cuántas páginas hay en total.
+  const first = await fetchProxy('/productos/obtener', { qs: baseQs + '&page=1' });
+  const firstRaw = extraer(first);
+  let lastPage = first.meta ? (first.meta.last_page || first.meta.total_pages || 1) : 1;
+  if (lastPage > 20) lastPage = 20; // safeguard contra valores anómalos
+
+  // Páginas 2..N en paralelo (antes se pedían una tras otra, lo que era lento).
+  let pages = [firstRaw];
+  if (lastPage > 1) {
+    const rest = await Promise.all(
+      Array.from({ length: lastPage - 1 }, (_, i) =>
+        fetchProxy('/productos/obtener', { qs: baseQs + '&page=' + (i + 2) })
+          .then(extraer)
+          .catch(() => [])
+      )
+    );
+    pages = pages.concat(rest);
+  }
+
   const seen = new Set();
   let all = [];
-  let page = 1;
-
-  while (true) {
-    const qs = 'per_page=100&include_stock=1&include_images=1&include_variants=1&page=' + page;
-    const data = await fetchProxy('/productos/obtener', { qs });
-    const raw = Array.isArray(data) ? data : (data.data || data.products || data.items || []);
-
+  for (const raw of pages) {
     for (const p of raw) {
       const id = p.id || p.product_id;
       if (seen.has(id) || p.active === 0 || getPrecio(p) <= 0) continue;
       seen.add(id);
       all.push(p);
     }
-
-    const lastPage = data.meta ? (data.meta.last_page || data.meta.total_pages || 1) : 1;
-    if (page >= lastPage || raw.length < 100) break;
-    page++;
   }
 
   // Filtrar productos y categorías ocultos por el admin

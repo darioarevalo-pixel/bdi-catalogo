@@ -49,6 +49,10 @@ module.exports = async (req, res) => {
       }
     }
 
+    // Las imágenes/descripciones de Tienda Nube cambian rara vez. Cacheamos en el
+    // edge de Vercel: 5 min frescas + 10 min sirviendo viejas mientras se revalida.
+    // Así la 2da visita (y la de otros clientes) recibe este ~1MB casi instantáneo.
+    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=600');
     res.json(map);
   } catch (e) {
     res.status(500).json({ error: e.message });
