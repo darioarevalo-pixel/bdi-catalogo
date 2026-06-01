@@ -183,7 +183,8 @@
   .modal-vqty-btn.minus:hover { background: #B0B7C0; }
   .modal-vqty-btn.plus { background: var(--accent); color: white; }
   .modal-vqty-btn.plus:hover { opacity: 0.85; }
-  .modal-vqty-num { width: 34px; text-align: center; border: 1px solid var(--border-strong); border-radius: 4px; font-family: 'DM Sans', sans-serif; font-size: 13px; background: var(--surface); color: var(--text); height: 28px; outline: none; padding: 0; }
+  .modal-vqty-num { width: 34px; text-align: center; border: 1px solid var(--border-strong); border-radius: 4px; font-family: 'DM Sans', sans-serif; font-size: 13px; background: var(--surface); color: var(--text); height: 28px; outline: none; padding: 0; -moz-appearance: textfield; appearance: textfield; }
+  .modal-vqty-num::-webkit-outer-spin-button, .modal-vqty-num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
   .modal-vqty-btn.plus:disabled { opacity: 0.3; cursor: default; }
   .modal-no-variants { padding: 0 1.25rem 1rem; display: flex; align-items: center; gap: 8px; }
   .modal-close { width: 32px; height: 32px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); cursor: pointer; font-size: 18px; color: var(--text-muted); display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.12s; }
