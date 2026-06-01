@@ -278,6 +278,18 @@
     .modal-vqty-btn { width: 24px; height: 24px; font-size: 15px; }
     .modal-vqty-num { width: 28px; height: 24px; font-size: 12px; }
   }
+
+  /* Botón y modal de Preguntas Frecuentes */
+  .faq-btn { width: 36px; height: 36px; flex-shrink: 0; border: 1px solid var(--border-strong); border-radius: 50%; background: var(--surface); color: var(--text-muted); font-family: inherit; font-size: 17px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; line-height: 1; transition: background 0.12s, color 0.12s; }
+  .faq-btn:hover { background: var(--bg); color: var(--text); }
+  .faq-box { background: var(--surface); border-radius: var(--radius); width: 100%; max-width: 540px; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+  .faq-header { padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+  .faq-header h2 { font-size: 16px; font-weight: 600; }
+  .faq-body { padding: 0.5rem 1.5rem 1.5rem; overflow-y: auto; }
+  .faq-item { padding: 1.1rem 0; border-bottom: 1px solid var(--border); }
+  .faq-item:last-child { border-bottom: none; }
+  .faq-q { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 5px; }
+  .faq-a { font-size: 13px; line-height: 1.55; color: var(--text-muted); }
 </style>
 </head>
 <body>
@@ -290,12 +302,48 @@
   <div class="header-right">
     <span class="conn-dot" id="conn-dot"></span>
     <span class="conn-label" id="conn-label"></span>
+    <button class="faq-btn" onclick="abrirFAQ()" title="Preguntas frecuentes" aria-label="Preguntas frecuentes">?</button>
     <button class="cart-btn" onclick="abrirCarrito()">
       Pedido
       <span class="cart-badge" id="cart-badge">0</span>
     </button>
   </div>
 </header>
+
+<div class="modal-overlay" id="faq-overlay" onclick="cerrarFAQ(event)">
+  <div class="faq-box">
+    <div class="faq-header">
+      <h2>Preguntas frecuentes</h2>
+      <button class="close-btn" onclick="cerrarFAQ()">×</button>
+    </div>
+    <div class="faq-body">
+      <div class="faq-item">
+        <div class="faq-q">¿Cuál es la compra mínima?</div>
+        <div class="faq-a">La compra mínima es de $100.000.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">¿A dónde y por dónde envían?</div>
+        <div class="faq-a">Enviamos a todo el país por Correo Argentino, Andreani, Vía Cargo o Sendbox. También podemos despachar en tu transporte de confianza.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">¿Quién paga el envío y cómo se abona?</div>
+        <div class="faq-a">El envío siempre es a cargo del cliente. En envíos por Correo Argentino o Andreani, el costo se paga por adelantado. En envíos con encomiendista o transporte, el pago es en destino.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">¿Emiten Factura A?</div>
+        <div class="faq-a">Sí, emitimos Factura A. Consultá las condiciones con el vendedor.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">¿Qué medios de pago aceptan?</div>
+        <div class="faq-a">Aceptamos transferencia bancaria o depósito. Consultá con el vendedor la cuenta para abonar el pedido.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">¿Cuánto demora el armado y despacho del pedido?</div>
+        <div class="faq-a">La demora de armado y despacho del pedido es de 24 hs.</div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <div class="layout">
 
@@ -592,6 +640,8 @@ function setVariantDim(productId, dim1) {
 }
 
 function $(id) { return document.getElementById(id); }
+function abrirFAQ() { $('faq-overlay').classList.add('open'); }
+function cerrarFAQ(e) { if (e && e.target !== $('faq-overlay')) return; $('faq-overlay').classList.remove('open'); }
 
 function showToast(msg, type='', dur=2800) {
   const t = $('toast');
