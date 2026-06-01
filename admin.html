@@ -75,6 +75,8 @@
   .variant-row:last-child { border-bottom: none; }
   .variant-row-name { flex: 1; font-size: 12px; color: var(--text); }
   .variant-row.hidden-var .variant-row-name { color: var(--text-hint); text-decoration: line-through; }
+  .variant-row-stock { font-size: 11px; color: var(--text-muted); flex-shrink: 0; white-space: nowrap; min-width: 54px; text-align: right; }
+  .variant-row-stock.low { color: var(--danger); font-weight: 600; }
   .vprice-wrap { display: flex; align-items: center; gap: 3px; flex-shrink: 0; }
   .vprice-wrap > span { font-size: 12px; color: var(--text-muted); }
   .vprice-input { width: 92px; padding: 5px 7px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 12px; outline: none; text-align: right; }
@@ -534,9 +536,13 @@ function renderProductList() {
     const varRows = variants.map(v => {
       const vh = isVariantHidden(id, v.size_id);
       const vpVal = (config.variantPrices || {})[id + '-' + v.size_id];
+      const vstock = getStockVarianteAdmin(v);
+      const stockTxt = vstock === null ? '<div class="variant-row-stock">—</div>'
+        : '<div class="variant-row-stock' + (vstock <= 5 ? ' low' : '') + '">' + vstock + ' u</div>';
       return '<div class="variant-row' + (vh ? ' hidden-var' : '') + (vpVal != null ? ' has-vprice' : '') + '" id="var-row-' + id + '-' + v.size_id + '">' +
         '<button class="toggle' + (vh ? '' : ' on') + '" id="var-tog-' + id + '-' + v.size_id + '" onclick="toggleVariant(' + id + ',' + v.size_id + ')"></button>' +
         '<div class="variant-row-name">' + v.size + '</div>' +
+        stockTxt +
         '<div class="vprice-wrap"><span>$</span><input class="vprice-input" type="number" min="0" step="1" value="' + (vpVal != null ? vpVal : '') + '" placeholder="' + phPrecio + '" title="Precio especial para esta variante. Vacío = precio normal." onclick="event.stopPropagation()" oninput="setVariantPrice(' + id + ',' + v.size_id + ',this.value)" /></div>' +
         '</div>';
     }).join('');
@@ -1012,6 +1018,14 @@ function precioBaseAdmin(p) {
     return cost > 0 ? cost * (1 + rec / 100) : 0;
   }
   return getCurrentPrice(p);
+}
+
+// Stock disponible de una variante (prioriza "Deposito Minorista", igual que el catálogo).
+function getStockVarianteAdmin(v) {
+  if (!v.stock_por_tienda || !v.stock_por_tienda.length) return null;
+  const t = v.stock_por_tienda.find(x => x.store_name === 'Deposito Minorista');
+  if (t) return t.stock_disponible || 0;
+  return v.stock_por_tienda.reduce((s, x) => s + (x.stock_disponible || 0), 0);
 }
 
 // Precio especial por variante: clave "productId-sizeId". Vacío = sin precio especial.
