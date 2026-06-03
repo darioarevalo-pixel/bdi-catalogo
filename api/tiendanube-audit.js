@@ -90,9 +90,19 @@ function mapProduct(p, catMap) {
   const rawDesc = p.description?.es || p.description?.pt || Object.values(p.description || {})[0] || '';
   const desc    = rawDesc.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
   const images  = (p.images   || []).map(i => i.src).filter(Boolean);
-  const sku     = (p.variants || [])[0]?.sku || null;
+  const variantsRaw = p.variants || [];
+  const sku     = variantsRaw[0]?.sku || null;
   const categoryIds = (p.categories || []).map(c => typeof c === 'object' ? c.id : c).filter(Boolean);
   const categories  = categoryIds.map(id => catMap[id]).filter(Boolean);
+
+  // Análisis variante ↔ foto: image_id null = la variante NO tiene foto propia vinculada
+  // (usa la principal de forma automática). Solo aplica si el producto tiene fotos.
+  const labelVar = v => {
+    const vals = (v.values || []).map(val => val?.es || val?.pt || (val && Object.values(val)[0])).filter(Boolean);
+    return vals.join(' / ') || v.sku || ('var ' + v.id);
+  };
+  const variantes_sin_foto = images.length > 0 ? variantsRaw.filter(v => v.image_id == null).map(labelVar) : [];
+
   return {
     id: p.id, name, handle, sku,
     published:   p.published ?? true,
@@ -105,6 +115,9 @@ function mapProduct(p, catMap) {
     categories,           // nombres de categorías en TN
     category_ids: categoryIds,
     created_at: p.created_at || null,
+    variantes_total:     variantsRaw.length,
+    variantes_con_foto:  images.length > 0 ? variantsRaw.filter(v => v.image_id != null).length : 0,
+    variantes_sin_foto,  // etiquetas de las variantes sin foto propia
   };
 }
 
