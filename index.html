@@ -180,7 +180,8 @@
   .modal-variant-stock { font-size: 11px; font-weight: 600; white-space: nowrap; flex-shrink: 0; }
   .modal-variant-stock.low { color: var(--warning); }
   .modal-variant-price { font-size: 13px; font-weight: 700; color: var(--accent); white-space: nowrap; flex-shrink: 0; }
-  .modal-variant-price.dif { color: var(--precio-dif); }
+  .modal-variant-price.dif { color: #DC2626; display: flex; flex-direction: column; align-items: flex-end; line-height: 1.1; }
+  .modal-variant-price .oferta-tag { font-size: 9px; font-weight: 800; letter-spacing: 0.5px; color: #DC2626; }
   .product-price.dif { color: var(--precio-dif); }
   .modal-price.dif { color: var(--precio-dif); }
   .modal-vqty-wrap { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
@@ -648,7 +649,7 @@ function renderVariantRowsHTML(productId, dims, selectedDim1, nomEsc, precio, im
         '<div class="modal-variant-name">' + v.dim2 + '</div>' +
         sTxt +
       '</div>' +
-      (especial ? '<div class="modal-variant-price' + (vPrecio !== moda ? ' dif' : '') + '">' + formatPrecio(vPrecio) + '</div>' : '') +
+      ((especial && vPrecio !== moda) ? '<div class="modal-variant-price dif">' + (vPrecio < moda ? '<span class="oferta-tag">OFERTA</span>' : '') + formatPrecio(vPrecio) + '</div>' : '') +
       '<div class="modal-vqty-wrap">' +
         '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1)">−</button>' +
         '<input class="modal-vqty-num" type="number" id="' + inputId + '" value="' + currentQty + '" min="0"' + maxAttr + ' />' +
@@ -1183,7 +1184,7 @@ function renderCardVariantRows(id, dims, selectedColor, nomEsc, precio, imgEsc) 
         '<div class="modal-variant-name" style="font-size:12px">' + v.dim2 + '</div>' +
         sTxt +
       '</div>' +
-      (especial ? '<div class="modal-variant-price' + (vPrecio !== moda ? ' dif' : '') + '">' + formatPrecio(vPrecio) + '</div>' : '') +
+      ((especial && vPrecio !== moda) ? '<div class="modal-variant-price dif">' + (vPrecio < moda ? '<span class="oferta-tag">OFERTA</span>' : '') + formatPrecio(vPrecio) + '</div>' : '') +
       '<div class="modal-vqty-wrap">' +
         '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1);event.stopPropagation()">−</button>' +
         '<input class="modal-vqty-num" type="number" id="q-m-' + cartKey + '" value="' + currentQty + '" min="0"' + maxAttr + ' />' +
@@ -1265,7 +1266,7 @@ function renderVariantesGrid(prods) {
               '<div class="modal-variant-name" style="font-size:12px">' + v.size + '</div>' +
               sTxt +
             '</div>' +
-            (especial ? '<div class="modal-variant-price' + (vPrecio !== moda ? ' dif' : '') + '">' + formatPrecio(vPrecio) + '</div>' : '') +
+            ((especial && vPrecio !== moda) ? '<div class="modal-variant-price dif">' + (vPrecio < moda ? '<span class="oferta-tag">OFERTA</span>' : '') + formatPrecio(vPrecio) + '</div>' : '') +
             '<div class="modal-vqty-wrap">' +
               '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1);event.stopPropagation()">−</button>' +
               '<input class="modal-vqty-num" type="number" id="q-m-' + cartKey + '" value="' + currentQty + '" min="0"' + maxAttr + ' />' +
@@ -1500,7 +1501,7 @@ function abrirModal(id) {
               '<div class="modal-variant-name">' + v.size + '</div>' +
               sTxt +
             '</div>' +
-            (especial ? '<div class="modal-variant-price' + (vPrecio !== moda ? ' dif' : '') + '">' + formatPrecio(vPrecio) + '</div>' : '') +
+            ((especial && vPrecio !== moda) ? '<div class="modal-variant-price dif">' + (vPrecio < moda ? '<span class="oferta-tag">OFERTA</span>' : '') + formatPrecio(vPrecio) + '</div>' : '') +
             '<div class="modal-vqty-wrap">' +
               '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1)">−</button>' +
               '<input class="modal-vqty-num" type="number" id="q-m-' + cartKey + '" value="' + currentQty + '" min="0"' + maxAttr + ' />' +
