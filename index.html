@@ -551,7 +551,7 @@ let filtro = 'todos';
 let categoria = 'todas';
 let viewMode = 'variants';
 let references = null;
-let adminConfig = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, recargos: {}, variantPrices: {} };
+let adminConfig = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, recargos: {}, variantPrices: {}, shownProducts: [], shownProductsInit: false };
 let esDistribuidor = null; // lo define el servidor (config.__esDistribuidor); null = aún no cargado
 let variantDimsCache = {};
 let cardVariantState = {};
@@ -874,10 +874,23 @@ async function cargarProductos() {
 
   // Filtrar productos y categorías ocultos por el admin
   const hiddenCats = adminConfig.hiddenCategories || [];
+  const modoDist = (esDistribuidor === null) ? all.some(p => parseFloat(p.unit_cost || 0) > 0) : esDistribuidor;
   all = all.filter(p => {
-    if (adminConfig.hiddenProducts.some(hid => hid == (p.id || p.product_id))) return false;
+    const pid = p.id || p.product_id;
     if (hiddenCats.includes(p.category || '')) return false;
     if (adminConfig.hideNoStock && getStockTotal(p) === 0) return false;
+    if (modoDist) {
+      // Distribuidores: lista blanca. El producto nuevo nace oculto hasta que lo
+      // aprueben desde el admin. Antes de la migración inicial (shownProductsInit)
+      // se mantiene el comportamiento anterior para no ocultar todo de golpe.
+      if (adminConfig.shownProductsInit &&
+          !(adminConfig.shownProducts || []).some(s => s == pid)) return false;
+    } else {
+      // Mayorista: oculto manual + no publicar sin precio mayorista cargado
+      // (evita que un producto nuevo se muestre con el precio minorista de respaldo).
+      if (adminConfig.hiddenProducts.some(hid => hid == pid)) return false;
+      if (parseFloat(p.wholesaler_price || 0) <= 0) return false;
+    }
     return true;
   });
   allProducts = all;

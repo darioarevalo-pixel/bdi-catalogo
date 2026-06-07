@@ -321,7 +321,7 @@
 <script>
 let allAdminProducts = [];
 const ALL_KEY = '__todas__';
-let config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, recargos: {}, variantPrices: {}, banners: [] };
+let config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, recargos: {}, variantPrices: {}, banners: [], shownProducts: [], shownProductsInit: false };
 let isDistribuidor = false; // se detecta al cargar productos (si vienen con unit_cost)
 let adminPassword = '';
 
@@ -354,7 +354,7 @@ async function login() {
       return;
     }
     const loaded = await r.json();
-    config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, recargos: {}, variantPrices: {}, banners: [], ...loaded };
+    config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, recargos: {}, variantPrices: {}, banners: [], shownProducts: [], shownProductsInit: false, ...loaded };
     if (!config.referencePrices) config.referencePrices = {};
     if (!config.recargos) config.recargos = {};
     if (!config.variantPrices) config.variantPrices = {};
@@ -404,6 +404,17 @@ async function cargarProductos() {
     if (btnPrices) btnPrices.style.display = 'none';
   }
 
+  // Distribuidores: migración inicial de visibilidad. La primera vez, todos los
+  // productos que hoy se muestran quedan en la lista blanca (shownProducts) para
+  // que sigan visibles. De ahí en más, los productos nuevos nacen ocultos hasta
+  // mostrarlos manualmente. Se persiste al tocar "Guardar cambios".
+  if (isDistribuidor && !config.shownProductsInit) {
+    config.shownProducts = all
+      .map(p => parseInt(p.id || p.product_id))
+      .filter(id => !config.hiddenProducts.some(h => h == id));
+    config.shownProductsInit = true;
+  }
+
   // Si no hay orden de categorías guardado, inicializar con todas las del catálogo
   const allCats = [...new Set(all.map(p => p.category || '').filter(Boolean).sort())];
   if (!config.categoryOrder || !config.categoryOrder.length) {
@@ -427,6 +438,8 @@ async function cargarProductos() {
 }
 
 function isHidden(id) {
+  // Distribuidores: oculto = NO está en la lista blanca (shownProducts).
+  if (isDistribuidor) return !(config.shownProducts || []).some(x => x == id);
   return config.hiddenProducts.some(x => x == id);
 }
 
@@ -448,6 +461,15 @@ function isVariantHidden(productId, variantId) {
 }
 
 function toggleProduct(id) {
+  if (isDistribuidor) {
+    // En distribuidores se maneja la lista blanca (mostrar = agregar a shownProducts).
+    if (!config.shownProducts) config.shownProducts = [];
+    const i = config.shownProducts.findIndex(x => x == id);
+    if (i >= 0) config.shownProducts.splice(i, 1);   // estaba visible -> ocultar
+    else config.shownProducts.push(parseInt(id));     // estaba oculto -> mostrar
+    renderProductList();
+    return;
+  }
   const idx = config.hiddenProducts.findIndex(x => x == id);
   if (idx >= 0) {
     config.hiddenProducts.splice(idx, 1);
@@ -1069,7 +1091,9 @@ function populatePriceCatFilter() {
 function getVisibilityStatus(p) {
   const id = p.id || p.product_id;
   const pcat = p.category || '';
-  const prodHidden = (config.hiddenProducts || []).some(x => x == id);
+  const prodHidden = isDistribuidor
+    ? !(config.shownProducts || []).some(x => x == id)
+    : (config.hiddenProducts || []).some(x => x == id);
   const catHidden = (config.hiddenCategories || []).includes(pcat);
   if (prodHidden) return 'prod';   // oculto manualmente
   if (catHidden) return 'cat';     // oculto por categoría
