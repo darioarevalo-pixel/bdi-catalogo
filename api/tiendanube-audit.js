@@ -92,6 +92,13 @@ function mapProduct(p, catMap) {
   const images  = (p.images   || []).map(i => i.src).filter(Boolean);
   const variantsRaw = p.variants || [];
   const sku     = variantsRaw[0]?.sku || null;
+
+  // Precio normal y promocional (de las variantes). El precio real de venta en TN
+  // es el promocional cuando está cargado; si no, el normal.
+  const _promoNums = variantsRaw.map(v => parseFloat(v.promotional_price)).filter(n => n > 0);
+  const _priceNums = variantsRaw.map(v => parseFloat(v.price)).filter(n => n > 0);
+  const promo_price = _promoNums.length ? Math.min(..._promoNums) : null;
+  const price       = _priceNums.length ? Math.min(..._priceNums) : null;
   const categoryIds = (p.categories || []).map(c => typeof c === 'object' ? c.id : c).filter(Boolean);
   const categories  = categoryIds.map(id => catMap[id]).filter(Boolean);
 
@@ -105,6 +112,7 @@ function mapProduct(p, catMap) {
 
   return {
     id: p.id, name, handle, sku,
+    price, promo_price,   // precio normal y promocional en TN
     published:   p.published ?? true,
     image_count: images.length,
     images,
