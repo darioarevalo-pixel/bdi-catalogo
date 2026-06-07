@@ -123,6 +123,7 @@
   .product-price-old { font-size: 12px; color: var(--text-muted); text-decoration: line-through; font-weight: 500; }
   .product-discount-badge { font-size: 11px; font-weight: 700; color: var(--danger); background: rgba(220, 38, 38, 0.1); padding: 2px 6px; border-radius: 4px; }
   .product-img-badge { position: absolute; top: 8px; left: 8px; background: var(--danger); color: white; font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 4px; z-index: 2; box-shadow: 0 2px 8px rgba(220, 38, 38, 0.35); letter-spacing: 0.3px; }
+  .product-img-badge.nuevo { left: auto; right: 8px; background: #16A34A; box-shadow: 0 2px 8px rgba(22, 163, 74, 0.35); }
   .product-imgs-badge { position: absolute; bottom: 8px; right: 8px; display: flex; align-items: center; gap: 4px; background: rgba(17,24,39,0.82); color: white; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 20px; z-index: 2; letter-spacing: 0.2px; pointer-events: none; }
   .modal-price-old { font-size: 14px; color: var(--text-muted); text-decoration: line-through; font-weight: 500; margin-right: 8px; }
   .modal-price-current { font-size: 24px; font-weight: 700; color: var(--accent); }
@@ -551,7 +552,7 @@ let filtro = 'todos';
 let categoria = 'todas';
 let viewMode = 'variants';
 let references = null;
-let adminConfig = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, recargos: {}, variantPrices: {}, shownProducts: [], shownProductsInit: false };
+let adminConfig = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, recargos: {}, variantPrices: {}, shownProducts: [], shownProductsInit: false, newProducts: [] };
 let esDistribuidor = null; // lo define el servidor (config.__esDistribuidor); null = aún no cargado
 let variantDimsCache = {};
 let cardVariantState = {};
@@ -1031,6 +1032,12 @@ function imgsBadge(imgs) {
   return '<div class="product-imgs-badge">' + cam + '+' + extra + (extra === 1 ? ' foto' : ' fotos') + '</div>';
 }
 
+// Cartel "NUEVO" (se prende manualmente por producto desde el admin).
+function nuevoBadge(id) {
+  return (adminConfig.newProducts || []).some(x => x == id)
+    ? '<div class="product-img-badge nuevo">NUEVO</div>' : '';
+}
+
 function getImagenGN(p) {
 
   // Fallback: campos propios de Gestión Nube
@@ -1154,6 +1161,7 @@ function renderProductos() {
     return '<div class="product-card" onclick="abrirModal(' + id + ')" style="cursor:pointer">' +
       '<div class="product-img-wrap">' +
         (pctDisc > 0 ? '<div class="product-img-badge">-' + pctDisc + '%</div>' : '') +
+        nuevoBadge(id) +
         (img ? '<img src="' + img + '" alt="' + nombre + '" loading="lazy" onerror="this.parentNode.innerHTML=\'<div class=\\\'no-img\\\'>Sin imagen</div>\'">' : '<div class="no-img">Sin imagen</div>') +
         imgsBadge(imgs) +
       '</div>' +
@@ -1305,6 +1313,7 @@ function renderVariantesGrid(prods) {
       '<div class="product-card" style="cursor:default">' +
         '<div class="product-img-wrap" style="cursor:pointer" onclick="abrirModalSoloGaleria(' + id + ')">' +
           (pctDisc > 0 ? '<div class="product-img-badge">-' + pctDisc + '%</div>' : '') +
+          nuevoBadge(id) +
           (img ? '<img src="' + img + '" alt="' + nombre + '" loading="lazy" onerror="this.parentNode.innerHTML=\'<div class=\\\'no-img\\\'>Sin imagen</div>\'">' : '<div class="no-img">Sin imagen</div>') +
           imgsBadge(imgs) +
         '</div>' +

@@ -61,6 +61,9 @@
   .product-row-cat { font-size: 10px; color: var(--text-muted); margin-top: 1px; }
   .expand-btn { font-size: 10px; color: var(--text-hint); background: var(--bg); border: 1px solid var(--border); cursor: pointer; padding: 2px 6px; border-radius: 20px; white-space: nowrap; font-family: inherit; transition: color 0.12s; flex-shrink: 0; margin-left: auto; }
   .expand-btn:hover { color: var(--text); border-color: var(--border-strong); }
+  .new-btn { font-size: 10px; font-weight: 700; letter-spacing: 0.3px; color: var(--text-hint); background: var(--bg); border: 1px solid var(--border); cursor: pointer; padding: 2px 8px; border-radius: 20px; white-space: nowrap; font-family: inherit; transition: all 0.12s; flex-shrink: 0; }
+  .new-btn:hover { color: var(--text); border-color: var(--border-strong); }
+  .new-btn.on { background: #16A34A; border-color: #16A34A; color: #fff; }
 
   /* Toggle */
   .toggle { width: 36px; height: 20px; border-radius: 10px; background: var(--border-strong); border: none; cursor: pointer; position: relative; flex-shrink: 0; transition: background 0.2s; }
@@ -321,7 +324,7 @@
 <script>
 let allAdminProducts = [];
 const ALL_KEY = '__todas__';
-let config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, recargos: {}, variantPrices: {}, banners: [], shownProducts: [], shownProductsInit: false };
+let config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, recargos: {}, variantPrices: {}, banners: [], shownProducts: [], shownProductsInit: false, newProducts: [] };
 let isDistribuidor = false; // se detecta al cargar productos (si vienen con unit_cost)
 let adminPassword = '';
 
@@ -354,7 +357,7 @@ async function login() {
       return;
     }
     const loaded = await r.json();
-    config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, recargos: {}, variantPrices: {}, banners: [], shownProducts: [], shownProductsInit: false, ...loaded };
+    config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, recargos: {}, variantPrices: {}, banners: [], shownProducts: [], shownProductsInit: false, newProducts: [], ...loaded };
     if (!config.referencePrices) config.referencePrices = {};
     if (!config.recargos) config.recargos = {};
     if (!config.variantPrices) config.variantPrices = {};
@@ -441,6 +444,19 @@ function isHidden(id) {
   // Distribuidores: oculto = NO está en la lista blanca (shownProducts).
   if (isDistribuidor) return !(config.shownProducts || []).some(x => x == id);
   return config.hiddenProducts.some(x => x == id);
+}
+
+function isNew(id) {
+  return (config.newProducts || []).some(x => x == id);
+}
+
+function toggleNew(id) {
+  if (!config.newProducts) config.newProducts = [];
+  const idx = config.newProducts.findIndex(x => x == id);
+  if (idx >= 0) config.newProducts.splice(idx, 1);
+  else config.newProducts.push(parseInt(id));
+  const btn = $('prod-new-' + id);
+  if (btn) btn.classList.toggle('on', isNew(id));
 }
 
 function isCatHidden(cat) {
@@ -595,6 +611,7 @@ function renderProductList() {
         (!filtered ? '<div class="move-btns"><button class="move-btn" title="Subir" onclick="moveProduct(\'' + id + '\',-1)">▲</button><button class="move-btn" title="Bajar" onclick="moveProduct(\'' + id + '\',1)">▼</button></div>' : '') +
         (!filtered ? '<input class="pos-input" type="number" min="1" max="' + totalOrdered + '" value="' + pos + '" title="Escribí la posición y presioná Enter" onkeydown="if(event.key===\'Enter\')moveProductToPos(\'' + id + '\',this.value)" onblur="moveProductToPos(\'' + id + '\',this.value)" onclick="event.stopPropagation();this.select()" />' : '') +
         '<button class="toggle' + (hidden ? '' : ' on') + '" id="prod-toggle-' + id + '" onclick="toggleProduct(' + id + ')"></button>' +
+        '<button class="new-btn' + (isNew(id) ? ' on' : '') + '" id="prod-new-' + id + '" onclick="event.stopPropagation();toggleNew(' + id + ')" title="Mostrar el cartel NUEVO en el catálogo">NUEVO</button>' +
         (variants.length ? '<button class="expand-btn" id="expand-btn-' + id + '" onclick="toggleExpand(' + id + ')">Variantes</button>' : '') +
       '</div>' +
       '<div class="product-row-body">' +
