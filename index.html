@@ -634,7 +634,7 @@ function renderVariantRowsHTML(productId, dims, selectedDim1, nomEsc, precio, im
   const moda = especial ? precioModaVariantes(productId, dims, precio) : precio;
   return filtered.map(v => {
     const vs = getStockVariante(v);
-    const pocas = vs !== null && vs < 10;
+    const pocas = vs !== null && vs <= 2;
     const sTxt = pocas ? '<div class="modal-variant-stock low">Últimas ' + vs + '</div>' : '';
     const maxAttr = vs !== null ? ' max="' + vs + '"' : '';
     const vnEsc = v.dim2.replace(/'/g,"\\'").replace(/"/g,'&quot;');
@@ -1198,7 +1198,7 @@ function renderCardVariantRows(id, dims, selectedColor, nomEsc, precio, imgEsc) 
     const fullVnEsc = v.size.replace(/'/g,"\\'").replace(/"/g,'&quot;');
     const vPrecio = getPrecioVariante(id, v.size_id, precio);
     const chArgs = '\'' + cartKey + '\',' + id + ',\'' + nomEsc + '\',' + vPrecio + ',' + v.size_id + ',\'' + fullVnEsc + '\',\'' + imgEsc + '\'';
-    const pocas = vs !== null && vs < 10;
+    const pocas = vs !== null && vs <= 2;
     const sTxt = pocas ? '<div class="modal-variant-stock low">Últimas ' + vs + '</div>' : '';
     return '<div class="modal-variant-row">' +
       '<div class="modal-variant-info">' +
@@ -1277,7 +1277,7 @@ function renderVariantesGrid(prods) {
           const currentQty = cart[cartKey]?.qty || 0;
           const maxAttr = vs !== null ? ' max="' + vs + '"' : '';
           const atMax = vs !== null && currentQty >= vs;
-          const pocas = vs !== null && vs < 10;
+          const pocas = vs !== null && vs <= 2;
           const sTxt = pocas ? '<div class="modal-variant-stock low">Últimas ' + vs + '</div>' : '';
           const vnEsc = v.size.replace(/'/g,"\\'").replace(/"/g,'&quot;');
           const vPrecio = getPrecioVariante(id, v.size_id, precio);
@@ -1511,7 +1511,7 @@ function abrirModal(id) {
           const vs = getStockVariante(v);
           const cartKey = id + '-' + v.size_id;
           const vnEsc = v.size.replace(/'/g,"\\'").replace(/"/g,'&quot;');
-          const pocas = vs !== null && vs < 10;
+          const pocas = vs !== null && vs <= 2;
           const sTxt = pocas ? '<div class="modal-variant-stock low">Últimas ' + vs + '</div>' : '';
           const maxAttr = vs !== null ? ' max="' + vs + '"' : '';
           const currentQty = cart[cartKey]?.qty || 0;
