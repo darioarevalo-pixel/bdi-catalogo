@@ -11,6 +11,8 @@ const STORES = {
   zattia: { storeId: process.env.TIENDANUBE_STORE_ID_ZATTIA, token: process.env.TIENDANUBE_TOKEN_ZATTIA },
 };
 const MODELO_PARENT = 36220324; // categoría padre "Modelo de iPhone" (BDI)
+// Alias: nombres de variante que en realidad refieren a una categoría con otro nombre (normalizado)
+const MODEL_ALIAS = { 'iphone17air': 'iphoneair' };
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -82,7 +84,7 @@ function calcularProducto(p, modelCats) {
   });
   // Categorías de modelo deseadas (las que tienen stock y existen como categoría)
   const deseadas = new Set();
-  conStock.forEach(nm => { if (modelCats.map[nm]) deseadas.add(modelCats.map[nm]); });
+  conStock.forEach(nm => { const k = MODEL_ALIAS[nm] || nm; if (modelCats.map[k]) deseadas.add(modelCats.map[k]); });
   // Actuales de modelo
   const actualesModelo = catActuales.filter(id => modelCats.ids.has(id));
   const agregar = [...deseadas].filter(id => !actualesModelo.includes(id));
