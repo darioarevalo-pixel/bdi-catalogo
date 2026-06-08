@@ -89,14 +89,21 @@ function calcularProducto(p, modelCats) {
   const actualesModelo = catActuales.filter(id => modelCats.ids.has(id));
   const agregar = [...deseadas].filter(id => !actualesModelo.includes(id));
   const quitar = actualesModelo.filter(id => !deseadas.has(id));
-  // Nueva lista completa: no-modelo + deseadas
-  const nuevas = catActuales.filter(id => !modelCats.ids.has(id)).concat([...deseadas]);
+  // Categoría padre "Modelo de iPhone": va si hay algún modelo con stock; se saca si no hay ninguno
+  const tieneParent = catActuales.includes(MODELO_PARENT);
+  const quiereParent = deseadas.size > 0;
+  // Nueva lista completa: no-modelo (sin el padre, que va aparte) + deseadas + padre si corresponde
+  let nuevas = catActuales.filter(id => !modelCats.ids.has(id) && id !== MODELO_PARENT).concat([...deseadas]);
+  if (quiereParent) nuevas.push(MODELO_PARENT);
+  const agregarN = agregar.map(id => ({ id, nombre: modelCats.nombre[id] }));
+  const quitarN = quitar.map(id => ({ id, nombre: modelCats.nombre[id] }));
+  if (quiereParent && !tieneParent) agregarN.push({ id: MODELO_PARENT, nombre: 'Modelo de iPhone' });
+  if (!quiereParent && tieneParent) quitarN.push({ id: MODELO_PARENT, nombre: 'Modelo de iPhone' });
   return {
     id: p.id, nombre,
-    agregar: agregar.map(id => ({ id, nombre: modelCats.nombre[id] })),
-    quitar: quitar.map(id => ({ id, nombre: modelCats.nombre[id] })),
+    agregar: agregarN, quitar: quitarN,
     nuevasCategorias: nuevas,
-    cambia: agregar.length > 0 || quitar.length > 0,
+    cambia: agregarN.length > 0 || quitarN.length > 0,
   };
 }
 
