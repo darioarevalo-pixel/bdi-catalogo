@@ -13,8 +13,11 @@ const CORS = {
 };
 function tnH(token) { return { 'Authentication': `bearer ${token}`, 'User-Agent': 'Monitor Areben (brunoarevalo@arebensrl.com)', 'Content-Type': 'application/json' }; }
 const valEs = v => v?.es || (v && Object.values(v)[0]) || '';
-// Una variante puede tener varios values: el "color" es el value que NO es un modelo de iPhone
-const coloresDeVariante = v => (v.values || []).map(valEs).filter(t => t && !/iphone/i.test(t));
+// Talles (no son colores): se excluyen para que la imagen vaya por color, no por talle
+const TALLES = new Set(['s', 'm', 'l', 'xl', 'xxl', 'xs', 'xxs', 'xxxl', 'xxxxl', 'u', 'unico', 'único']);
+const _esTalle = t => { const x = String(t || '').toLowerCase().trim(); return TALLES.has(x) || /^\d{1,3}$/.test(x) || x.startsWith('talle'); };
+// El "color" de una variante = value que NO es modelo de iPhone NI talle
+const coloresDeVariante = v => (v.values || []).map(valEs).filter(t => t && !/iphone/i.test(t) && !_esTalle(t));
 
 async function tnGet(storeId, token, path) {
   const r = await fetch(`https://api.tiendanube.com/v1/${storeId}/${path}`, { headers: tnH(token) });
