@@ -684,7 +684,7 @@ function renderVariantRowsHTML(productId, dims, selectedDim1, nomEsc, precio, im
         '<div class="modal-variant-name">' + modeloCorto(v.dim2) + '</div>' +
         sTxt +
       '</div>' +
-      ((especial && vPrecio !== moda) ? '<div class="modal-variant-price dif">' + (vPrecio < moda ? '<span class="oferta-tag">OFERTA</span>' : '') + formatPrecio(vPrecio) + '</div>' : '') +
+      (vPrecio !== precio ? '<div class="modal-variant-price dif">' + (vPrecio < precio ? '<span class="oferta-tag">OFERTA</span>' : '') + formatPrecio(vPrecio) + '</div>' : '') +
       '<div class="modal-vqty-wrap">' +
         '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1)">−</button>' +
         '<input class="modal-vqty-num" type="number" id="' + inputId + '" value="' + currentQty + '" min="0"' + maxAttr + ' />' +
@@ -1232,7 +1232,7 @@ function renderProductos() {
         '<div class="product-name">' + nombre + '</div>' +
         (cod ? '<div class="product-code">' + cod + '</div>' : '') +
         (productoTienePrecioEspecial(p)
-          ? '<div class="product-price">' + formatPrecio(precioModaProducto(p)) + '</div>'
+          ? '<div class="product-price">' + formatPrecio(getPrecio(p)) + '</div>'
           : precioCardHTML(precio, precioAnt)) +
       '</div>' +
     '</div>';
@@ -1267,7 +1267,7 @@ function renderCardVariantRows(id, dims, selectedColor, nomEsc, precio, imgEsc) 
         '<div class="modal-variant-name" style="font-size:12px">' + modeloCorto(v.dim2) + '</div>' +
         sTxt +
       '</div>' +
-      ((especial && vPrecio !== moda) ? '<div class="modal-variant-price dif">' + (vPrecio < moda ? '<span class="oferta-tag">OFERTA</span>' : '') + formatPrecio(vPrecio) + '</div>' : '') +
+      (vPrecio !== precio ? '<div class="modal-variant-price dif">' + (vPrecio < precio ? '<span class="oferta-tag">OFERTA</span>' : '') + formatPrecio(vPrecio) + '</div>' : '') +
       '<div class="modal-vqty-wrap">' +
         '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1);event.stopPropagation()">−</button>' +
         '<input class="modal-vqty-num" type="number" id="q-m-' + cartKey + '" value="' + currentQty + '" min="0"' + maxAttr + ' />' +
@@ -1349,7 +1349,7 @@ function renderVariantesGrid(prods) {
               '<div class="modal-variant-name" style="font-size:12px">' + modeloCorto(v.size) + '</div>' +
               sTxt +
             '</div>' +
-            ((especial && vPrecio !== moda) ? '<div class="modal-variant-price dif">' + (vPrecio < moda ? '<span class="oferta-tag">OFERTA</span>' : '') + formatPrecio(vPrecio) + '</div>' : '') +
+            (vPrecio !== precio ? '<div class="modal-variant-price dif">' + (vPrecio < precio ? '<span class="oferta-tag">OFERTA</span>' : '') + formatPrecio(vPrecio) + '</div>' : '') +
             '<div class="modal-vqty-wrap">' +
               '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1);event.stopPropagation()">−</button>' +
               '<input class="modal-vqty-num" type="number" id="q-m-' + cartKey + '" value="' + currentQty + '" min="0"' + maxAttr + ' />' +
@@ -1384,7 +1384,7 @@ function renderVariantesGrid(prods) {
           '<div class="product-name">' + nombre + '</div>' +
           (cod ? '<div class="product-code">' + cod + '</div>' : '') +
           (especial
-            ? '<div class="product-price" style="margin-top:4px">' + formatPrecio(precioModaProducto(p)) + '</div>'
+            ? '<div class="product-price" style="margin-top:4px">' + formatPrecio(getPrecio(p)) + '</div>'
             : pctDisc > 0
             ? '<div class="product-price-wrap" style="margin-top:4px"><span class="product-price-old">' + formatPrecio(precioAnt) + '</span><span class="product-price">' + formatPrecio(precio) + '</span><span class="product-discount-badge">-' + pctDisc + '%</span></div>'
             : '<div class="product-price" style="margin-top:4px">' + formatPrecio(precio) + '</div>') +
@@ -1521,7 +1521,7 @@ function abrirModal(id) {
   const pctDiscModal = getDescuentoPct(precio, precioAntModal);
   $('modal-price').classList.remove('dif');
   if (especial) {
-    $('modal-price').textContent = formatPrecio(precioModaProducto(p));
+    $('modal-price').textContent = formatPrecio(getPrecio(p));
   } else if (pctDiscModal > 0) {
     $('modal-price').innerHTML =
       '<span class="modal-price-old">' + formatPrecio(precioAntModal) + '</span>' +
@@ -1585,7 +1585,7 @@ function abrirModal(id) {
               '<div class="modal-variant-name">' + modeloCorto(v.size) + '</div>' +
               sTxt +
             '</div>' +
-            ((especial && vPrecio !== moda) ? '<div class="modal-variant-price dif">' + (vPrecio < moda ? '<span class="oferta-tag">OFERTA</span>' : '') + formatPrecio(vPrecio) + '</div>' : '') +
+            (vPrecio !== precio ? '<div class="modal-variant-price dif">' + (vPrecio < precio ? '<span class="oferta-tag">OFERTA</span>' : '') + formatPrecio(vPrecio) + '</div>' : '') +
             '<div class="modal-vqty-wrap">' +
               '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1)">−</button>' +
               '<input class="modal-vqty-num" type="number" id="q-m-' + cartKey + '" value="' + currentQty + '" min="0"' + maxAttr + ' />' +
