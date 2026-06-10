@@ -505,6 +505,7 @@ function copiarModelosWA(id) {
   const lineas = ['*' + nombre + '*', '', '📱 *Modelos disponibles:*', ...modelos, ''];
   if (precio > 0) lineas.push('💵 *Precio:* ' + fmtAR(precio), '');
   lineas.push('No ingresaron muchas, no te duermas en stockear tu local');
+  lineas.push('', '🛍️ *Tienda online:* ' + location.origin);
   const texto = lineas.join('\n');
   const ok = () => showToast('Copiado para WhatsApp · ' + modelos.length + ' modelos', 'success');
   if (navigator.clipboard && navigator.clipboard.writeText) {
