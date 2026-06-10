@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Votación de diseños · Areben</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #F3F4F6; color: #111827; }
+  header { position: sticky; top: 0; background: #fff; border-bottom: 1px solid #E5E7EB; padding: 12px 16px; z-index: 10; }
+  .h-title { font-size: 16px; font-weight: 700; }
+  .h-sub { font-size: 12px; color: #6B7280; margin-top: 2px; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 14px; }
+  .namebox { background: #fff; border: 1px solid #E5E7EB; border-radius: 12px; padding: 14px; margin-bottom: 14px; }
+  .namebox label { font-size: 13px; font-weight: 600; display: block; margin-bottom: 6px; }
+  .namebox input { width: 100%; padding: 10px 12px; font-size: 15px; border: 1px solid #D1D5DB; border-radius: 9px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .card { background: #fff; border: 1px solid #E5E7EB; border-radius: 12px; overflow: hidden; }
+  .card img { width: 100%; height: 150px; object-fit: cover; background: #F3F4F6; display: block; cursor: zoom-in; }
+  .card .nm { font-size: 12px; font-weight: 600; padding: 7px 8px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .vbtns { display: flex; gap: 6px; padding: 0 8px 9px; }
+  .vbtns button { flex: 1; padding: 9px 0; font-size: 15px; border-radius: 8px; border: 1.5px solid #E5E7EB; background: #fff; cursor: pointer; }
+  .vbtns button.up.on { background: #16A34A; border-color: #16A34A; color: #fff; }
+  .vbtns button.down.on { background: #DC2626; border-color: #DC2626; color: #fff; }
+  .status { position: sticky; bottom: 0; background: #fff; border-top: 1px solid #E5E7EB; padding: 10px 16px; text-align: center; font-size: 13px; color: #374151; }
+  .msg { padding: 40px 16px; text-align: center; color: #6B7280; }
+  #lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.85); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 50; }
+  #lightbox img { max-width: 96%; max-height: 96%; border-radius: 8px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="h-title" id="titulo">Votación de diseños</div>
+  <div class="h-sub" id="subtitulo">Cargando…</div>
+</header>
+<div class="wrap">
+  <div class="namebox">
+    <label for="nombre">Tu nombre (para saber quién votó)</label>
+    <input id="nombre" type="text" placeholder="Ej: Sofía" autocomplete="name">
+  </div>
+  <div id="grid" class="grid"></div>
+  <div id="vacio" class="msg" style="display:none;"></div>
+</div>
+<div class="status" id="status">Marcá 👍 o 👎 en cada diseño. Se guarda solo.</div>
+<div id="lightbox" onclick="this.style.display='none'"><img></div>
+
+<script>
+const API = '/api/votacion';
+const params = new URLSearchParams(location.search);
+const ID = params.get('id');
+let META = null, IMAGES = {};
+let misVotos = {};        // { designId: 'up' | 'down' }
+let saveT = null;
+
+// voterId persistente por dispositivo
+function voterId() {
+  let v = localStorage.getItem('areben_voter_id');
+  if (!v) { v = 'v' + Date.now() + Math.floor(Math.random() * 1e6); localStorage.setItem('areben_voter_id', v); }
+  return v;
+}
+const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+async function cargar() {
+  if (!ID) { document.getElementById('subtitulo').textContent = 'Link inválido (falta el código de la ronda).'; return; }
+  try {
+    const r = await fetch(`${API}?id=${encodeURIComponent(ID)}&full=1`);
+    if (r.status === 404) { document.getElementById('subtitulo').textContent = 'Esta votación no existe o expiró.'; return; }
+    const d = await r.json();
+    META = d.meta; IMAGES = d.images || {};
+    // recuperar mi voto previo: del servidor, o del respaldo local de este dispositivo
+    const yo = (d.ballots || []).find(b => b.voterId === voterId());
+    if (yo && yo.votes) misVotos = yo.votes;
+    else { try { misVotos = JSON.parse(localStorage.getItem('areben_votes_' + ID)) || {}; } catch { misVotos = {}; } }
+    document.getElementById('titulo').textContent = META.title || 'Votación de diseños';
+    render();
+  } catch (e) {
+    document.getElementById('subtitulo').textContent = 'Error cargando la votación. Probá recargar.';
+  }
+}
+
+function render() {
+  const grid = document.getElementById('grid');
+  const designs = (META && META.designs) || [];
+  if (!designs.length) { grid.style.display = 'none'; const v = document.getElementById('vacio'); v.style.display = 'block'; v.textContent = 'La ronda no tiene diseños.'; return; }
+  grid.innerHTML = designs.map(d => {
+    const img = IMAGES[d.id] || '';
+    const mv = misVotos[d.id];
+    return `<div class="card">
+      <img src="${img}" onclick="ampliar('${d.id}')">
+      <div class="nm" title="${esc(d.name)}">${esc(d.name) || '—'}</div>
+      <div class="vbtns">
+        <button class="up ${mv === 'up' ? 'on' : ''}" onclick="votar('${d.id}','up')">👍</button>
+        <button class="down ${mv === 'down' ? 'on' : ''}" onclick="votar('${d.id}','down')">👎</button>
+      </div>
+    </div>`;
+  }).join('');
+  actualizarStatus();
+}
+
+function votar(did, val) {
+  if (!document.getElementById('nombre').value.trim()) {
+    document.getElementById('nombre').focus();
+    document.getElementById('status').textContent = '👆 Primero poné tu nombre arriba.';
+    return;
+  }
+  misVotos[did] = (misVotos[did] === val) ? undefined : val; // tocar de nuevo = desmarca
+  if (misVotos[did] === undefined) delete misVotos[did];
+  try { localStorage.setItem('areben_votes_' + ID, JSON.stringify(misVotos)); } catch {}
+  render();
+  guardar();
+}
+
+function actualizarStatus() {
+  const total = ((META && META.designs) || []).length;
+  const hechos = Object.keys(misVotos).length;
+  document.getElementById('subtitulo').textContent = `${total} diseños · votaste ${hechos}`;
+}
+
+function guardar() {
+  clearTimeout(saveT);
+  document.getElementById('status').textContent = 'Guardando…';
+  saveT = setTimeout(async () => {
+    try {
+      await fetch(API, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'votar', id: ID, voterId: voterId(), name: document.getElementById('nombre').value.trim(), votes: misVotos }),
+      });
+      document.getElementById('status').textContent = '✓ Guardado. ¡Gracias! Podés seguir cambiando tus votos.';
+    } catch (e) {
+      document.getElementById('status').textContent = '⚠️ No se pudo guardar, revisá tu conexión.';
+    }
+  }, 600);
+}
+
+function ampliar(did) {
+  const img = IMAGES[did]; if (!img) return;
+  const lb = document.getElementById('lightbox');
+  lb.querySelector('img').src = img;
+  lb.style.display = 'flex';
+}
+
+// nombre persistente
+const inpNombre = document.getElementById('nombre');
+inpNombre.value = localStorage.getItem('areben_voter_name') || '';
+inpNombre.addEventListener('input', () => { localStorage.setItem('areben_voter_name', inpNombre.value); });
+inpNombre.addEventListener('change', () => { if (Object.keys(misVotos).length) guardar(); });
+
+cargar();
+</script>
+</body>
+</html>
