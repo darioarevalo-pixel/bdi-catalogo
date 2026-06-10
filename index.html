@@ -221,6 +221,7 @@
   .cat-nav-item.active { background: #fff; color: #111827; font-weight: 600; }
   .cat-nav-count { font-size: 11px; font-weight: 600; color: #9CA3AF; flex-shrink: 0; }
   .cat-nav-item.active .cat-nav-count { color: #6B7280; }
+  .cat-nav-sep { margin-top: 10px; padding-top: 8px; border-top: 1px solid #1F2937; }
   .cart-drawer { position: fixed; right: -480px; top: 0; width: 460px; height: 100vh; height: 100dvh; background: var(--surface); border-left: 1px solid var(--border); z-index: 201; display: flex; flex-direction: column; transition: right 0.25s ease; overflow: hidden; }
   .cart-drawer.open { right: 0; }
   .drawer-header { padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
@@ -394,6 +395,12 @@
       <button class="cat-nav-close" onclick="cerrarCatNav()" aria-label="Cerrar">×</button>
     </div>
     <div class="cat-list" id="cat-list"></div>
+    <div class="cat-nav-sep" id="faq-nav-wrap">
+      <button class="cat-nav-item" onclick="abrirFAQ();cerrarCatNav()">
+        <span class="cat-nav-name">Preguntas frecuentes</span>
+        <span class="cat-nav-count">?</span>
+      </button>
+    </div>
   </aside>
 
   <main class="main">
@@ -809,6 +816,8 @@ async function conectar() {
   if (/distribuidor/i.test(location.hostname)) {
     const fb = document.querySelector('.faq-btn');
     if (fb) fb.remove();
+    const fnav = document.getElementById('faq-nav-wrap');
+    if (fnav) fnav.remove();
   }
   try {
     // Config y referencias son rápidas y necesarias para filtrar/renderizar.
@@ -1157,7 +1166,11 @@ function renderProductos() {
   });
   if (sort === 'custom' || sort === 'default') {
     if (categoria !== 'todas') {
-      prods = applyCustomProductOrder(prods, categoria);
+      // Mantener el MISMO orden que en "Todos los productos": si hay un orden
+      // global definido, ordenar la categoría según ese orden; si no, usar el
+      // orden por categoría (que coincide con el agrupado de "Todos").
+      const globalOrder = (adminConfig.productOrder || {})['__todas__'] || [];
+      prods = applyCustomProductOrder(prods, globalOrder.length ? '__todas__' : categoria);
     } else {
       const globalOrder = (adminConfig.productOrder || {})['__todas__'] || [];
       if (globalOrder.length) {
