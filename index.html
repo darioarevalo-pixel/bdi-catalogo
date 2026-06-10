@@ -647,7 +647,7 @@ function renderVariantRowsHTML(productId, dims, selectedDim1, nomEsc, precio, im
     const chArgs = '\'' + cartKey + '\',' + productId + ',\'' + nomEsc + '\',' + vPrecio + ',' + v.size_id + ',\'' + fullVnEsc + '\',\'' + imgEsc + '\'';
     return '<div class="modal-variant-row">' +
       '<div class="modal-variant-info">' +
-        '<div class="modal-variant-name">' + v.dim2 + '</div>' +
+        '<div class="modal-variant-name">' + modeloCorto(v.dim2) + '</div>' +
         sTxt +
       '</div>' +
       ((especial && vPrecio !== moda) ? '<div class="modal-variant-price dif">' + (vPrecio < moda ? '<span class="oferta-tag">OFERTA</span>' : '') + formatPrecio(vPrecio) + '</div>' : '') +
@@ -1038,6 +1038,13 @@ function nuevoBadge(id) {
     ? '<div class="product-img-badge nuevo">NUEVO</div>' : '';
 }
 
+// Nombre de modelo acortado para mostrar en la lista de variantes: saca la palabra
+// "iPhone" del inicio (se sobreentiende). Solo afecta lo visible; el carrito y lo
+// que se envía a Gestión Nube siguen usando el nombre completo (v.size).
+function modeloCorto(txt) {
+  return (txt || '').replace(/^\s*iphone\s+/i, '');
+}
+
 function getImagenGN(p) {
 
   // Fallback: campos propios de Gestión Nube
@@ -1202,7 +1209,7 @@ function renderCardVariantRows(id, dims, selectedColor, nomEsc, precio, imgEsc) 
     const sTxt = pocas ? '<div class="modal-variant-stock low">Últimas ' + vs + '</div>' : '';
     return '<div class="modal-variant-row">' +
       '<div class="modal-variant-info">' +
-        '<div class="modal-variant-name" style="font-size:12px">' + v.dim2 + '</div>' +
+        '<div class="modal-variant-name" style="font-size:12px">' + modeloCorto(v.dim2) + '</div>' +
         sTxt +
       '</div>' +
       ((especial && vPrecio !== moda) ? '<div class="modal-variant-price dif">' + (vPrecio < moda ? '<span class="oferta-tag">OFERTA</span>' : '') + formatPrecio(vPrecio) + '</div>' : '') +
@@ -1284,7 +1291,7 @@ function renderVariantesGrid(prods) {
           const chArgs = '\'' + cartKey + '\',' + id + ',\'' + nomEsc + '\',' + vPrecio + ',' + v.size_id + ',\'' + vnEsc + '\',\'' + imgEsc + '\'';
           return '<div class="modal-variant-row">' +
             '<div class="modal-variant-info">' +
-              '<div class="modal-variant-name" style="font-size:12px">' + v.size + '</div>' +
+              '<div class="modal-variant-name" style="font-size:12px">' + modeloCorto(v.size) + '</div>' +
               sTxt +
             '</div>' +
             ((especial && vPrecio !== moda) ? '<div class="modal-variant-price dif">' + (vPrecio < moda ? '<span class="oferta-tag">OFERTA</span>' : '') + formatPrecio(vPrecio) + '</div>' : '') +
@@ -1520,7 +1527,7 @@ function abrirModal(id) {
           const chArgs = '\'' + cartKey + '\',' + id + ',\'' + nomEsc + '\',' + vPrecio + ',' + v.size_id + ',\'' + vnEsc + '\',\'' + imgEsc + '\'';
           return '<div class="modal-variant-row">' +
             '<div class="modal-variant-info">' +
-              '<div class="modal-variant-name">' + v.size + '</div>' +
+              '<div class="modal-variant-name">' + modeloCorto(v.size) + '</div>' +
               sTxt +
             '</div>' +
             ((especial && vPrecio !== moda) ? '<div class="modal-variant-price dif">' + (vPrecio < moda ? '<span class="oferta-tag">OFERTA</span>' : '') + formatPrecio(vPrecio) + '</div>' : '') +
