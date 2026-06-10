@@ -473,7 +473,11 @@ function copiarModelosWA(id) {
     .map(v => v.size)
     .filter(Boolean);
   if (!modelos.length) { showToast('Este producto no tiene modelos con stock', 'error'); return; }
-  const texto = '*' + nombre + '*\n\n' + modelos.join('\n');
+  const precio = precioBaseAdmin(p);
+  const lineas = ['*' + nombre + '*', '', '📱 *Modelos disponibles:*', ...modelos, ''];
+  if (precio > 0) lineas.push('💵 *Precio:* ' + fmtAR(precio), '');
+  lineas.push('No ingresaron muchas, no te duermas en stockear tu local');
+  const texto = lineas.join('\n');
   const ok = () => showToast('Copiado para WhatsApp · ' + modelos.length + ' modelos', 'success');
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(texto).then(ok).catch(() => fallbackCopiar(texto, ok));
