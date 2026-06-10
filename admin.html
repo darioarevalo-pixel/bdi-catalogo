@@ -64,6 +64,8 @@
   .new-btn { font-size: 10px; font-weight: 700; letter-spacing: 0.3px; color: var(--text-hint); background: var(--bg); border: 1px solid var(--border); cursor: pointer; padding: 2px 8px; border-radius: 20px; white-space: nowrap; font-family: inherit; transition: all 0.12s; flex-shrink: 0; }
   .new-btn:hover { color: var(--text); border-color: var(--border-strong); }
   .new-btn.on { background: #16A34A; border-color: #16A34A; color: #fff; }
+  .wa-btn { font-size: 10px; font-weight: 700; letter-spacing: 0.3px; color: #16A34A; background: var(--bg); border: 1px solid #16A34A; cursor: pointer; padding: 2px 8px; border-radius: 20px; white-space: nowrap; font-family: inherit; transition: all 0.12s; flex-shrink: 0; }
+  .wa-btn:hover { background: #16A34A; color: #fff; }
 
   /* Toggle */
   .toggle { width: 36px; height: 20px; border-radius: 10px; background: var(--border-strong); border: none; cursor: pointer; position: relative; flex-shrink: 0; transition: background 0.2s; }
@@ -459,6 +461,35 @@ function toggleNew(id) {
   if (btn) btn.classList.toggle('on', isNew(id));
 }
 
+// Copia al portapapeles un mensaje para WhatsApp con los modelos disponibles
+// (con stock y no ocultos) de la funda. Nombre en negrita (*...*), un modelo por linea.
+function copiarModelosWA(id) {
+  const p = allAdminProducts.find(x => (x.id || x.product_id) == id);
+  if (!p) return;
+  const nombre = p.name || p.nombre || '';
+  const modelos = (p.variantes || [])
+    .filter(v => !isVariantHidden(id, v.size_id))
+    .filter(v => { const st = getStockVarianteAdmin(v); return st === null || st > 0; })
+    .map(v => v.size)
+    .filter(Boolean);
+  if (!modelos.length) { showToast('Este producto no tiene modelos con stock', 'error'); return; }
+  const texto = '*' + nombre + '*\n\n' + modelos.join('\n');
+  const ok = () => showToast('Copiado para WhatsApp · ' + modelos.length + ' modelos', 'success');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(texto).then(ok).catch(() => fallbackCopiar(texto, ok));
+  } else {
+    fallbackCopiar(texto, ok);
+  }
+}
+
+function fallbackCopiar(texto, ok) {
+  const ta = document.createElement('textarea');
+  ta.value = texto; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.focus(); ta.select();
+  try { document.execCommand('copy'); ok(); } catch (e) { showToast('No se pudo copiar', 'error'); }
+  document.body.removeChild(ta);
+}
+
 function isCatHidden(cat) {
   return (config.hiddenCategories || []).includes(cat);
 }
@@ -612,6 +643,7 @@ function renderProductList() {
         (!filtered ? '<input class="pos-input" type="number" min="1" max="' + totalOrdered + '" value="' + pos + '" title="Escribí la posición y presioná Enter" onkeydown="if(event.key===\'Enter\')moveProductToPos(\'' + id + '\',this.value)" onblur="moveProductToPos(\'' + id + '\',this.value)" onclick="event.stopPropagation();this.select()" />' : '') +
         '<button class="toggle' + (hidden ? '' : ' on') + '" id="prod-toggle-' + id + '" onclick="toggleProduct(' + id + ')"></button>' +
         '<button class="new-btn' + (isNew(id) ? ' on' : '') + '" id="prod-new-' + id + '" onclick="event.stopPropagation();toggleNew(' + id + ')" title="Mostrar el cartel NUEVO en el catálogo">NUEVO</button>' +
+        (variants.length ? '<button class="wa-btn" onclick="event.stopPropagation();copiarModelosWA(' + id + ')" title="Copiar modelos disponibles para WhatsApp">Copiar modelos</button>' : '') +
         (variants.length ? '<button class="expand-btn" id="expand-btn-' + id + '" onclick="toggleExpand(' + id + ')">Variantes</button>' : '') +
       '</div>' +
       '<div class="product-row-body">' +
