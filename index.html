@@ -210,6 +210,17 @@
 
   .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 200; }
   .overlay.open { display: block; }
+  /* Barra lateral de categorías */
+  .menu-btn { display: none; background: none; border: none; cursor: pointer; font-size: 22px; line-height: 1; color: var(--text); padding: 6px 8px; }
+  .cat-sidebar { width: 232px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); padding: 1rem 0.6rem; position: sticky; top: 68px; height: calc(100vh - 68px); overflow-y: auto; z-index: 201; }
+  .cat-nav-head { display: flex; align-items: center; justify-content: space-between; padding: 0 8px 10px; font-size: 12px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--text-muted); }
+  .cat-nav-close { display: none; background: none; border: none; font-size: 24px; line-height: 1; color: var(--text-muted); cursor: pointer; }
+  .cat-list { display: flex; flex-direction: column; gap: 2px; }
+  .cat-nav-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; text-align: left; padding: 9px 10px; border: none; border-radius: var(--radius-sm); background: none; font-family: inherit; font-size: 13px; font-weight: 500; color: var(--text); cursor: pointer; transition: background 0.12s, color 0.12s; }
+  .cat-nav-item:hover { background: var(--bg); }
+  .cat-nav-item.active { background: var(--accent); color: #fff; }
+  .cat-nav-count { font-size: 11px; font-weight: 600; color: var(--text-muted); flex-shrink: 0; }
+  .cat-nav-item.active .cat-nav-count { color: rgba(255,255,255,0.85); }
   .cart-drawer { position: fixed; right: -480px; top: 0; width: 460px; height: 100vh; height: 100dvh; background: var(--surface); border-left: 1px solid var(--border); z-index: 201; display: flex; flex-direction: column; transition: right 0.25s ease; overflow: hidden; }
   .cart-drawer.open { right: 0; }
   .drawer-header { padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
@@ -280,6 +291,10 @@
 
   @media (max-width: 700px) {
     .sidebar { display: none; }
+    .menu-btn { display: flex; align-items: center; }
+    .cat-sidebar { position: fixed; top: 0; left: -300px; width: 270px; height: 100vh; height: 100dvh; padding-top: 1rem; transition: left 0.25s ease; }
+    .cat-sidebar.open { left: 0; }
+    .cat-nav-close { display: block; }
     .cart-drawer { width: 100%; right: -100%; }
     .site-header { padding: 0 1rem; }
     .main { padding: 1rem; }
@@ -310,7 +325,9 @@
 <body>
 
 <header class="site-header">
-  <div></div>
+  <div style="display:flex;justify-content:flex-start">
+    <button class="menu-btn" onclick="abrirCatNav()" aria-label="Categorías">☰</button>
+  </div>
   <div class="logo">
     <img src="/logo.png" alt="BDI Accesorios" style="height:52px;width:auto;display:block;">
   </div>
@@ -371,6 +388,14 @@
 
 <div class="layout">
 
+  <aside class="cat-sidebar" id="cat-sidebar">
+    <div class="cat-nav-head">
+      <span>Categorías</span>
+      <button class="cat-nav-close" onclick="cerrarCatNav()" aria-label="Cerrar">×</button>
+    </div>
+    <div class="cat-list" id="cat-list"></div>
+  </aside>
+
   <main class="main">
     <div id="banners-section" style="display:none"></div>
     <div id="toolbar" style="display:none">
@@ -395,7 +420,6 @@
           </select>
         </div>
       </div>
-      <div class="cat-pills" id="cat-pills"></div>
     </div>
     <div class="products-grid" id="products-grid">
       <div class="state-msg">
@@ -430,7 +454,7 @@
   </div>
 </div>
 
-<div class="overlay" id="overlay" onclick="cerrarCarrito()"></div>
+<div class="overlay" id="overlay" onclick="cerrarCarrito();cerrarCatNav()"></div>
 <div class="cart-drawer" id="cart-drawer">
   <div class="drawer-header">
     <h2>Tu pedido</h2>
@@ -826,9 +850,13 @@ function renderCatPills() {
     orderedCats = rawCats.sort();
   }
   const cats = ['todas', ...orderedCats];
-  $('cat-pills').innerHTML = cats.map(c =>
-    '<button class="cat-pill' + (c === categoria ? ' active' : '') + '" onclick="setCategoria(\'' + c.replace(/'/g,"\\'") + '\')">' +
-      (c === 'todas' ? 'Todos los productos' : c) +
+  const cuenta = c => c === 'todas'
+    ? allProducts.length
+    : allProducts.filter(p => (p.category || '') === c).length;
+  $('cat-list').innerHTML = cats.map(c =>
+    '<button class="cat-nav-item' + (c === categoria ? ' active' : '') + '" onclick="setCategoria(\'' + c.replace(/'/g,"\\'") + '\')">' +
+      '<span class="cat-nav-name">' + (c === 'todas' ? 'Todos los productos' : c) + '</span>' +
+      '<span class="cat-nav-count">' + cuenta(c) + '</span>' +
     '</button>'
   ).join('');
 }
@@ -837,6 +865,17 @@ function setCategoria(c) {
   categoria = c;
   renderCatPills();
   renderProductos();
+  cerrarCatNav();
+}
+
+function abrirCatNav() {
+  $('overlay').classList.add('open');
+  $('cat-sidebar').classList.add('open');
+}
+
+function cerrarCatNav() {
+  $('overlay').classList.remove('open');
+  $('cat-sidebar').classList.remove('open');
 }
 
 async function cargarProductos() {
