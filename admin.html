@@ -55,7 +55,10 @@
   .product-row.dragging { opacity: 0.4; }
   .product-row.drag-over { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(17,24,39,0.15); }
   .product-row-header { display: flex; align-items: center; gap: 6px; padding: 7px 8px 5px; flex-wrap: wrap; }
-  .product-row-body { padding: 0 8px 7px; }
+  .product-row-body { padding: 0 8px 7px; display: flex; align-items: center; gap: 8px; }
+  .prod-thumb { width: 42px; height: 42px; flex-shrink: 0; border-radius: 6px; background: #fff; border: 1px solid var(--border); overflow: hidden; display: flex; align-items: center; justify-content: center; }
+  .prod-thumb img { width: 100%; height: 100%; object-fit: contain; }
+  .product-row-meta { min-width: 0; flex: 1; }
   .product-row-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .product-row.hidden-row .product-row-name { color: var(--text-hint); text-decoration: line-through; }
   .product-row-cat { font-size: 10px; color: var(--text-muted); margin-top: 1px; }
@@ -328,6 +331,7 @@ let allAdminProducts = [];
 const ALL_KEY = '__todas__';
 let config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, recargos: {}, variantPrices: {}, banners: [], shownProducts: [], shownProductsInit: false, newProducts: [] };
 let isDistribuidor = false; // se detecta al cargar productos (si vienen con unit_cost)
+let tnImageMap = {}; // imágenes de TiendaNube (para mostrar la foto en el listado del admin)
 let adminPassword = '';
 
 function $(id) { return document.getElementById(id); }
@@ -440,6 +444,7 @@ async function cargarProductos() {
 
   renderProductList();
   renderCategoryList();
+  cargarImagenesTN(); // trae las fotos de TiendaNube y re-renderiza cuando llegan
 }
 
 function isHidden(id) {
@@ -572,6 +577,47 @@ function getOrderedAllProducts() {
 
 let dragAllFrom = null;
 
+// Busca la imagen de un producto en el mapa de TiendaNube (por SKU o por nombre).
+function tnLookupAdmin(p) {
+  const sku = (p.code || p.sku || p.codigo || '').trim().toLowerCase();
+  if (sku && tnImageMap[sku]) return tnImageMap[sku];
+  const nombre = (p.name || p.nombre || p.product_name || '').trim().toLowerCase();
+  if (nombre) {
+    if (tnImageMap[nombre]) return tnImageMap[nombre];
+    const gnWords = nombre.split(/\s+/);
+    let best = null, bestLen = 0;
+    for (const tn of Object.keys(tnImageMap)) {
+      const tw = tn.split(/\s+/);
+      if (tw.every(w => gnWords.includes(w)) && tw.length > bestLen) { best = tn; bestLen = tw.length; }
+    }
+    if (best) return tnImageMap[best];
+  }
+  return null;
+}
+function getImagenAdmin(p) {
+  const e = tnLookupAdmin(p);
+  return (e && e.imgs && e.imgs.length) ? e.imgs[0] : null;
+}
+async function cargarImagenesTN() {
+  try {
+    const r = await fetch('/api/tiendanube');
+    if (!r.ok) return;
+    tnImageMap = await r.json();
+    // Precalcular la imagen de cada producto (una sola vez) para que el listado
+    // no recalcule el cruce en cada tecla del buscador.
+    allAdminProducts.forEach(p => { p._img = getImagenAdmin(p); });
+    if (allAdminProducts.length) renderProductList();
+  } catch (e) { /* sin imágenes: el listado sigue funcionando igual */ }
+}
+
+// Re-dibuja el listado manteniendo la posición de scroll (para que la vista no
+// salte al principio al reordenar un producto).
+function renderProductListKeepScroll() {
+  const y = window.scrollY || document.documentElement.scrollTop || 0;
+  renderProductList();
+  window.scrollTo(0, y);
+}
+
 function renderProductList() {
   const q = ($('admin-search')?.value || '').toLowerCase();
   const cat = $('admin-cat-filter')?.value || '';
@@ -607,6 +653,7 @@ function renderProductList() {
     const name = p.name || p.nombre || 'Sin nombre';
     const pcat = p.category || '';
     const variants = p.variantes || [];
+    const img = p._img || null;
     const hidden = isHidden(id);
     const pos = posMap[String(id)] || (i + 1);
 
@@ -651,8 +698,11 @@ function renderProductList() {
         (variants.length ? '<button class="expand-btn" id="expand-btn-' + id + '" onclick="toggleExpand(' + id + ')">Variantes</button>' : '') +
       '</div>' +
       '<div class="product-row-body">' +
-        '<div class="product-row-name">' + name + '</div>' +
-        (pcat ? '<div class="product-row-cat">' + pcat + '</div>' : '') +
+        '<div class="prod-thumb">' + (img ? '<img src="' + img.replace(/"/g, '&quot;') + '" loading="lazy" onerror="this.remove()">' : '') + '</div>' +
+        '<div class="product-row-meta">' +
+          '<div class="product-row-name">' + name + '</div>' +
+          (pcat ? '<div class="product-row-cat">' + pcat + '</div>' : '') +
+        '</div>' +
       '</div>' +
       (variants.length ? '<div class="variant-rows" id="var-rows-' + id + '">' + costoHead + varRows + '</div>' : '') +
     '</div>';
@@ -691,7 +741,7 @@ function prodListDrop(e, toIdx) {
   ids.splice(toIdx, 0, moved);
   config.productOrder[ALL_KEY] = ids;
   dragAllFrom = null;
-  renderProductList();
+  renderProductListKeepScroll();
 }
 
 function moveProductToPos(id, rawVal) {
@@ -707,11 +757,7 @@ function moveProductToPos(id, rawVal) {
   ids.splice(currentIdx, 1);
   ids.splice(newIdx, 0, String(id));
   config.productOrder[ALL_KEY] = ids;
-  renderProductList();
-  setTimeout(() => {
-    const el = $('prod-row-' + id);
-    if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  }, 50);
+  renderProductListKeepScroll();
 }
 
 function moveProduct(id, dir) {
@@ -725,12 +771,7 @@ function moveProduct(id, dir) {
   ids.splice(idx, 1);
   ids.splice(newIdx, 0, String(id));
   config.productOrder[ALL_KEY] = ids;
-  renderProductList();
-  // Scroll para mantener visible el producto movido
-  setTimeout(() => {
-    const el = $('prod-row-' + id);
-    if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  }, 50);
+  renderProductListKeepScroll();
 }
 
 // ── Drag state ──────────────────────────────────────────────
