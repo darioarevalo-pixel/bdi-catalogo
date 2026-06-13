@@ -7,6 +7,7 @@
     "api/pedido.js": { "maxDuration": 10 }
   },
   "rewrites": [
+    { "source": "/api/reposicion", "destination": "/api/ingresos?kind=reposicion" },
     { "source": "/admin", "destination": "/admin.html" },
     { "source": "/pedido/:id", "destination": "/pedido.html" },
     { "source": "/votar", "destination": "/votar.html" }
