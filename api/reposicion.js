@@ -34,10 +34,10 @@ module.exports = async (req, res) => {
       return res.status(200).json({ ok: true, config: raw ? JSON.parse(raw) : { mins: {}, apagados: [], defaultMin: 4 } });
     }
     if (req.method === 'POST') {
-      const { config, user, pass } = req.body || {};
+      // Config de reposición (mínimos + apagados): baja sensibilidad → guardado directo (sin contraseña).
+      // El acceso a la sección ya está gateado por permisos del lado del cliente.
+      const { config } = req.body || {};
       if (!config || typeof config !== 'object') return res.status(400).json({ error: 'config inválida' });
-      const cfgU = JSON.parse((await kvCmd(['GET', 'cfg:usuarios'])) || 'null');
-      if (!usuarioValido(cfgU, user, pass)) return res.status(403).json({ error: 'Necesitás estar logueado para guardar.' });
       await kvCmd(['SET', keyFor(store), JSON.stringify(config)]);
       return res.status(200).json({ ok: true });
     }
