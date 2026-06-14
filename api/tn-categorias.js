@@ -57,6 +57,18 @@ async function fetchTodosProductos(storeId, token) {
   return all;
 }
 
+// Todas las categorías (id + nombre) — para el desplegable y la asignación masiva por nombre.
+async function fetchAllCats(storeId, token) {
+  let cats = [], page = 1;
+  while (page <= 15) {
+    const r = await tnGet(storeId, token, `categories?per_page=200&page=${page}&fields=id,name`);
+    if (!Array.isArray(r.data) || !r.data.length) break;
+    cats.push(...r.data); if (r.data.length < 200) break; page++;
+  }
+  return cats.map(c => ({ id: c.id, name: valEs(c.name) })).filter(c => c.name);
+}
+const normNombre = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
+
 async function fetchModelCats(storeId, token) {
   // Subcategorías de "Modelo de iPhone": normName → id, y el set de ids de modelo
   let cats = [], page = 1;
@@ -115,6 +127,56 @@ module.exports = async (req, res) => {
   const storeKey = (req.query?.store || 'bdi').toLowerCase();
   const cfg = STORES[storeKey];
   if (!cfg || !cfg.storeId || !cfg.token) return res.status(500).json({ error: 'TiendaNube no configurado para ' + storeKey });
+
+  // --- Listar todas las categorías (para el desplegable) ---
+  if (req.query?.accion === 'cats') {
+    try {
+      const cats = await fetchAllCats(cfg.storeId, cfg.token);
+      cats.sort((a, b) => a.name.localeCompare(b.name, 'es'));
+      return res.status(200).json({ ok: true, categorias: cats });
+    } catch (e) { return res.status(500).json({ error: e.message }); }
+  }
+
+  // --- Asignación masiva: agregar UNA categoría a una lista de productos (por nombre) ---
+  if (req.method === 'POST' && req.body && req.body.accion === 'asignar') {
+    try {
+      const { categoriaId, nombres, aplicar: aplicarAsig } = req.body;
+      if (!categoriaId || !Array.isArray(nombres) || !nombres.length) return res.status(400).json({ error: 'Falta categoriaId o la lista de nombres.' });
+      const catId = Number(categoriaId);
+      const [productos, cats] = await Promise.all([
+        fetchTodosProductos(cfg.storeId, cfg.token),
+        fetchAllCats(cfg.storeId, cfg.token),
+      ]);
+      const catObj = cats.find(c => c.id === catId);
+      if (!catObj) return res.status(400).json({ error: 'La categoría seleccionada no existe.' });
+      const byName = {};
+      productos.forEach(p => { byName[normNombre(valEs(p.name))] = p; });
+      const matched = [], noEncontrados = [], yaTenian = [];
+      nombres.forEach(nm => {
+        const p = byName[normNombre(nm)];
+        if (!p) { noEncontrados.push(nm); return; }
+        const actuales = (p.categories || []).map(c => (typeof c === 'object' ? c.id : c)).filter(Boolean);
+        if (actuales.includes(catId)) { yaTenian.push(valEs(p.name)); return; }
+        matched.push({ id: p.id, nombre: valEs(p.name), nuevas: [...new Set([...actuales, catId])] });
+      });
+      let aplicados = 0; const errores = [];
+      if (aplicarAsig) {
+        for (const m of matched) {
+          const r = await fetch(`https://api.tiendanube.com/v1/${cfg.storeId}/products/${m.id}`, {
+            method: 'PUT', headers: tnHeaders(cfg.token), body: JSON.stringify({ categories: m.nuevas }),
+          });
+          if (r.ok) aplicados++; else { const t = await r.text(); errores.push({ nombre: m.nombre, status: r.status, msg: t.slice(0, 150) }); }
+        }
+      }
+      return res.status(200).json({
+        ok: true, modo: aplicarAsig ? 'aplicado' : 'prueba', categoria: catObj.name,
+        total: nombres.length,
+        matched: matched.map(m => m.nombre), yaTenian, noEncontrados,
+        aplicados, errores,
+      });
+    } catch (e) { return res.status(500).json({ error: e.message }); }
+  }
+
   const aplicar = req.method === 'POST';
 
   try {
