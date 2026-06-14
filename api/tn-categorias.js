@@ -137,10 +137,26 @@ module.exports = async (req, res) => {
     } catch (e) { return res.status(500).json({ error: e.message }); }
   }
 
-  // --- Asignación masiva: agregar UNA categoría a una lista de productos (por nombre) ---
+  // --- Asignación masiva de categoría ---
   if (req.method === 'POST' && req.body && req.body.accion === 'asignar') {
     try {
-      const { categoriaId, nombres, aplicar: aplicarAsig } = req.body;
+      const { categoriaId, nombres, items } = req.body;
+
+      // MODO APLICAR POR LOTES: el cliente manda items ya resueltos {id, nombre, nuevas}.
+      // Así no re-leemos todos los productos en cada lote y mostramos progreso real.
+      if (Array.isArray(items)) {
+        let aplicados = 0; const errores = [];
+        for (const m of items) {
+          if (!m || !m.id || !Array.isArray(m.nuevas)) continue;
+          const r = await fetch(`https://api.tiendanube.com/v1/${cfg.storeId}/products/${m.id}`, {
+            method: 'PUT', headers: tnHeaders(cfg.token), body: JSON.stringify({ categories: m.nuevas }),
+          });
+          if (r.ok) aplicados++; else { const t = await r.text(); errores.push({ nombre: m.nombre, status: r.status, msg: t.slice(0, 150) }); }
+        }
+        return res.status(200).json({ ok: true, modo: 'aplicado', aplicados, errores });
+      }
+
+      // MODO PRUEBA: resolver por nombre y devolver el match (con ids) para previsualizar.
       if (!categoriaId || !Array.isArray(nombres) || !nombres.length) return res.status(400).json({ error: 'Falta categoriaId o la lista de nombres.' });
       const catId = Number(categoriaId);
       const [productos, cats] = await Promise.all([
@@ -159,20 +175,10 @@ module.exports = async (req, res) => {
         if (actuales.includes(catId)) { yaTenian.push(valEs(p.name)); return; }
         matched.push({ id: p.id, nombre: valEs(p.name), nuevas: [...new Set([...actuales, catId])] });
       });
-      let aplicados = 0; const errores = [];
-      if (aplicarAsig) {
-        for (const m of matched) {
-          const r = await fetch(`https://api.tiendanube.com/v1/${cfg.storeId}/products/${m.id}`, {
-            method: 'PUT', headers: tnHeaders(cfg.token), body: JSON.stringify({ categories: m.nuevas }),
-          });
-          if (r.ok) aplicados++; else { const t = await r.text(); errores.push({ nombre: m.nombre, status: r.status, msg: t.slice(0, 150) }); }
-        }
-      }
       return res.status(200).json({
-        ok: true, modo: aplicarAsig ? 'aplicado' : 'prueba', categoria: catObj.name,
+        ok: true, modo: 'prueba', categoria: catObj.name,
         total: nombres.length,
-        matched: matched.map(m => m.nombre), yaTenian, noEncontrados,
-        aplicados, errores,
+        matched, yaTenian, noEncontrados, // matched = objetos {id, nombre, nuevas}
       });
     } catch (e) { return res.status(500).json({ error: e.message }); }
   }
