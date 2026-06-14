@@ -23,7 +23,7 @@ module.exports = async (req, res) => {
   if (!KV_URL || !KV_TOKEN) return res.status(500).json({ error: 'KV no configurado' });
 
   try {
-    const store = (req.query?.store || 'bdi').toLowerCase();
+    const store = (req.query?.store || req.body?.store || 'bdi').toLowerCase(); // POST manda store en el body
     if (req.method === 'GET') {
       const raw = await kvCmd(['GET', keyFor(store)]);
       return res.status(200).json({ ok: true, config: raw ? JSON.parse(raw) : null });

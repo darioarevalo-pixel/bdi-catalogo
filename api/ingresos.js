@@ -29,7 +29,7 @@ module.exports = async (req, res) => {
   if (!KV_URL || !KV_TOKEN) return res.status(500).json({ error: 'KV no configurado' });
 
   try {
-    const store = (req.query?.store || 'bdi').toLowerCase();
+    const store = (req.query?.store || req.body?.store || 'bdi').toLowerCase(); // POST manda store en el body
 
     // --- Config de reposición (mínimos por categoría + apagados) — baja sensibilidad, sin contraseña ---
     if (req.query?.kind === 'reposicion') {
