@@ -104,6 +104,8 @@
   .view-label { font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; text-align: center; }
   .vcard-colors { display: flex; flex-wrap: wrap; gap: 5px; padding: 6px 10px 2px; }
   .vcard-variants { padding: 0 6px 6px; display: flex; flex-direction: column; gap: 3px; }
+  .vcard-mobile-btn { display: none; margin: 0 6px 8px; padding: 9px; background: var(--accent); color: #fff; border: none; border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .vcard-mobile-btn:hover { opacity: 0.9; }
 
   .products-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(195px, 1fr)); gap: 12px; align-items: stretch; }
   .products-grid.variants-grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
@@ -302,6 +304,11 @@
     .products-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 8px; }
     .product-name { font-size: 11px; }
     .product-price { font-size: 14px; }
+    /* En celular, en la vista de variantes, las tarjetas quedan compactas:
+       se ocultan las variantes inline y se muestra el botón "Ver y pedir"
+       (que abre el pop-up con todo el detalle). En compu queda inline como hoy. */
+    .vcard-colors, .vcard-variants { display: none !important; }
+    .vcard-mobile-btn { display: block; }
     .modal-vqty-btn { width: 24px; height: 24px; font-size: 15px; }
     .modal-vqty-num { width: 26px; height: 24px; font-size: 12px; }
     /* Variantes en celular: nombre arriba y "Últimas X" debajo (evita que se superpongan) */
@@ -1373,13 +1380,13 @@ function renderVariantesGrid(prods) {
 
     cards.push(
       '<div class="product-card" style="cursor:default">' +
-        '<div class="product-img-wrap" style="cursor:pointer" onclick="abrirModalSoloGaleria(' + id + ')">' +
+        '<div class="product-img-wrap" style="cursor:pointer" onclick="abrirDesdeCard(' + id + ')">' +
           (pctDisc > 0 ? '<div class="product-img-badge">-' + pctDisc + '%</div>' : '') +
           nuevoBadge(id) +
           (img ? '<img src="' + img + '" alt="' + nombre + '" loading="lazy" onerror="this.parentNode.innerHTML=\'<div class=\\\'no-img\\\'>Sin imagen</div>\'">' : '<div class="no-img">Sin imagen</div>') +
           imgsBadge(imgs) +
         '</div>' +
-        '<div class="product-body" style="cursor:pointer;flex:0 0 auto" onclick="abrirModalSoloGaleria(' + id + ')">' +
+        '<div class="product-body" style="cursor:pointer;flex:0 0 auto" onclick="abrirDesdeCard(' + id + ')">' +
           (cat ? '<div class="product-cat">' + cat + '</div>' : '') +
           '<div class="product-name">' + nombre + '</div>' +
           (cod ? '<div class="product-code">' + cod + '</div>' : '') +
@@ -1390,6 +1397,7 @@ function renderVariantesGrid(prods) {
             : '<div class="product-price" style="margin-top:4px">' + formatPrecio(precio) + '</div>') +
         '</div>' +
         variantsHTML +
+        (variantes.length > 0 ? '<button class="vcard-mobile-btn" onclick="abrirModal(' + id + ');event.stopPropagation()">Ver y pedir</button>' : '') +
       '</div>'
     );
   }
@@ -1609,6 +1617,14 @@ function abrirModal(id) {
 
   $('modal-overlay').classList.add('open');
   document.body.style.overflow = 'hidden';
+}
+
+// Al tocar una tarjeta en la vista de variantes:
+// - En celular las variantes están ocultas → abrimos el pop-up de pedido completo.
+// - En compu las variantes ya se ven inline → abrimos solo la galería.
+function abrirDesdeCard(id) {
+  if (window.matchMedia('(max-width: 700px)').matches) abrirModal(id);
+  else abrirModalSoloGaleria(id);
 }
 
 function abrirModalSoloGaleria(id) {
