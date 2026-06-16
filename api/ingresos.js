@@ -47,6 +47,22 @@ module.exports = async (req, res) => {
       return res.status(405).json({ error: 'método no permitido' });
     }
 
+    // --- Override de teléfonos del CRM (mapa id_cliente -> teléfono, completado desde el export de GN) ---
+    if (req.query?.kind === 'crmtel') {
+      const telKey = `crm:tel:${store === 'zattia' ? 'zattia' : 'bdi'}`;
+      if (req.method === 'GET') {
+        const raw = await kvCmd(['GET', telKey]);
+        return res.status(200).json({ ok: true, map: raw ? JSON.parse(raw) : {} });
+      }
+      if (req.method === 'POST') {
+        const { map } = req.body || {};
+        if (!map || typeof map !== 'object') return res.status(400).json({ error: 'map inválido' });
+        await kvCmd(['SET', telKey, JSON.stringify(map)]);
+        return res.status(200).json({ ok: true, total: Object.keys(map).length });
+      }
+      return res.status(405).json({ error: 'método no permitido' });
+    }
+
     if (req.method === 'GET') {
       const raw = await kvCmd(['GET', keyFor(store)]);
       return res.status(200).json({ ok: true, ingresos: raw ? JSON.parse(raw) : [] });
