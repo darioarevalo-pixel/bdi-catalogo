@@ -128,6 +128,26 @@ module.exports = async (req, res) => {
   const cfg = STORES[storeKey];
   if (!cfg || !cfg.storeId || !cfg.token) return res.status(500).json({ error: 'TiendaNube no configurado para ' + storeKey });
 
+  // --- Variantes con SKU / código de barras / color (para completar datos desde TN) ---
+  if (req.query?.accion === 'variantes') {
+    try {
+      let all = [], page = 1;
+      while (page <= 30) {
+        const r = await tnGet(cfg.storeId, cfg.token, `products?per_page=200&page=${page}&fields=id,name,variants`);
+        if (!Array.isArray(r.data) || !r.data.length) break;
+        all.push(...r.data); if (r.data.length < 200) break; page++;
+      }
+      const productos = all.map(p => ({
+        id: p.id, name: valEs(p.name),
+        variants: (p.variants || []).map(v => ({
+          sku: v.sku || null, barcode: v.barcode || null,
+          values: (v.values || []).map(x => valEs(x)).filter(Boolean),
+        })),
+      }));
+      return res.status(200).json({ ok: true, total: productos.length, productos });
+    } catch (e) { return res.status(500).json({ error: e.message }); }
+  }
+
   // --- Listar todas las categorías (para el desplegable) ---
   if (req.query?.accion === 'cats') {
     try {
