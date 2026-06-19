@@ -45,6 +45,9 @@ module.exports = async (req, res) => {
       // Bandera de modo según el CONFIG_KEY del proyecto (no según el costo).
       // Así el catálogo no depende de que el token tenga permiso de costos.
       config.__esDistribuidor = (CONFIG_KEY === 'distribuidor-config');
+      // Los códigos de cupón NO se exponen al público: solo el admin (verify con
+      // contraseña correcta) los recibe. El catálogo valida vía /api/cupon.
+      if (!req.query.verify) delete config.cupones;
       return res.json(config);
     } catch (e) {
       return res.json({ ...DEFAULT, __esDistribuidor: (CONFIG_KEY === 'distribuidor-config') });

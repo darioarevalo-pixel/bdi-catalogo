@@ -626,20 +626,18 @@ let references = null;
 let adminConfig = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, recargos: {}, variantPrices: {}, shownProducts: [], shownProductsInit: false, newProducts: [], cupones: [] };
 let cuponAplicado = null; // cupón aplicado en el carrito (objeto) o null
 
-// Busca un cupón por código y valida que sea usable para el subtotal dado.
-function buscarCuponValido(codigo, subtotal) {
-  const code = (codigo || '').trim().toUpperCase();
-  if (!code) return { error: 'Ingresá un código' };
-  const c = (adminConfig.cupones || []).find(x => (x.codigo || '').trim().toUpperCase() === code);
-  if (!c) return { error: 'El cupón no existe' };
-  if (c.activo === false) return { error: 'Este cupón no está disponible' };
-  if (c.vence) {
-    const fin = new Date(c.vence + 'T23:59:59');
+// Re-valida un cupón YA aplicado (objeto guardado) contra el subtotal actual.
+// La validación inicial la hace el servidor (/api/cupon); acá solo re-chequeamos
+// vencimiento y compra mínima sin necesitar la lista de cupones.
+function cuponSigueValido(cupon, subtotal) {
+  if (!cupon) return { error: 'Sin cupón' };
+  if (cupon.vence) {
+    const fin = new Date(cupon.vence + 'T23:59:59');
     if (!isNaN(fin.getTime()) && fin < new Date()) return { error: 'El cupón venció' };
   }
-  const minimo = parseFloat(c.minimo) || 0;
+  const minimo = parseFloat(cupon.minimo) || 0;
   if (minimo > 0 && subtotal < minimo) return { error: 'Requiere una compra mínima de ' + formatPrecio(minimo) };
-  return { cupon: c };
+  return { ok: true };
 }
 
 // Descuento en $ que aplica el cupón sobre el subtotal (envío gratis = 0 en $, es una marca).
@@ -650,13 +648,27 @@ function descuentoCupon(cupon, subtotal) {
   return 0;
 }
 
-function aplicarCupon() {
+async function aplicarCupon() {
   const input = $('cupon-input');
+  const code = (input ? input.value : '').trim();
   const subtotal = Object.values(cart).reduce((s, i) => s + i.precio * i.qty, 0);
-  const res = buscarCuponValido(input ? input.value : '', subtotal);
-  if (res.error) { cuponAplicado = null; const m = $('cupon-msg'); if (m) { m.textContent = res.error; m.className = 'cupon-msg err'; } updateCartUI(); return; }
-  cuponAplicado = res.cupon;
-  updateCartUI();
+  const m = $('cupon-msg');
+  if (!code) { if (m) { m.textContent = 'Ingresá un código'; m.className = 'cupon-msg err'; } return; }
+  if (m) { m.textContent = 'Validando…'; m.className = 'cupon-msg'; }
+  try {
+    const r = await fetch('/api/cupon?codigo=' + encodeURIComponent(code) + '&subtotal=' + subtotal);
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok || data.error || !data.cupon) {
+      cuponAplicado = null;
+      if (m) { m.textContent = data.error || 'No se pudo validar el cupón'; m.className = 'cupon-msg err'; }
+      updateCartUI();
+      return;
+    }
+    cuponAplicado = data.cupon; // {codigo, tipo, valor, detalle, minimo, vence}
+    updateCartUI();
+  } catch (e) {
+    if (m) { m.textContent = 'No se pudo validar (revisá tu conexión)'; m.className = 'cupon-msg err'; }
+  }
 }
 
 function quitarCupon() {
@@ -1778,9 +1790,9 @@ function updateCartUI() {
   // Cupón: re-validar contra el subtotal actual y calcular descuento.
   let descuento = 0, total = subtotal;
   if (cuponAplicado) {
-    const res = buscarCuponValido(cuponAplicado.codigo, subtotal);
+    const res = cuponSigueValido(cuponAplicado, subtotal);
     if (res.error) { cuponAplicado = null; }
-    else { cuponAplicado = res.cupon; descuento = descuentoCupon(cuponAplicado, subtotal); total = Math.max(0, subtotal - descuento); }
+    else { descuento = descuentoCupon(cuponAplicado, subtotal); total = Math.max(0, subtotal - descuento); }
   }
   renderCuponUI(descuento);
   if ($('subtotal-row')) $('subtotal-row').style.display = descuento > 0 ? 'flex' : 'none';
@@ -2003,9 +2015,8 @@ async function confirmarPedido() {
     // Cupón: re-validar contra el subtotal final y calcular el descuento.
     const subtotal = items.reduce((s, i) => s + i.precio * i.qty, 0);
     let cupon = null, descuento = 0;
-    if (cuponAplicado) {
-      const resC = buscarCuponValido(cuponAplicado.codigo, subtotal);
-      if (!resC.error) { cupon = resC.cupon; descuento = descuentoCupon(cupon, subtotal); }
+    if (cuponAplicado && cuponSigueValido(cuponAplicado, subtotal).ok) {
+      cupon = cuponAplicado; descuento = descuentoCupon(cupon, subtotal);
     }
     const totalFinal = Math.max(0, subtotal - descuento);
     // Aplicamos el descuento bajando proporcionalmente el precio de cada ítem,
