@@ -33,6 +33,12 @@
   .row .variante { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
   .row .qtyprice { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
   .row .subtotal { font-size: 13px; font-weight: 700; white-space: nowrap; }
+  .cupon-bloque { padding: 0.75rem 1.5rem; border-top: 1px dashed var(--border-strong); font-size: 13px; }
+  .cupon-sub, .cupon-desc { display: flex; justify-content: space-between; }
+  .cupon-sub { color: var(--text-muted); }
+  .cupon-desc { color: #16A34A; font-weight: 600; margin-top: 3px; }
+  .cupon-line.envio { color: #16A34A; font-weight: 600; }
+  .cupon-bloque .cod { color: var(--text-muted); font-weight: 400; font-size: 11px; }
   .total { padding: 1rem 1.5rem; border-top: 2px solid var(--border-strong); display: flex; justify-content: space-between; align-items: center; }
   .total .lbl { font-size: 14px; font-weight: 600; }
   .total .amount { font-size: 22px; font-weight: 700; color: var(--accent); }
@@ -66,6 +72,20 @@
 
 <script>
 function fmt(n) { return '$' + Number(n || 0).toLocaleString('es-AR'); }
+
+function cuponBloque(pedido) {
+  const c = pedido.cupon;
+  if (!c) return '';
+  if (c.tipo === 'envio') {
+    return '<div class="cupon-bloque"><div class="cupon-line envio">🚚 Envío bonificado' +
+      (c.detalle ? ' · ' + c.detalle : '') + ' <span class="cod">(' + c.codigo + ')</span></div></div>';
+  }
+  const sub = pedido.subtotal != null ? pedido.subtotal : pedido.total;
+  return '<div class="cupon-bloque">' +
+    '<div class="cupon-sub"><span>Subtotal</span><span>' + fmt(sub) + '</span></div>' +
+    '<div class="cupon-desc"><span>Descuento <span class="cod">(' + c.codigo + (c.detalle ? ' · ' + c.detalle : '') + ')</span></span><span>-' + fmt(c.descuento || 0) + '</span></div>' +
+  '</div>';
+}
 
 function getId() {
   const parts = location.pathname.split('/').filter(Boolean);
@@ -138,6 +158,7 @@ async function cargar() {
     '</div>' +
     '<div class="datos">' + datos + '</div>' +
     '<div class="items">' + filas + '</div>' +
+    cuponBloque(pedido) +
     '<div class="total"><span class="lbl">Total del pedido</span><span class="amount">' + fmt(pedido.total) + '</span></div>' +
     (pedido.obs ? '<div class="obs"><div class="lbl">Observaciones</div>' + pedido.obs + '</div>' : '');
 
