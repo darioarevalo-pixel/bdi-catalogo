@@ -1816,31 +1816,36 @@ function updateCartUI() {
   const subtotal = items.reduce((s,i) => s + i.precio * i.qty, 0);
   $('cart-badge').textContent = totalUnits;
 
-  // Subtotal "descontable": excluye los productos en oferta (no reciben descuento).
-  const subtotalDesc = items.reduce((s,i) => s + (cartItemOferta(i) ? 0 : i.precio * i.qty), 0);
-  const hayOferta = items.some(cartItemOferta);
-  // Cupón: re-validar (la compra mínima se mide sobre el subtotal total).
+  // Cupón / oferta: blindado. Si algo falla acá, NO debe romper el total ni la
+  // barra flotante. Por eso va en try/catch y el total se escribe siempre.
   let descuento = 0, total = subtotal;
-  if (cuponAplicado) {
-    const res = cuponSigueValido(cuponAplicado, subtotal);
-    if (res.error) { cuponAplicado = null; }
-    else { descuento = descuentoCupon(cuponAplicado, subtotalDesc); total = Math.max(0, subtotal - descuento); }
-  }
-  renderCuponUI(descuento, hayOferta);
-  if ($('subtotal-row')) $('subtotal-row').style.display = descuento > 0 ? 'flex' : 'none';
-  if ($('descuento-row')) $('descuento-row').style.display = descuento > 0 ? 'flex' : 'none';
-  if ($('subtotal-amount')) $('subtotal-amount').textContent = formatPrecio(subtotal);
-  if ($('descuento-amount')) $('descuento-amount').textContent = '-' + formatPrecio(descuento);
-  $('total-amount').textContent = formatPrecio(total);
+  try {
+    const subtotalDesc = items.reduce((s,i) => s + (cartItemOferta(i) ? 0 : i.precio * i.qty), 0);
+    const hayOferta = items.some(cartItemOferta);
+    if (cuponAplicado) {
+      const res = cuponSigueValido(cuponAplicado, subtotal);
+      if (res.error) { cuponAplicado = null; }
+      else { descuento = descuentoCupon(cuponAplicado, subtotalDesc); total = Math.max(0, subtotal - descuento); }
+    }
+    renderCuponUI(descuento, hayOferta);
+    if ($('subtotal-row')) $('subtotal-row').style.display = descuento > 0 ? 'flex' : 'none';
+    if ($('descuento-row')) $('descuento-row').style.display = descuento > 0 ? 'flex' : 'none';
+    if ($('subtotal-amount')) $('subtotal-amount').textContent = formatPrecio(subtotal);
+    if ($('descuento-amount')) $('descuento-amount').textContent = '-' + formatPrecio(descuento);
+  } catch (e) { console.error('updateCartUI: error en cupón/oferta (se ignora):', e); }
 
-  // Barra flotante (muestra el total con descuento aplicado)
+  if ($('total-amount')) $('total-amount').textContent = formatPrecio(total);
+
+  // Barra flotante — se actualiza SIEMPRE (no depende del bloque de arriba).
   const bar = $('summary-bar');
-  if (totalUnits > 0) {
-    $('summary-units').textContent = totalUnits + (totalUnits === 1 ? ' producto' : ' productos');
-    $('summary-total').textContent = formatPrecio(total);
-    bar.classList.add('visible');
-  } else {
-    bar.classList.remove('visible');
+  if (bar) {
+    if (totalUnits > 0) {
+      if ($('summary-units')) $('summary-units').textContent = totalUnits + (totalUnits === 1 ? ' producto' : ' productos');
+      if ($('summary-total')) $('summary-total').textContent = formatPrecio(total);
+      bar.classList.add('visible');
+    } else {
+      bar.classList.remove('visible');
+    }
   }
   // Solo reconstruir el drawer si está abierto
   if ($('cart-drawer')?.classList.contains('open')) renderCartItems();
