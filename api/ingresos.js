@@ -7,6 +7,9 @@
 // (mínimos + apagados) → guardado directo sin contraseña.
 // GET  ?kind=reposicion&store=...           → { ok, config: {mins, apagados, defaultMin, reservaDeposito} }
 // POST ?kind=reposicion {store, config}     → guarda (sin contraseña)
+//
+// También sirve los teléfonos del CRM (?kind=crmtel) y el seguimiento del CRM
+// (?kind=crmseg → mapa id_cliente -> { cadencia, ultimo_contacto, proximo_manual, notas }).
 const KV_URL   = process.env.KV_REST_API_URL   || process.env.STORAGE_KV_REST_API_URL;
 const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.STORAGE_KV_REST_API_TOKEN;
 const BOOTSTRAP = { 'Bruno Arevalo': 'BDI123456', 'Dario Arevalo': 'BDI123456' };
@@ -58,6 +61,22 @@ module.exports = async (req, res) => {
         const { map } = req.body || {};
         if (!map || typeof map !== 'object') return res.status(400).json({ error: 'map inválido' });
         await kvCmd(['SET', telKey, JSON.stringify(map)]);
+        return res.status(200).json({ ok: true, total: Object.keys(map).length });
+      }
+      return res.status(405).json({ error: 'método no permitido' });
+    }
+
+    // --- Seguimiento del CRM (mapa id_cliente -> { cadencia, ultimo_contacto, proximo_manual, notas }) ---
+    if (req.query?.kind === 'crmseg') {
+      const segKey = `crm:seg:${store === 'zattia' ? 'zattia' : 'bdi'}`;
+      if (req.method === 'GET') {
+        const raw = await kvCmd(['GET', segKey]);
+        return res.status(200).json({ ok: true, map: raw ? JSON.parse(raw) : {} });
+      }
+      if (req.method === 'POST') {
+        const { map } = req.body || {};
+        if (!map || typeof map !== 'object') return res.status(400).json({ error: 'map inválido' });
+        await kvCmd(['SET', segKey, JSON.stringify(map)]);
         return res.status(200).json({ ok: true, total: Object.keys(map).length });
       }
       return res.status(405).json({ error: 'método no permitido' });
