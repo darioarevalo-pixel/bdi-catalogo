@@ -279,6 +279,31 @@
   .gen-preview-wrap { max-width: 620px; }
   .gen-preview-lbl { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
   .gen-preview { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; font-family: inherit; font-size: 13px; color: var(--text); white-space: pre-wrap; margin: 0; }
+  .pm-builder { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 6px; }
+  .pm-builder .admin-select { min-width: 180px; }
+  .pm-cant { width: 70px; padding: 8px 9px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; text-align: right; outline: none; }
+  .pm-precio-wrap { display: flex; align-items: center; gap: 3px; }
+  .pm-precio-wrap span { font-size: 13px; color: var(--text-muted); }
+  .pm-precio-wrap input { width: 120px; padding: 8px 9px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; text-align: right; outline: none; }
+  .pm-hint { font-size: 12px; color: var(--text-muted); margin-bottom: 14px; }
+  .pm-hint strong { color: var(--text); }
+  .pm-hint-sub { color: var(--text-hint); font-style: italic; }
+  .pm-linea { display: flex; align-items: center; gap: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 6px; background: white; }
+  .pm-linea-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .pm-linea-info strong { font-size: 13px; color: var(--text); }
+  .pm-linea-meta { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+  .pm-linea-sub { font-size: 14px; font-weight: 700; color: var(--text); white-space: nowrap; }
+  .pm-linea .btn-del { background: transparent; border: none; color: var(--danger); font-size: 20px; line-height: 1; cursor: pointer; padding: 0 4px; }
+  #pm-footer { margin-top: 14px; max-width: 480px; }
+  .pm-total-row { font-size: 16px; margin-bottom: 14px; }
+  .pm-total-row strong { font-size: 20px; }
+  .pm-cliente-label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 14px; }
+  .pm-cliente-label input { display: block; width: 100%; margin-top: 5px; padding: 9px 11px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 14px; outline: none; }
+  .pm-confirmar { background: var(--success) !important; }
+  .pm-resultado { margin-top: 12px; font-size: 14px; }
+  .pm-resultado .pm-ok { color: var(--success); font-weight: 600; }
+  .pm-resultado .pm-error { color: var(--danger); font-weight: 500; }
+  .pm-resultado a { color: var(--accent); font-weight: 600; }
 </style>
 </head>
 <body>
@@ -314,6 +339,7 @@
     <button class="tab-btn" onclick="setTab('banners')">Banners</button>
     <button class="tab-btn" onclick="setTab('cupones')">Cupones</button>
     <button class="tab-btn" onclick="setTab('generador')">Generador de precios</button>
+    <button class="tab-btn" onclick="setTab('pedido')">Cargar pedido</button>
     <button class="tab-btn" onclick="setTab('settings')">Configuración</button>
   </div>
 
@@ -409,6 +435,27 @@
           <span id="gen-copiado" class="gen-copiado"></span>
         </div>
         <div class="gen-preview-wrap"><div class="gen-preview-lbl">Esto se copia (sin el costo):</div><pre class="gen-preview" id="gen-preview"></pre></div>
+      </div>
+    </div>
+
+    <div id="tab-pedido" style="display:none">
+      <p class="section-note">Cargá un pedido mayorista negociado: elegís productos, cantidades y el <strong>precio acordado</strong>, y se crea la venta <strong>directo en Gestión Nube</strong> (descuenta stock). Después en GN la vinculás al cliente. Te genera el link del pedido para mandarle.</p>
+      <div class="pm-builder">
+        <select id="pm-producto" class="admin-select" onchange="pmSelectProducto()"><option value="">— Elegí un producto —</option></select>
+        <select id="pm-variante" class="admin-select" style="display:none"></select>
+        <input type="number" id="pm-cant" class="pm-cant" min="1" value="1" title="Cantidad" />
+        <div class="pm-precio-wrap"><span>$</span><input type="number" id="pm-precio" min="0" placeholder="Precio c/u" /></div>
+        <button class="btn-save" onclick="pmAgregar()">+ Agregar</button>
+      </div>
+      <div id="pm-hint" class="pm-hint"></div>
+      <div id="pm-lineas"><div class="loading-state">Sin productos en el pedido.</div></div>
+      <div id="pm-footer" style="display:none">
+        <div class="pm-total-row">Total del pedido: <strong id="pm-total">$0</strong></div>
+        <label class="pm-cliente-label">Nombre del cliente
+          <input type="text" id="pm-cliente" placeholder="Ej: Distribuidora López" />
+        </label>
+        <button class="btn-save pm-confirmar" id="pm-confirmar-btn" onclick="pmConfirmar()">Confirmar pedido en Gestión Nube</button>
+        <div id="pm-resultado" class="pm-resultado"></div>
       </div>
     </div>
 
@@ -1148,6 +1195,7 @@ function setTab(tab) {
   $('tab-margenes').style.display = tab === 'margenes' ? 'block' : 'none';
   $('tab-pendientes').style.display = tab === 'pendientes' ? 'block' : 'none';
   $('tab-generador').style.display = tab === 'generador' ? 'block' : 'none';
+  $('tab-pedido').style.display = tab === 'pedido' ? 'block' : 'none';
   $('tab-settings').style.display = tab === 'settings' ? 'block' : 'none';
   document.querySelectorAll('.tab-btn').forEach(btn => {
     const onclickStr = btn.getAttribute('onclick') || '';
@@ -1168,6 +1216,7 @@ function setTab(tab) {
   if (tab === 'margenes') { populateMargenCatFilter(); renderMargenes(); }
   if (tab === 'pendientes') { populatePendientesCatFilter(); renderPendientes(); }
   if (tab === 'generador') populateGenerador();
+  if (tab === 'pedido') populatePedidoManual();
   if (tab === 'products') renderProductList();
 
   // PERFORMANCE: las listas de productos (cientos de filas con fotos) son pesadas.
@@ -1718,6 +1767,126 @@ function genCopiarFallback(txt) {
   ta.value = txt; document.body.appendChild(ta); ta.select();
   try { document.execCommand('copy'); } catch (e) {}
   document.body.removeChild(ta);
+}
+
+// ===== Cargar pedido mayorista (crea la venta directo en Gestión Nube) =====
+let pmLineas = [];
+let pmReferences = null;
+function pmFetchReferences() {
+  if (pmReferences) return Promise.resolve(pmReferences);
+  return fetch('/api/proxy?_path=/ventas/referencias').then(r => r.json()).then(d => { pmReferences = d; return d; }).catch(() => ({}));
+}
+function populatePedidoManual() {
+  const sel = $('pm-producto');
+  if (sel && sel.options.length <= 1) {
+    [...allAdminProducts].sort((a, b) => (a.name || a.nombre || '').localeCompare(b.name || b.nombre || '')).forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id || p.product_id; opt.textContent = p.name || p.nombre || 'Sin nombre';
+      sel.appendChild(opt);
+    });
+  }
+  pmFetchReferences();
+  pmRender();
+}
+function pmProdSel() { return allAdminProducts.find(x => (x.id || x.product_id) == $('pm-producto').value); }
+function pmSelectProducto() {
+  const p = pmProdSel();
+  const vsel = $('pm-variante');
+  vsel.innerHTML = ''; vsel.style.display = 'none';
+  if (!p) { $('pm-hint').textContent = ''; $('pm-precio').value = ''; return; }
+  if ((p.variantes || []).length) {
+    vsel.style.display = '';
+    (p.variantes || []).forEach(v => {
+      const vs = getStockVarianteAdmin(v);
+      const opt = document.createElement('option');
+      opt.value = v.size_id; opt.textContent = v.size + (vs != null ? ' (stock ' + vs + ')' : '');
+      vsel.appendChild(opt);
+    });
+  }
+  const precio = getCurrentPrice(p);
+  $('pm-precio').value = precio > 0 ? Math.round(precio) : '';
+  const costo = parseFloat(p.unit_cost || 0);
+  $('pm-hint').innerHTML = 'Costo: <strong>' + (costo > 0 ? fmtAR(costo) : '—') + '</strong> · Precio mayorista: <strong>' + (precio > 0 ? fmtAR(precio) : '—') + '</strong> <span class="pm-hint-sub">(poné el precio negociado)</span>';
+}
+function pmAgregar() {
+  const p = pmProdSel();
+  if (!p) { alert('Elegí un producto.'); return; }
+  const cant = parseInt($('pm-cant').value) || 0;
+  const precio = Math.round(parseFloat($('pm-precio').value));
+  if (cant <= 0) { alert('Ingresá una cantidad válida.'); return; }
+  if (isNaN(precio) || precio <= 0) { alert('Ingresá el precio por unidad.'); return; }
+  const vsel = $('pm-variante');
+  const tieneVar = vsel.style.display !== 'none';
+  const sizeId = tieneVar && vsel.value ? vsel.value : null;
+  const sizeName = sizeId ? (vsel.options[vsel.selectedIndex].textContent || '').replace(/ \(stock.*$/, '') : '';
+  pmLineas.push({ id: p.id || p.product_id, nombre: p.name || p.nombre || '', sizeId, sizeName, cant, precio, costo: parseFloat(p.unit_cost || 0), img: p._img || '' });
+  $('pm-cant').value = 1;
+  pmRender();
+}
+function pmQuitar(idx) { pmLineas.splice(idx, 1); pmRender(); }
+function pmRender() {
+  const cont = $('pm-lineas');
+  if (!cont) return;
+  if (!pmLineas.length) { cont.innerHTML = '<div class="loading-state">Sin productos en el pedido.</div>'; if ($('pm-footer')) $('pm-footer').style.display = 'none'; return; }
+  cont.innerHTML = pmLineas.map((l, idx) => {
+    const sub = l.precio * l.cant;
+    const gan = (l.precio - l.costo) * l.cant;
+    return '<div class="pm-linea">' +
+      '<div class="pm-linea-info"><strong>' + (l.nombre || '').replace(/</g, '&lt;') + (l.sizeName ? ' · ' + l.sizeName : '') + '</strong>' +
+        '<span class="pm-linea-meta">' + l.cant + ' u × ' + fmtAR(l.precio) + (l.costo > 0 ? ' · ganancia ' + fmtAR(gan) : '') + '</span></div>' +
+      '<div class="pm-linea-sub">' + fmtAR(sub) + '</div>' +
+      '<button class="btn-del" onclick="pmQuitar(' + idx + ')" title="Quitar">×</button>' +
+    '</div>';
+  }).join('');
+  $('pm-footer').style.display = 'block';
+  $('pm-total').textContent = fmtAR(pmLineas.reduce((s, l) => s + l.precio * l.cant, 0));
+}
+async function pmConfirmar() {
+  if (!pmLineas.length) { alert('El pedido está vacío.'); return; }
+  const cliente = $('pm-cliente').value.trim();
+  if (!cliente) { alert('Ingresá el nombre del cliente.'); $('pm-cliente').focus(); return; }
+  if (!confirm('¿Crear esta venta en Gestión Nube? Se va a descontar el stock.')) return;
+  const btn = $('pm-confirmar-btn');
+  btn.disabled = true; btn.textContent = 'Creando en GN…';
+  $('pm-resultado').textContent = '';
+  try {
+    const ref = await pmFetchReferences();
+    const canales = ref && ref.canales || [];
+    const tipos = ref && ref.tipos_venta || [];
+    const monedas = ref && ref.monedas || [];
+    const channelId = (canales.find(c => c.name === 'Mayorista') || canales[0] || {}).id || 10;
+    const saleTypeId = (tipos.find(t => t.name === 'Mayorista') || tipos[0] || {}).id || 6;
+    const currencyId = (monedas.find(m => m.label === 'ARS') || monedas.find(m => m.name === 'Pesos') || monedas[monedas.length - 1] || {}).id || 1;
+    const storeId = (ref && ref.configuracion && ref.configuracion.default_store_id) || 13307;
+    const body = {
+      client_id: 563310,
+      channel_id: channelId, sale_type_id: saleTypeId, currency_id: currencyId, store_id: storeId,
+      sale_state_id: 1, discount_inventory: true,
+      comments: 'Pedido mayorista (admin) — ' + cliente,
+      items: pmLineas.map(l => ({ product_id: l.id, ...(l.sizeId ? { size_id: l.sizeId } : {}), quantity: l.cant, unit_price: l.precio }))
+    };
+    const r = await fetch('/api/proxy?_path=/ventas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const msg = data.problemas ? ('Stock insuficiente:\n' + (data.detalle || '')) : ('Error al crear la venta: ' + (data.error || r.status));
+      $('pm-resultado').innerHTML = '<span class="pm-error">⚠ ' + msg.replace(/\n/g, '<br>') + '</span>';
+      btn.disabled = false; btn.textContent = 'Confirmar pedido en Gestión Nube';
+      return;
+    }
+    const pedidoId = (data.data && (data.data.number || data.data.id)) || data.id || data.number || null;
+    let pedidoUrl = '';
+    if (pedidoId) {
+      const det = { id: pedidoId, fecha: new Date().toISOString(), cliente, total: pmLineas.reduce((s, l) => s + l.precio * l.cant, 0), items: pmLineas.map(l => ({ nombre: l.nombre, variante: l.sizeName || '', cantidad: l.cant, precio: l.precio, img: l.img || '' })) };
+      try { await fetch('/api/pedido', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(det) }); pedidoUrl = location.origin + '/pedido/' + pedidoId; } catch (e) {}
+    }
+    $('pm-resultado').innerHTML = '<span class="pm-ok">✅ Pedido creado en Gestión Nube' + (pedidoId ? ' — N° ' + pedidoId : '') + '.</span>' +
+      (pedidoUrl ? ' <a href="' + pedidoUrl + '" target="_blank">Ver / compartir link del pedido</a>' : '');
+    pmLineas = []; $('pm-cliente').value = '';
+    pmRender();
+  } catch (e) {
+    $('pm-resultado').innerHTML = '<span class="pm-error">⚠ Error: ' + e.message + '</span>';
+  }
+  btn.disabled = false; btn.textContent = 'Confirmar pedido en Gestión Nube';
 }
 
 function getVisibilityStatus(p) {
