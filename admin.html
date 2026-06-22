@@ -521,6 +521,11 @@ async function cargarProductos() {
 
   renderProductList();
   renderCategoryList();
+  // Si el usuario ya está parado en una pestaña que depende de los productos
+  // (entró antes de que terminaran de cargar), la re-renderizamos ahora.
+  if ($('tab-margenes') && $('tab-margenes').style.display !== 'none') { populateMargenCatFilter(); renderMargenes(); }
+  if ($('tab-prices') && $('tab-prices').style.display !== 'none') { populatePriceCatFilter(); renderPriceList(); }
+  if ($('tab-recargos') && $('tab-recargos').style.display !== 'none') { populateRecargoCatFilter(); renderRecargosList(); }
   cargarImagenesTN(); // trae las fotos de TiendaNube y re-renderiza cuando llegan
 }
 
@@ -1368,6 +1373,11 @@ function populateMargenCatFilter() {
 function renderMargenes() {
   const container = $('margenes-list');
   if (!container) return;
+  if (!allAdminProducts.length) {
+    const res = $('margenes-resumen'); if (res) res.innerHTML = '';
+    container.innerHTML = '<div class="loading-state">Cargando productos… esperá unos segundos.</div>';
+    return;
+  }
   const q = ($('margenes-search')?.value || '').toLowerCase();
   const cat = $('margenes-cat-filter')?.value || '';
   let desc = parseFloat($('margenes-desc')?.value);
