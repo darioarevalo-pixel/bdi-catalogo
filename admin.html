@@ -1168,6 +1168,16 @@ function setTab(tab) {
   if (tab === 'margenes') { populateMargenCatFilter(); renderMargenes(); }
   if (tab === 'pendientes') { populatePendientesCatFilter(); renderPendientes(); }
   if (tab === 'generador') populateGenerador();
+  if (tab === 'products') renderProductList();
+
+  // PERFORMANCE: las listas de productos (cientos de filas con fotos) son pesadas.
+  // Dejamos en el DOM SOLO la lista de la pestaña activa; las demás se vacían
+  // (se vuelven a armar al abrir esa pestaña). Esto evita que el navegador se
+  // trabe por tener todas cargadas a la vez.
+  const listaActiva = { products: 'products-list', prices: 'prices-list', recargos: 'recargos-list', margenes: 'margenes-list', pendientes: 'pendientes-list' }[tab] || '';
+  ['products-list', 'prices-list', 'recargos-list', 'margenes-list', 'pendientes-list'].forEach(cid => {
+    if (cid !== listaActiva) { const el = $(cid); if (el) el.innerHTML = ''; }
+  });
 }
 
 function renderBannersAdmin() {
