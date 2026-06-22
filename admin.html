@@ -244,6 +244,17 @@
   .margen-cell.loss .mv { color: var(--danger); }
   .margen-nodata { font-size: 12px; color: var(--text-muted); font-style: italic; }
   @media (max-width: 700px) { .margen-cells { grid-template-columns: repeat(4, 1fr); row-gap: 10px; } }
+  .tab-badge { display: inline-block; min-width: 18px; padding: 1px 6px; border-radius: 20px; background: var(--danger); color: #fff; font-size: 10px; font-weight: 700; vertical-align: middle; }
+  .pend-row { display: flex; align-items: center; gap: 12px; border: 1px solid var(--border); border-left: 3px solid var(--danger); border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 8px; background: white; }
+  .pend-left { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+  .pend-info { display: flex; flex-direction: column; min-width: 0; }
+  .pend-info strong { font-size: 13px; font-weight: 600; color: var(--text); }
+  .pend-meta { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+  .pend-ref { display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0; }
+  .pend-ref-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.3px; color: var(--text-hint); }
+  .pend-ref-val { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+  .pend-badge { font-size: 11px; font-weight: 600; color: var(--danger); white-space: nowrap; flex-shrink: 0; }
+  @media (max-width: 700px) { .pend-row { flex-wrap: wrap; } .pend-badge { flex-basis: 100%; } }
 </style>
 </head>
 <body>
@@ -275,6 +286,7 @@
     <button class="tab-btn" id="tab-btn-prices" onclick="setTab('prices')">Precios</button>
     <button class="tab-btn" id="tab-btn-recargos" onclick="setTab('recargos')" style="display:none">Recargos</button>
     <button class="tab-btn" onclick="setTab('margenes')">Márgenes</button>
+    <button class="tab-btn" id="tab-btn-pendientes" onclick="setTab('pendientes')">Pendientes</button>
     <button class="tab-btn" onclick="setTab('banners')">Banners</button>
     <button class="tab-btn" onclick="setTab('cupones')">Cupones</button>
     <button class="tab-btn" onclick="setTab('settings')">Configuración</button>
@@ -344,6 +356,15 @@
       </div>
       <div id="margenes-resumen"></div>
       <div id="margenes-list"><div class="loading-state">Cargando productos...</div></div>
+    </div>
+
+    <div id="tab-pendientes" style="display:none">
+      <p class="section-note">Productos que <strong>no tienen precio mayorista cargado</strong>. Por regla, <strong>no se venden</strong> (no aparecen en el catálogo). Para que se vendan, cargales el precio mayorista en <strong>Gestión Nube</strong> → cuando lo hagas, desaparecen de acá y aparecen solos en el catálogo. El precio que se ve es el de venta al público, solo de referencia.</p>
+      <div class="admin-toolbar">
+        <input class="admin-search" type="text" id="pendientes-search" placeholder="Buscar producto..." oninput="renderPendientes()" />
+        <select class="admin-select" id="pendientes-cat-filter" onchange="renderPendientes()"><option value="">Todas las categorías</option></select>
+      </div>
+      <div id="pendientes-list"><div class="loading-state">Cargando productos...</div></div>
     </div>
 
     <div id="tab-recargos" style="display:none">
@@ -523,9 +544,11 @@ async function cargarProductos() {
 
   renderProductList();
   renderCategoryList();
+  updatePendientesCount();
   // Si el usuario ya está parado en una pestaña que depende de los productos
   // (entró antes de que terminaran de cargar), la re-renderizamos ahora.
   if ($('tab-margenes') && $('tab-margenes').style.display !== 'none') { populateMargenCatFilter(); renderMargenes(); }
+  if ($('tab-pendientes') && $('tab-pendientes').style.display !== 'none') { populatePendientesCatFilter(); renderPendientes(); }
   if ($('tab-prices') && $('tab-prices').style.display !== 'none') { populatePriceCatFilter(); renderPriceList(); }
   if ($('tab-recargos') && $('tab-recargos').style.display !== 'none') { populateRecargoCatFilter(); renderRecargosList(); }
   cargarImagenesTN(); // trae las fotos de TiendaNube y re-renderiza cuando llegan
@@ -693,6 +716,7 @@ async function cargarImagenesTN() {
     allAdminProducts.forEach(p => { p._img = getImagenAdmin(p); });
     if (allAdminProducts.length) renderProductList();
     if ($('tab-margenes') && $('tab-margenes').style.display !== 'none') renderMargenes();
+    if ($('tab-pendientes') && $('tab-pendientes').style.display !== 'none') renderPendientes();
   } catch (e) { /* sin imágenes: el listado sigue funcionando igual */ }
 }
 
@@ -1040,6 +1064,7 @@ function setTab(tab) {
   $('tab-banners').style.display = tab === 'banners' ? 'block' : 'none';
   $('tab-cupones').style.display = tab === 'cupones' ? 'block' : 'none';
   $('tab-margenes').style.display = tab === 'margenes' ? 'block' : 'none';
+  $('tab-pendientes').style.display = tab === 'pendientes' ? 'block' : 'none';
   $('tab-settings').style.display = tab === 'settings' ? 'block' : 'none';
   document.querySelectorAll('.tab-btn').forEach(btn => {
     const onclickStr = btn.getAttribute('onclick') || '';
@@ -1058,6 +1083,7 @@ function setTab(tab) {
   if (tab === 'banners') renderBannersAdmin();
   if (tab === 'cupones') renderCupones();
   if (tab === 'margenes') { populateMargenCatFilter(); renderMargenes(); }
+  if (tab === 'pendientes') { populatePendientesCatFilter(); renderPendientes(); }
 }
 
 function renderBannersAdmin() {
@@ -1312,9 +1338,17 @@ function setRecargo(productId, value) {
 }
 
 function getCurrentPrice(p) {
-  const w = parseFloat(p.wholesaler_price || 0);
+  // Solo precio mayorista (regla: sin precio mayorista, no se vende). 0 = pendiente.
+  return parseFloat(p.wholesaler_price || p.precio_mayorista || 0);
+}
+
+// Producto al que le falta el precio mayorista (solo aplica en modo mayorista):
+// no tiene mayorista pero sí tiene precio retail de referencia.
+function faltaPrecioMayorista(p) {
+  if (isDistribuidor) return false;
+  const w = parseFloat(p.wholesaler_price || p.precio_mayorista || 0);
   const r = parseFloat(p.retailer_price || p.price || 0);
-  return w > 0 ? w : r;
+  return w <= 0 && r > 0;
 }
 
 // Precio base que el cliente vería (sin precio especial), para mostrarlo de referencia.
@@ -1389,6 +1423,7 @@ function renderMargenes() {
   const factor = 1 - desc / 100;
 
   const prods = allAdminProducts.filter(p => {
+    if (precioBaseAdmin(p) <= 0) return false; // sin precio de venta → va a "Pendientes"
     const name = (p.name || p.nombre || '').toLowerCase();
     const code = (p.code || p.sku || '').toLowerCase();
     const pcat = p.category || '';
@@ -1454,6 +1489,56 @@ function renderMargenes() {
       '</div>' +
     '</div>';
   }).join('');
+}
+
+// ===== Pendientes de precio mayorista =====
+function populatePendientesCatFilter() {
+  const sel = $('pendientes-cat-filter');
+  if (!sel || sel.options.length > 1) return;
+  const cats = [...new Set(allAdminProducts.filter(faltaPrecioMayorista).map(p => p.category || '').filter(Boolean))].sort();
+  cats.forEach(c => { const opt = document.createElement('option'); opt.value = c; opt.textContent = c; sel.appendChild(opt); });
+}
+
+function renderPendientes() {
+  const container = $('pendientes-list');
+  if (!container) return;
+  if (!allAdminProducts.length) { container.innerHTML = '<div class="loading-state">Cargando productos… esperá unos segundos.</div>'; return; }
+  const q = ($('pendientes-search')?.value || '').toLowerCase();
+  const cat = $('pendientes-cat-filter')?.value || '';
+  const prods = allAdminProducts.filter(p => {
+    if (!faltaPrecioMayorista(p)) return false;
+    const name = (p.name || p.nombre || '').toLowerCase();
+    const code = (p.code || p.sku || '').toLowerCase();
+    const pcat = p.category || '';
+    return (!q || name.includes(q) || code.includes(q)) && (!cat || pcat === cat);
+  });
+  if (!prods.length) {
+    container.innerHTML = '<div class="loading-state">🎉 No hay productos pendientes — todos los visibles tienen precio mayorista.</div>';
+    return;
+  }
+  container.innerHTML = prods.map(p => {
+    const name = (p.name || p.nombre || 'Sin nombre').replace(/</g, '&lt;');
+    const img = p._img || null;
+    const thumb = img ? '<img class="margen-thumb" src="' + img + '" alt="" loading="lazy" onerror="this.style.visibility=\'hidden\'">' : '<div class="margen-thumb"></div>';
+    const r = parseFloat(p.retailer_price || p.price || 0);
+    const cod = p.code || p.sku || '';
+    return '<div class="pend-row">' +
+      '<div class="pend-left">' + thumb + '<div class="pend-info"><strong>' + name + '</strong>' +
+        '<span class="pend-meta">' + (cod ? cod + ' · ' : '') + (p.category || '') + '</span></div></div>' +
+      '<div class="pend-ref"><span class="pend-ref-lbl">Precio público (ref.)</span><span class="pend-ref-val">' + fmtAR(r) + '</span></div>' +
+      '<div class="pend-badge">⚠ Falta precio mayorista</div>' +
+    '</div>';
+  }).join('');
+}
+
+// Muestra/oculta el botón "Pendientes" y actualiza el contador.
+function updatePendientesCount() {
+  const btn = $('tab-btn-pendientes');
+  if (!btn) return;
+  if (isDistribuidor) { btn.style.display = 'none'; return; }
+  btn.style.display = '';
+  const n = allAdminProducts.filter(faltaPrecioMayorista).length;
+  btn.innerHTML = 'Pendientes' + (n > 0 ? ' <span class="tab-badge">' + n + '</span>' : '');
 }
 
 function getVisibilityStatus(p) {
