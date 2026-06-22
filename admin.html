@@ -285,6 +285,16 @@
   .pm-precio-wrap { display: flex; align-items: center; gap: 3px; }
   .pm-precio-wrap span { font-size: 13px; color: var(--text-muted); }
   .pm-precio-wrap input { width: 120px; padding: 8px 9px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; text-align: right; outline: none; }
+  .pm-matriz { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; margin: 6px 0 14px; background: var(--bg); max-width: 660px; }
+  .pm-matriz-top { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px; margin-bottom: 14px; }
+  .pm-precio-label { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+  .pm-precio-label .pm-precio-wrap { margin-top: 5px; }
+  .pm-var-lbl { font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+  .pm-variantes { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .pm-var-cell { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: white; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 10px; }
+  .pm-var-name { font-size: 12px; color: var(--text); min-width: 0; }
+  .pm-var-stock { font-size: 10px; color: var(--text-hint); white-space: nowrap; }
+  .pm-var-qty { width: 52px; padding: 6px 7px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; text-align: right; outline: none; flex-shrink: 0; }
   .pm-hint { font-size: 12px; color: var(--text-muted); margin-bottom: 14px; }
   .pm-hint strong { color: var(--text); }
   .pm-hint-sub { color: var(--text-hint); font-style: italic; }
@@ -442,12 +452,18 @@
       <p class="section-note">Cargá un pedido mayorista negociado: elegís productos, cantidades y el <strong>precio acordado</strong>, y se crea la venta <strong>directo en Gestión Nube</strong> (descuenta stock). Después en GN la vinculás al cliente. Te genera el link del pedido para mandarle.</p>
       <div class="pm-builder">
         <select id="pm-producto" class="admin-select" onchange="pmSelectProducto()"><option value="">— Elegí un producto —</option></select>
-        <select id="pm-variante" class="admin-select" style="display:none"></select>
-        <input type="number" id="pm-cant" class="pm-cant" min="1" value="1" title="Cantidad" />
-        <div class="pm-precio-wrap"><span>$</span><input type="number" id="pm-precio" min="0" placeholder="Precio c/u" /></div>
-        <button class="btn-save" onclick="pmAgregar()">+ Agregar</button>
       </div>
-      <div id="pm-hint" class="pm-hint"></div>
+      <div id="pm-matriz" style="display:none">
+        <div class="pm-matriz-top">
+          <label class="pm-precio-label">Precio c/u (el negociado)
+            <div class="pm-precio-wrap"><span>$</span><input type="number" id="pm-precio" min="0" placeholder="0" oninput="pmActualizarGanancias()" /></div>
+          </label>
+          <div id="pm-hint" class="pm-hint"></div>
+        </div>
+        <div class="pm-var-lbl">Cargá la cantidad de cada color/modelo:</div>
+        <div id="pm-variantes" class="pm-variantes"></div>
+        <button class="btn-save" onclick="pmAgregarMatriz()" style="margin-top:12px">+ Agregar al pedido</button>
+      </div>
       <div id="pm-lineas"><div class="loading-state">Sin productos en el pedido.</div></div>
       <div id="pm-footer" style="display:none">
         <div class="pm-total-row">Total del pedido: <strong id="pm-total">$0</strong></div>
@@ -1793,36 +1809,56 @@ function populatePedidoManual() {
 function pmProdSel() { return allAdminProducts.find(x => (x.id || x.product_id) == $('pm-producto').value); }
 function pmSelectProducto() {
   const p = pmProdSel();
-  const vsel = $('pm-variante');
-  vsel.innerHTML = ''; vsel.style.display = 'none';
-  if (!p) { $('pm-hint').textContent = ''; $('pm-precio').value = ''; return; }
-  if ((p.variantes || []).length) {
-    vsel.style.display = '';
-    (p.variantes || []).forEach(v => {
-      const vs = getStockVarianteAdmin(v);
-      const opt = document.createElement('option');
-      opt.value = v.size_id; opt.textContent = v.size + (vs != null ? ' (stock ' + vs + ')' : '');
-      vsel.appendChild(opt);
-    });
-  }
+  const matriz = $('pm-matriz');
+  if (!p) { matriz.style.display = 'none'; return; }
+  matriz.style.display = 'block';
   const precio = getCurrentPrice(p);
   $('pm-precio').value = precio > 0 ? Math.round(precio) : '';
-  const costo = parseFloat(p.unit_cost || 0);
-  $('pm-hint').innerHTML = 'Costo: <strong>' + (costo > 0 ? fmtAR(costo) : '—') + '</strong> · Precio mayorista: <strong>' + (precio > 0 ? fmtAR(precio) : '—') + '</strong> <span class="pm-hint-sub">(poné el precio negociado)</span>';
+  // Grilla de variantes (un campo de cantidad por color/modelo).
+  const variantes = p.variantes || [];
+  const cont = $('pm-variantes');
+  if (variantes.length) {
+    cont.innerHTML = variantes.map(v => {
+      const vs = getStockVarianteAdmin(v);
+      return '<div class="pm-var-cell">' +
+        '<div class="pm-var-name">' + (v.size || '').replace(/</g, '&lt;') + (vs != null ? ' <span class="pm-var-stock">stock ' + vs + '</span>' : '') + '</div>' +
+        '<input type="number" min="0" value="0" class="pm-var-qty" data-sizeid="' + v.size_id + '" data-sizename="' + (v.size || '').replace(/"/g, '&quot;') + '" />' +
+      '</div>';
+    }).join('');
+  } else {
+    cont.innerHTML = '<div class="pm-var-cell"><div class="pm-var-name">Cantidad</div><input type="number" min="0" value="0" class="pm-var-qty" data-sizeid="" data-sizename="" /></div>';
+  }
+  pmActualizarGanancias();
 }
-function pmAgregar() {
+function pmActualizarGanancias() {
+  const p = pmProdSel();
+  if (!p) return;
+  const costo = parseFloat(p.unit_cost || 0);
+  const precioMay = getCurrentPrice(p);
+  const precio = parseFloat($('pm-precio').value);
+  let ganTxt = '';
+  if (!isNaN(precio) && precio > 0 && costo > 0) {
+    const gan = precio - costo;
+    ganTxt = ' · ganancia c/u: <strong style="color:' + (gan < 0 ? 'var(--danger)' : 'var(--success)') + '">' + (gan < 0 ? '-' : '') + fmtAR(Math.abs(gan)) + '</strong>';
+  }
+  $('pm-hint').innerHTML = 'Costo: <strong>' + (costo > 0 ? fmtAR(costo) : '—') + '</strong> · Mayorista: <strong>' + (precioMay > 0 ? fmtAR(precioMay) : '—') + '</strong>' + ganTxt;
+}
+function pmAgregarMatriz() {
   const p = pmProdSel();
   if (!p) { alert('Elegí un producto.'); return; }
-  const cant = parseInt($('pm-cant').value) || 0;
   const precio = Math.round(parseFloat($('pm-precio').value));
-  if (cant <= 0) { alert('Ingresá una cantidad válida.'); return; }
-  if (isNaN(precio) || precio <= 0) { alert('Ingresá el precio por unidad.'); return; }
-  const vsel = $('pm-variante');
-  const tieneVar = vsel.style.display !== 'none';
-  const sizeId = tieneVar && vsel.value ? vsel.value : null;
-  const sizeName = sizeId ? (vsel.options[vsel.selectedIndex].textContent || '').replace(/ \(stock.*$/, '') : '';
-  pmLineas.push({ id: p.id || p.product_id, nombre: p.name || p.nombre || '', sizeId, sizeName, cant, precio, costo: parseFloat(p.unit_cost || 0), img: p._img || '' });
-  $('pm-cant').value = 1;
+  if (isNaN(precio) || precio <= 0) { alert('Ingresá el precio por unidad (el negociado).'); return; }
+  const inputs = $('pm-variantes').querySelectorAll('.pm-var-qty');
+  let agregados = 0;
+  inputs.forEach(inp => {
+    const cant = parseInt(inp.value) || 0;
+    if (cant <= 0) return;
+    pmLineas.push({ id: p.id || p.product_id, nombre: p.name || p.nombre || '', sizeId: inp.dataset.sizeid || null, sizeName: inp.dataset.sizename || '', cant, precio, costo: parseFloat(p.unit_cost || 0), img: p._img || '' });
+    agregados++;
+  });
+  if (!agregados) { alert('Cargá la cantidad de al menos un color/modelo.'); return; }
+  $('pm-producto').value = '';
+  $('pm-matriz').style.display = 'none';
   pmRender();
 }
 function pmQuitar(idx) { pmLineas.splice(idx, 1); pmRender(); }
