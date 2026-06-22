@@ -680,6 +680,8 @@ async function cargarProductos() {
   if ($('tab-pendientes') && $('tab-pendientes').style.display !== 'none') { populatePendientesCatFilter(); renderPendientes(); }
   if ($('tab-prices') && $('tab-prices').style.display !== 'none') { populatePriceCatFilter(); renderPriceList(); }
   if ($('tab-recargos') && $('tab-recargos').style.display !== 'none') { populateRecargoCatFilter(); renderRecargosList(); }
+  if ($('tab-generador') && $('tab-generador').style.display !== 'none') populateGenerador();
+  if ($('tab-pedido') && $('tab-pedido').style.display !== 'none') populatePedidoManual();
   cargarImagenesTN(); // trae las fotos de TiendaNube y re-renderiza cuando llegan
 }
 
