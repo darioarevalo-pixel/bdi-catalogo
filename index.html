@@ -1251,9 +1251,18 @@ function esOferta(p) {
   if (costo <= 0 || precio <= 0) return false;
   return ((precio - costo) / precio * 100) < umbral;
 }
+// Para el carrito calculamos la oferta a NIVEL ÍTEM: usa el precio real que paga
+// el cliente (i.precio, que puede ser un precio especial de variante más bajo) y
+// el costo del producto. Así se protege una variante al costo aunque el producto
+// en general tenga buen margen.
 function cartItemOferta(i) {
+  const umbral = parseFloat(adminConfig.ofertaMargen) || 0;
+  if (umbral <= 0) return false;
   const p = allProducts.find(x => (x.id || x.product_id) == i.id);
-  return p ? esOferta(p) : false;
+  const costo = p ? parseFloat(p.unit_cost || 0) : 0;
+  const precio = parseFloat(i.precio || 0);
+  if (costo <= 0 || precio <= 0) return false;
+  return ((precio - costo) / precio * 100) < umbral;
 }
 
 function getDescuentoPct(precioActual, precioAnterior) {
