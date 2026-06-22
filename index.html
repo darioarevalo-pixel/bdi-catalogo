@@ -799,7 +799,7 @@ function renderVariantRowsHTML(productId, dims, selectedDim1, nomEsc, precio, im
         '<div class="modal-variant-name">' + modeloCorto(v.dim2) + '</div>' +
         sTxt +
       '</div>' +
-      (vPrecio !== precio ? '<div class="modal-variant-price dif">' + (vPrecio < precio ? '<span class="oferta-tag">OFERTA</span>' : '') + formatPrecio(vPrecio) + '</div>' : '') +
+      (vPrecio !== precio ? '<div class="modal-variant-price dif">' + formatPrecio(vPrecio) + '</div>' : '') +
       '<div class="modal-vqty-wrap">' +
         '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1)">−</button>' +
         '<input class="modal-vqty-num" type="number" id="' + inputId + '" value="' + currentQty + '" min="0"' + maxAttr + ' />' +
@@ -1398,7 +1398,7 @@ function renderCardVariantRows(id, dims, selectedColor, nomEsc, precio, imgEsc) 
         '<div class="modal-variant-name" style="font-size:12px">' + modeloCorto(v.dim2) + '</div>' +
         sTxt +
       '</div>' +
-      (vPrecio !== precio ? '<div class="modal-variant-price dif">' + (vPrecio < precio ? '<span class="oferta-tag">OFERTA</span>' : '') + formatPrecio(vPrecio) + '</div>' : '') +
+      (vPrecio !== precio ? '<div class="modal-variant-price dif">' + formatPrecio(vPrecio) + '</div>' : '') +
       '<div class="modal-vqty-wrap">' +
         '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1);event.stopPropagation()">−</button>' +
         '<input class="modal-vqty-num" type="number" id="q-m-' + cartKey + '" value="' + currentQty + '" min="0"' + maxAttr + ' />' +
@@ -1480,7 +1480,7 @@ function renderVariantesGrid(prods) {
               '<div class="modal-variant-name" style="font-size:12px">' + modeloCorto(v.size) + '</div>' +
               sTxt +
             '</div>' +
-            (vPrecio !== precio ? '<div class="modal-variant-price dif">' + (vPrecio < precio ? '<span class="oferta-tag">OFERTA</span>' : '') + formatPrecio(vPrecio) + '</div>' : '') +
+            (vPrecio !== precio ? '<div class="modal-variant-price dif">' + formatPrecio(vPrecio) + '</div>' : '') +
             '<div class="modal-vqty-wrap">' +
               '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1);event.stopPropagation()">−</button>' +
               '<input class="modal-vqty-num" type="number" id="q-m-' + cartKey + '" value="' + currentQty + '" min="0"' + maxAttr + ' />' +
@@ -1718,7 +1718,7 @@ function abrirModal(id) {
               '<div class="modal-variant-name">' + modeloCorto(v.size) + '</div>' +
               sTxt +
             '</div>' +
-            (vPrecio !== precio ? '<div class="modal-variant-price dif">' + (vPrecio < precio ? '<span class="oferta-tag">OFERTA</span>' : '') + formatPrecio(vPrecio) + '</div>' : '') +
+            (vPrecio !== precio ? '<div class="modal-variant-price dif">' + formatPrecio(vPrecio) + '</div>' : '') +
             '<div class="modal-vqty-wrap">' +
               '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1)">−</button>' +
               '<input class="modal-vqty-num" type="number" id="q-m-' + cartKey + '" value="' + currentQty + '" min="0"' + maxAttr + ' />' +
