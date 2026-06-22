@@ -260,6 +260,25 @@
   .oferta-setting-row input { width: 70px; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; text-align: right; outline: none; }
   .oferta-setting-hint { font-size: 12px; color: var(--text-muted); margin-top: 6px; line-height: 1.45; }
   .margen-oferta-badge { font-size: 9px; font-weight: 700; color: #fff; background: #EA580C; padding: 1px 6px; border-radius: 3px; letter-spacing: 0.3px; margin-left: 6px; }
+  .gen-prod-label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 16px; }
+  .gen-prod-label select { margin-top: 5px; }
+  .gen-costo { font-size: 14px; color: var(--text); margin-bottom: 14px; }
+  .gen-costo strong { color: var(--accent); }
+  .gen-costo-hint { font-size: 11px; color: var(--text-hint); font-style: italic; }
+  .gen-tiers { border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; margin-bottom: 14px; max-width: 620px; }
+  .gen-tier-head, .gen-tier { display: grid; grid-template-columns: 1fr 1fr 1.3fr 1fr; gap: 10px; align-items: center; padding: 8px 12px; }
+  .gen-tier-head { background: var(--bg); font-size: 10px; text-transform: uppercase; letter-spacing: 0.3px; color: var(--text-hint); font-weight: 600; }
+  .gen-tier { border-top: 1px solid var(--border); }
+  .gen-tier input { width: 100%; padding: 7px 9px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; text-align: right; outline: none; }
+  .gen-precio-wrap { display: flex; align-items: center; gap: 3px; }
+  .gen-precio-wrap span { font-size: 13px; color: var(--text-muted); }
+  .gen-gan { font-size: 13px; font-weight: 600; color: var(--success); text-align: right; }
+  .gen-gan.loss { color: var(--danger); }
+  .gen-actions { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  .gen-copiado { font-size: 13px; color: var(--success); font-weight: 600; }
+  .gen-preview-wrap { max-width: 620px; }
+  .gen-preview-lbl { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+  .gen-preview { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; font-family: inherit; font-size: 13px; color: var(--text); white-space: pre-wrap; margin: 0; }
 </style>
 </head>
 <body>
@@ -294,6 +313,7 @@
     <button class="tab-btn" id="tab-btn-pendientes" onclick="setTab('pendientes')">Pendientes</button>
     <button class="tab-btn" onclick="setTab('banners')">Banners</button>
     <button class="tab-btn" onclick="setTab('cupones')">Cupones</button>
+    <button class="tab-btn" onclick="setTab('generador')">Generador de precios</button>
     <button class="tab-btn" onclick="setTab('settings')">Configuración</button>
   </div>
 
@@ -354,6 +374,42 @@
       </div>
       <button class="btn-save" onclick="addCupon()" style="margin-bottom:14px">+ Agregar cupón</button>
       <div id="cupones-admin-list"><div class="loading-state">Sin cupones cargados</div></div>
+    </div>
+
+    <div id="tab-generador" style="display:none">
+      <p class="section-note">Armá una <strong>lista de precios por cantidad</strong> para mandarle a un cliente. Elegís un producto, te traemos el <strong>costo</strong> (solo lo ves vos), generás los precios por escala —a mano o con un <strong>% de markup</strong> sobre el costo— y copiás el texto <strong>sin el costo</strong> para pegarlo en WhatsApp.</p>
+      <label class="gen-prod-label">Producto
+        <select id="gen-producto" class="admin-select" onchange="genSeleccionar()" style="width:100%;max-width:480px"><option value="">— Elegí un producto —</option></select>
+      </label>
+      <div id="gen-detalle" style="display:none">
+        <div class="gen-costo">Costo: <strong id="gen-costo-val">—</strong> <span class="gen-costo-hint">(solo para vos — no se copia)</span></div>
+        <div class="gen-tiers">
+          <div class="gen-tier-head"><span>Cantidad</span><span>Markup %</span><span>Precio c/u</span><span>Ganancia c/u</span></div>
+          <div class="gen-tier">
+            <input type="number" id="gen-qty-0" value="1" min="1" oninput="genPreview()" />
+            <input type="number" id="gen-markup-0" min="0" placeholder="%" oninput="genDesdeMarkup(0)" />
+            <div class="gen-precio-wrap"><span>$</span><input type="number" id="gen-precio-0" min="0" placeholder="0" oninput="genDesdePrecio(0)" /></div>
+            <span class="gen-gan" id="gen-gan-0">—</span>
+          </div>
+          <div class="gen-tier">
+            <input type="number" id="gen-qty-1" value="25" min="1" oninput="genPreview()" />
+            <input type="number" id="gen-markup-1" min="0" placeholder="%" oninput="genDesdeMarkup(1)" />
+            <div class="gen-precio-wrap"><span>$</span><input type="number" id="gen-precio-1" min="0" placeholder="0" oninput="genDesdePrecio(1)" /></div>
+            <span class="gen-gan" id="gen-gan-1">—</span>
+          </div>
+          <div class="gen-tier">
+            <input type="number" id="gen-qty-2" value="50" min="1" oninput="genPreview()" />
+            <input type="number" id="gen-markup-2" min="0" placeholder="%" oninput="genDesdeMarkup(2)" />
+            <div class="gen-precio-wrap"><span>$</span><input type="number" id="gen-precio-2" min="0" placeholder="0" oninput="genDesdePrecio(2)" /></div>
+            <span class="gen-gan" id="gen-gan-2">—</span>
+          </div>
+        </div>
+        <div class="gen-actions">
+          <button class="btn-save" onclick="copiarCotizacion()">📋 Copiar lista de precios</button>
+          <span id="gen-copiado" class="gen-copiado"></span>
+        </div>
+        <div class="gen-preview-wrap"><div class="gen-preview-lbl">Esto se copia (sin el costo):</div><pre class="gen-preview" id="gen-preview"></pre></div>
+      </div>
     </div>
 
     <div id="tab-margenes" style="display:none">
@@ -1078,6 +1134,7 @@ function setTab(tab) {
   $('tab-cupones').style.display = tab === 'cupones' ? 'block' : 'none';
   $('tab-margenes').style.display = tab === 'margenes' ? 'block' : 'none';
   $('tab-pendientes').style.display = tab === 'pendientes' ? 'block' : 'none';
+  $('tab-generador').style.display = tab === 'generador' ? 'block' : 'none';
   $('tab-settings').style.display = tab === 'settings' ? 'block' : 'none';
   document.querySelectorAll('.tab-btn').forEach(btn => {
     const onclickStr = btn.getAttribute('onclick') || '';
@@ -1097,6 +1154,7 @@ function setTab(tab) {
   if (tab === 'cupones') renderCupones();
   if (tab === 'margenes') { populateMargenCatFilter(); renderMargenes(); }
   if (tab === 'pendientes') { populatePendientesCatFilter(); renderPendientes(); }
+  if (tab === 'generador') populateGenerador();
 }
 
 function renderBannersAdmin() {
@@ -1562,6 +1620,80 @@ function updatePendientesCount() {
   btn.style.display = '';
   const n = allAdminProducts.filter(faltaPrecioMayorista).length;
   btn.innerHTML = 'Pendientes' + (n > 0 ? ' <span class="tab-badge">' + n + '</span>' : '');
+}
+
+// ===== Generador de precios por cantidad (herramienta interna para cotizar) =====
+let genCosto = 0;
+function populateGenerador() {
+  const sel = $('gen-producto');
+  if (!sel || sel.options.length > 1) return;
+  [...allAdminProducts].sort((a, b) => (a.name || a.nombre || '').localeCompare(b.name || b.nombre || '')).forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.id || p.product_id;
+    opt.textContent = p.name || p.nombre || 'Sin nombre';
+    sel.appendChild(opt);
+  });
+}
+function genProductoSel() {
+  return allAdminProducts.find(x => (x.id || x.product_id) == $('gen-producto').value);
+}
+function genSeleccionar() {
+  const p = genProductoSel();
+  if (!p) { $('gen-detalle').style.display = 'none'; return; }
+  genCosto = parseFloat(p.unit_cost || 0);
+  $('gen-costo-val').textContent = genCosto > 0 ? fmtAR(genCosto) : 'sin costo cargado';
+  $('gen-detalle').style.display = 'block';
+  [0, 1, 2].forEach(i => genDesdeMarkup(i));
+  genPreview();
+}
+function genDesdeMarkup(i) {
+  const m = parseFloat($('gen-markup-' + i).value);
+  if (!isNaN(m) && genCosto > 0) $('gen-precio-' + i).value = Math.round(genCosto * (1 + m / 100));
+  genGanancia(i); genPreview();
+}
+function genDesdePrecio(i) {
+  const precio = parseFloat($('gen-precio-' + i).value);
+  if (!isNaN(precio) && precio > 0 && genCosto > 0) $('gen-markup-' + i).value = Math.round((precio / genCosto - 1) * 100);
+  genGanancia(i); genPreview();
+}
+function genGanancia(i) {
+  const precio = parseFloat($('gen-precio-' + i).value);
+  const el = $('gen-gan-' + i);
+  if (isNaN(precio) || genCosto <= 0) { el.textContent = '—'; el.className = 'gen-gan'; return; }
+  const gan = precio - genCosto;
+  el.textContent = (gan < 0 ? '-' : '') + fmtAR(Math.abs(gan));
+  el.className = 'gen-gan' + (gan < 0 ? ' loss' : '');
+}
+function genTexto() {
+  const p = genProductoSel();
+  if (!p) return '';
+  const lines = [(p.name || p.nombre || '').toUpperCase()];
+  [0, 1, 2].forEach(i => {
+    const qty = parseInt($('gen-qty-' + i).value) || 0;
+    const precio = parseFloat($('gen-precio-' + i).value);
+    if (qty > 0 && !isNaN(precio) && precio > 0) {
+      lines.push(qty + (qty === 1 ? ' unidad' : ' unidades') + ': ' + fmtAR(precio) + (qty > 1 ? ' c/u' : ''));
+    }
+  });
+  return lines.join('\n');
+}
+function genPreview() {
+  const el = $('gen-preview');
+  if (el) el.textContent = genTexto();
+}
+function copiarCotizacion() {
+  const txt = genTexto();
+  if (!txt) return;
+  const ok = () => { const c = $('gen-copiado'); if (c) { c.textContent = '¡Copiado! Pegalo en WhatsApp.'; setTimeout(() => { c.textContent = ''; }, 3000); } };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(txt).then(ok).catch(() => { genCopiarFallback(txt); ok(); });
+  } else { genCopiarFallback(txt); ok(); }
+}
+function genCopiarFallback(txt) {
+  const ta = document.createElement('textarea');
+  ta.value = txt; document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); } catch (e) {}
+  document.body.removeChild(ta);
 }
 
 function getVisibilityStatus(p) {
