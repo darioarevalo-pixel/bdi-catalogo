@@ -627,7 +627,7 @@ let adminConfig = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: []
 let cuponAplicado = null; // cupón aplicado en el carrito (objeto) o null
 
 // Re-valida un cupón YA aplicado (objeto guardado) contra el subtotal actual.
-// La validación inicial la hace el servidor (/api/cupon); acá solo re-chequeamos
+// La validación inicial la hace el servidor (/api/config?accion=cupon); acá solo re-chequeamos
 // vencimiento y compra mínima sin necesitar la lista de cupones.
 function cuponSigueValido(cupon, subtotal) {
   if (!cupon) return { error: 'Sin cupón' };
@@ -656,7 +656,7 @@ async function aplicarCupon() {
   if (!code) { if (m) { m.textContent = 'Ingresá un código'; m.className = 'cupon-msg err'; } return; }
   if (m) { m.textContent = 'Validando…'; m.className = 'cupon-msg'; }
   try {
-    const r = await fetch('/api/cupon?codigo=' + encodeURIComponent(code) + '&subtotal=' + subtotal);
+    const r = await fetch('/api/config?accion=cupon&codigo=' + encodeURIComponent(code) + '&subtotal=' + subtotal);
     const data = await r.json().catch(() => ({}));
     if (!r.ok || data.error || !data.cupon) {
       cuponAplicado = null;

@@ -35,6 +35,30 @@ module.exports = async (req, res) => {
   if (req.method === 'OPTIONS') return res.status(204).end();
 
   if (req.method === 'GET') {
+    // Validación de cupón (acción pública). No expone la lista completa: solo
+    // valida el código tipeado y devuelve ese cupón + el descuento.
+    // (Va dentro de config.js para no superar el límite de 12 funciones en Hobby.)
+    if (req.query.accion === 'cupon') {
+      const codigo = (req.query.codigo || '').trim().toUpperCase();
+      const subtotal = parseFloat(req.query.subtotal) || 0;
+      if (!codigo) return res.status(400).json({ error: 'Ingresá un código' });
+      let cfg = null;
+      try { cfg = await kvGet(); } catch (e) { /* sin config */ }
+      const cupones = (cfg && cfg.cupones) || [];
+      const c = cupones.find(x => (x.codigo || '').trim().toUpperCase() === codigo);
+      if (!c) return res.status(404).json({ error: 'El cupón no existe' });
+      if (c.activo === false) return res.status(400).json({ error: 'Este cupón no está disponible' });
+      if (c.vence) {
+        const fin = new Date(c.vence + 'T23:59:59');
+        if (!isNaN(fin.getTime()) && fin < new Date()) return res.status(400).json({ error: 'El cupón venció' });
+      }
+      const minimo = parseFloat(c.minimo) || 0;
+      if (minimo > 0 && subtotal < minimo) return res.status(400).json({ error: 'Requiere una compra mínima de $' + Math.round(minimo).toLocaleString('es-AR') });
+      let descuento = 0;
+      if (c.tipo === 'porcentaje') descuento = Math.round(subtotal * (parseFloat(c.valor) || 0) / 100);
+      else if (c.tipo === 'monto') descuento = Math.min(subtotal, parseFloat(c.valor) || 0);
+      return res.json({ ok: true, descuento, cupon: { codigo: c.codigo, tipo: c.tipo, valor: c.valor, detalle: c.detalle || '', minimo: c.minimo || '', vence: c.vence || '' } });
+    }
     // Con ?verify=1 valida la contraseña y devuelve la config (para el login del admin)
     if (req.query.verify) {
       if (req.headers['x-admin-password'] !== ADMIN_PASSWORD)
@@ -46,7 +70,7 @@ module.exports = async (req, res) => {
       // Así el catálogo no depende de que el token tenga permiso de costos.
       config.__esDistribuidor = (CONFIG_KEY === 'distribuidor-config');
       // Los códigos de cupón NO se exponen al público: solo el admin (verify con
-      // contraseña correcta) los recibe. El catálogo valida vía /api/cupon.
+      // contraseña correcta) los recibe. El catálogo valida con ?accion=cupon.
       if (!req.query.verify) delete config.cupones;
       return res.json(config);
     } catch (e) {
