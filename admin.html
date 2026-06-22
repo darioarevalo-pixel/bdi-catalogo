@@ -1690,12 +1690,13 @@ function genGanancia(i) {
 function genTexto() {
   const p = genProductoSel();
   if (!p) return '';
-  const lines = [(p.name || p.nombre || '').toUpperCase()];
+  // Nombre y precios entre *asteriscos* → en WhatsApp se ven en negrita.
+  const lines = ['*' + (p.name || p.nombre || '').toUpperCase() + '*'];
   [0, 1, 2].forEach(i => {
     const qty = parseInt($('gen-qty-' + i).value) || 0;
     const precio = parseFloat($('gen-precio-' + i).value);
     if (qty > 0 && !isNaN(precio) && precio > 0) {
-      lines.push(qty + (qty === 1 ? ' unidad' : ' unidades') + ': ' + fmtAR(precio) + (qty > 1 ? ' c/u' : ''));
+      lines.push(qty + (qty === 1 ? ' unidad' : ' unidades') + ': *' + fmtAR(precio) + '*' + (qty > 1 ? ' c/u' : ''));
     }
   });
   return lines.join('\n');
