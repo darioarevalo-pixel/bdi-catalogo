@@ -231,7 +231,9 @@
   .margen-resumen .alerta { color: var(--danger); font-weight: 600; }
   .margen-row { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 8px; background: white; }
   .margen-row.es-perdida { border-color: rgba(220,38,38,0.4); background: #fff7f7; }
-  .margen-prod { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+  .margen-prod { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .margen-prod-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .margen-thumb { width: 36px; height: 36px; border-radius: 6px; object-fit: contain; background: var(--bg); flex-shrink: 0; }
   .margen-prod strong { font-size: 13px; font-weight: 600; color: var(--text); }
   .margen-cat { font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.3px; flex-shrink: 0; }
   .margen-cells { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
@@ -690,6 +692,7 @@ async function cargarImagenesTN() {
     // no recalcule el cruce en cada tecla del buscador.
     allAdminProducts.forEach(p => { p._img = getImagenAdmin(p); });
     if (allAdminProducts.length) renderProductList();
+    if ($('tab-margenes') && $('tab-margenes').style.display !== 'none') renderMargenes();
   } catch (e) { /* sin imágenes: el listado sigue funcionando igual */ }
 }
 
@@ -1425,7 +1428,11 @@ function renderMargenes() {
     const name = (p.name || p.nombre || 'Sin nombre').replace(/</g, '&lt;');
     const costo = parseFloat(p.unit_cost || 0);
     const precio = precioBaseAdmin(p);
-    const head = '<div class="margen-prod"><strong>' + name + '</strong>' + (p.category ? '<span class="margen-cat">' + p.category + '</span>' : '') + '</div>';
+    const img = p._img || null;
+    const thumb = img
+      ? '<img class="margen-thumb" src="' + img + '" alt="" loading="lazy" onerror="this.style.visibility=\'hidden\'">'
+      : '<div class="margen-thumb"></div>';
+    const head = '<div class="margen-prod"><div class="margen-prod-left">' + thumb + '<strong>' + name + '</strong></div>' + (p.category ? '<span class="margen-cat">' + p.category + '</span>' : '') + '</div>';
     if (!(costo > 0) || !(precio > 0)) {
       return '<div class="margen-row sincosto">' + head + '<div class="margen-nodata">Sin costo o precio cargado</div></div>';
     }
