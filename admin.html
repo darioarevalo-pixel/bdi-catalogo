@@ -224,6 +224,24 @@
   .cupon-card-actions .btn-del { background: transparent; color: var(--danger); border: 1px solid var(--danger); padding: 5px 10px; border-radius: var(--radius-sm); cursor: pointer; font-size: 12px; font-family: inherit; }
   .cupon-card-actions .btn-del:hover { background: var(--danger-light); }
   @media (max-width: 700px) { .cupon-grid { grid-template-columns: 1fr; } }
+  .margen-sim { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-muted); white-space: nowrap; }
+  .margen-sim input { width: 64px; padding: 7px 9px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; text-align: right; outline: none; }
+  .margen-resumen { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; font-size: 13px; color: var(--text-muted); padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 12px; }
+  .margen-resumen b { color: var(--text); }
+  .margen-resumen .alerta { color: var(--danger); font-weight: 600; }
+  .margen-row { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 8px; background: white; }
+  .margen-row.es-perdida { border-color: rgba(220,38,38,0.4); background: #fff7f7; }
+  .margen-prod { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+  .margen-prod strong { font-size: 13px; font-weight: 600; color: var(--text); }
+  .margen-cat { font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.3px; flex-shrink: 0; }
+  .margen-cells { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
+  .margen-cell { display: flex; flex-direction: column; gap: 1px; }
+  .margen-cell .ml { font-size: 9px; text-transform: uppercase; letter-spacing: 0.3px; color: var(--text-hint); }
+  .margen-cell .mv { font-size: 13px; font-weight: 600; color: var(--text); }
+  .margen-cell.sim .mv { color: var(--accent); }
+  .margen-cell.loss .mv { color: var(--danger); }
+  .margen-nodata { font-size: 12px; color: var(--text-muted); font-style: italic; }
+  @media (max-width: 700px) { .margen-cells { grid-template-columns: repeat(4, 1fr); row-gap: 10px; } }
 </style>
 </head>
 <body>
@@ -254,6 +272,7 @@
     <button class="tab-btn" onclick="setTab('categories')">Categorías</button>
     <button class="tab-btn" id="tab-btn-prices" onclick="setTab('prices')">Precios</button>
     <button class="tab-btn" id="tab-btn-recargos" onclick="setTab('recargos')" style="display:none">Recargos</button>
+    <button class="tab-btn" onclick="setTab('margenes')">Márgenes</button>
     <button class="tab-btn" onclick="setTab('banners')">Banners</button>
     <button class="tab-btn" onclick="setTab('cupones')">Cupones</button>
     <button class="tab-btn" onclick="setTab('settings')">Configuración</button>
@@ -308,6 +327,21 @@
       <p class="section-note">Creá cupones de descuento que los clientes aplican en el carrito. Tipos: <strong>%</strong>, <strong>monto fijo</strong> o <strong>envío gratis</strong> (este último se marca en el pedido como "envío bonificado" para coordinarlo, no descuenta un monto). El descuento entra automáticamente a Gestión Nube. Acordate de tocar "Guardar cambios".</p>
       <button class="btn-save" onclick="addCupon()" style="margin-bottom:14px">+ Agregar cupón</button>
       <div id="cupones-admin-list"><div class="loading-state">Sin cupones cargados</div></div>
+    </div>
+
+    <div id="tab-margenes" style="display:none">
+      <p class="section-note">Análisis de margen de cada producto (<strong>solo lo ves vos</strong>, el cliente no). Probá un descuento y mirá cómo queda la ganancia y el margen, para decidir cuánto podés bajar sin perder plata. El margen es sobre el precio de venta.</p>
+      <div class="admin-toolbar">
+        <input class="admin-search" type="text" id="margenes-search" placeholder="Buscar producto..." oninput="renderMargenes()" />
+        <select class="admin-select" id="margenes-cat-filter" onchange="renderMargenes()"><option value="">Todas las categorías</option></select>
+        <div class="margen-sim">
+          <label>Simular descuento</label>
+          <input type="number" id="margenes-desc" min="0" max="100" step="1" value="20" oninput="renderMargenes()" />
+          <span>%</span>
+        </div>
+      </div>
+      <div id="margenes-resumen"></div>
+      <div id="margenes-list"><div class="loading-state">Cargando productos...</div></div>
     </div>
 
     <div id="tab-recargos" style="display:none">
@@ -997,6 +1031,7 @@ function setTab(tab) {
   $('tab-recargos').style.display = tab === 'recargos' ? 'block' : 'none';
   $('tab-banners').style.display = tab === 'banners' ? 'block' : 'none';
   $('tab-cupones').style.display = tab === 'cupones' ? 'block' : 'none';
+  $('tab-margenes').style.display = tab === 'margenes' ? 'block' : 'none';
   $('tab-settings').style.display = tab === 'settings' ? 'block' : 'none';
   document.querySelectorAll('.tab-btn').forEach(btn => {
     const onclickStr = btn.getAttribute('onclick') || '';
@@ -1014,6 +1049,7 @@ function setTab(tab) {
   }
   if (tab === 'banners') renderBannersAdmin();
   if (tab === 'cupones') renderCupones();
+  if (tab === 'margenes') { populateMargenCatFilter(); renderMargenes(); }
 }
 
 function renderBannersAdmin() {
@@ -1315,6 +1351,92 @@ function populatePriceCatFilter() {
     opt.value = c; opt.textContent = c;
     sel.appendChild(opt);
   });
+}
+
+// ===== Márgenes (herramienta interna: ver margen y simular descuento) =====
+function populateMargenCatFilter() {
+  const sel = $('margenes-cat-filter');
+  if (!sel || sel.options.length > 1) return;
+  const cats = [...new Set(allAdminProducts.map(p => p.category || '').filter(Boolean))].sort();
+  cats.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c; opt.textContent = c;
+    sel.appendChild(opt);
+  });
+}
+
+function renderMargenes() {
+  const container = $('margenes-list');
+  if (!container) return;
+  const q = ($('margenes-search')?.value || '').toLowerCase();
+  const cat = $('margenes-cat-filter')?.value || '';
+  let desc = parseFloat($('margenes-desc')?.value);
+  if (isNaN(desc)) desc = 0;
+  desc = Math.min(100, Math.max(0, desc));
+  const factor = 1 - desc / 100;
+
+  const prods = allAdminProducts.filter(p => {
+    const name = (p.name || p.nombre || '').toLowerCase();
+    const code = (p.code || p.sku || '').toLowerCase();
+    const pcat = p.category || '';
+    return (!q || name.includes(q) || code.includes(q)) && (!cat || pcat === cat);
+  });
+
+  // Resumen
+  let nConDato = 0, sumMg = 0, sumMgD = 0, enPerdida = 0;
+  prods.forEach(p => {
+    const costo = parseFloat(p.unit_cost || 0);
+    const precio = precioBaseAdmin(p);
+    if (costo > 0 && precio > 0) {
+      nConDato++;
+      sumMg += (precio - costo) / precio * 100;
+      const precioD = Math.round(precio * factor);
+      sumMgD += precioD > 0 ? (precioD - costo) / precioD * 100 : 0;
+      if (precioD - costo < 0) enPerdida++;
+    }
+  });
+  const resumen = $('margenes-resumen');
+  if (resumen) {
+    resumen.innerHTML = nConDato === 0
+      ? '<div class="margen-resumen">No hay productos con costo cargado para analizar.</div>'
+      : '<div class="margen-resumen">' +
+          '<span><b>' + nConDato + '</b> productos</span>' +
+          '<span>Margen promedio: <b>' + (sumMg / nConDato).toFixed(0) + '%</b></span>' +
+          '<span>Con -' + desc + '%: <b>' + (sumMgD / nConDato).toFixed(0) + '%</b></span>' +
+          (enPerdida > 0 ? '<span class="alerta">⚠ ' + enPerdida + ' quedarían en pérdida</span>' : '') +
+        '</div>';
+  }
+
+  if (!prods.length) { container.innerHTML = '<div class="loading-state">Sin resultados</div>'; return; }
+
+  const cell = (label, val, cls) => '<div class="margen-cell' + (cls ? ' ' + cls : '') + '"><span class="ml">' + label + '</span><span class="mv">' + val + '</span></div>';
+
+  container.innerHTML = prods.map(p => {
+    const name = (p.name || p.nombre || 'Sin nombre').replace(/</g, '&lt;');
+    const costo = parseFloat(p.unit_cost || 0);
+    const precio = precioBaseAdmin(p);
+    const head = '<div class="margen-prod"><strong>' + name + '</strong>' + (p.category ? '<span class="margen-cat">' + p.category + '</span>' : '') + '</div>';
+    if (!(costo > 0) || !(precio > 0)) {
+      return '<div class="margen-row sincosto">' + head + '<div class="margen-nodata">Sin costo o precio cargado</div></div>';
+    }
+    const gan = precio - costo;
+    const mg = gan / precio * 100;
+    const precioD = Math.round(precio * factor);
+    const ganD = precioD - costo;
+    const mgD = precioD > 0 ? ganD / precioD * 100 : 0;
+    const lossCls = ganD < 0 ? 'loss' : 'sim';
+    return '<div class="margen-row' + (ganD < 0 ? ' es-perdida' : '') + '">' + head +
+      '<div class="margen-cells">' +
+        cell('Costo', fmtAR(costo)) +
+        cell('Precio', fmtAR(precio)) +
+        cell('Ganancia', fmtAR(gan)) +
+        cell('Margen', mg.toFixed(0) + '%') +
+        cell('Precio -' + desc + '%', fmtAR(precioD), 'sim') +
+        cell('Ganancia', (ganD < 0 ? '-' : '') + fmtAR(Math.abs(ganD)), lossCls) +
+        cell('Margen', mgD.toFixed(0) + '%', lossCls) +
+      '</div>' +
+    '</div>';
+  }).join('');
 }
 
 function getVisibilityStatus(p) {
