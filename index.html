@@ -40,7 +40,7 @@
   .cart-btn:hover { opacity: 0.9; }
   .cart-badge { background: white; color: var(--accent); font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 20px; min-width: 20px; text-align: center; }
   /* Barra flotante de resumen */
-  .summary-bar { position: fixed; bottom: 0; left: 0; right: 0; background: var(--accent); color: white; display: none; align-items: center; justify-content: space-between; padding: 14px 20px; z-index: 90; box-shadow: 0 -2px 12px rgba(0,0,0,0.18); }
+  .summary-bar { position: fixed; bottom: 0; left: 232px; right: 0; background: var(--accent); color: white; display: none; align-items: center; justify-content: space-between; padding: 14px 20px; z-index: 90; box-shadow: 0 -2px 12px rgba(0,0,0,0.18); }
   .summary-bar.visible { display: flex; }
   .summary-bar-left { display: flex; flex-direction: column; gap: 2px; }
   .summary-bar-units { font-size: 12px; opacity: 0.75; }
@@ -310,6 +310,7 @@
 
   @media (max-width: 700px) {
     .sidebar { display: none; }
+    .summary-bar { left: 0; }
     .menu-btn { display: flex; align-items: center; }
     .cat-sidebar { position: fixed; top: 0; left: -300px; width: 270px; height: 100vh; height: 100dvh; padding-top: 1rem; transition: left 0.25s ease; }
     .cat-sidebar.open { left: 0; }
