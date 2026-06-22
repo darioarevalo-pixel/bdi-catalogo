@@ -563,6 +563,7 @@ const ALL_KEY = '__todas__';
 let config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, recargos: {}, variantPrices: {}, banners: [], shownProducts: [], shownProductsInit: false, newProducts: [], cupones: [], ofertaMargen: 0 };
 let isDistribuidor = false; // se detecta al cargar productos (si vienen con unit_cost)
 let tnImageMap = {}; // imágenes de TiendaNube (para mostrar la foto en el listado del admin)
+let tnImageMapKeys = []; // claves del mapa, cacheadas (evita recalcularlas en cada cruce)
 let adminPassword = '';
 
 function $(id) { return document.getElementById(id); }
@@ -841,7 +842,7 @@ function tnLookupAdmin(p) {
     if (tnImageMap[nombre]) return tnImageMap[nombre];
     const gnWords = nombre.split(/\s+/);
     let best = null, bestLen = 0;
-    for (const tn of Object.keys(tnImageMap)) {
+    for (const tn of tnImageMapKeys) {
       const tw = tn.split(/\s+/);
       if (tw.every(w => gnWords.includes(w)) && tw.length > bestLen) { best = tn; bestLen = tw.length; }
     }
@@ -858,10 +859,13 @@ async function cargarImagenesTN() {
     const r = await fetch('/api/tiendanube');
     if (!r.ok) return;
     tnImageMap = await r.json();
+    tnImageMapKeys = Object.keys(tnImageMap);
     // Precalcular la imagen de cada producto (una sola vez) para que el listado
     // no recalcule el cruce en cada tecla del buscador.
     allAdminProducts.forEach(p => { p._img = getImagenAdmin(p); });
-    if (allAdminProducts.length) renderProductList();
+    // Re-renderizar SOLO la pestaña que se está viendo (antes rearmaba las 234
+    // filas de "Productos" aunque estuviera oculta, re-trabando el navegador).
+    if ($('tab-products') && $('tab-products').style.display !== 'none') renderProductList();
     if ($('tab-margenes') && $('tab-margenes').style.display !== 'none') renderMargenes();
     if ($('tab-pendientes') && $('tab-pendientes').style.display !== 'none') renderPendientes();
   } catch (e) { /* sin imágenes: el listado sigue funcionando igual */ }
