@@ -215,7 +215,9 @@
   .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 200; }
   .overlay.open { display: block; }
   /* Barra lateral de categorías */
-  .menu-btn { display: none; background: none; border: none; cursor: pointer; font-size: 22px; line-height: 1; color: var(--text); padding: 6px 8px; }
+  .menu-btn { display: flex; background: none; border: none; cursor: pointer; font-size: 22px; line-height: 1; color: var(--text); padding: 6px 8px; }
+  body.cat-collapsed .cat-sidebar { display: none; }
+  body.cat-collapsed .summary-bar { left: 0; }
   .cat-sidebar { width: 232px; flex-shrink: 0; background: #111827; border-right: 1px solid #1F2937; padding: 1rem 0.6rem; position: sticky; top: 68px; height: calc(100vh - 68px); overflow-y: auto; z-index: 201; }
   .cat-nav-head { display: flex; align-items: center; justify-content: space-between; padding: 0 8px 10px; font-size: 12px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: #9CA3AF; }
   .cat-nav-close { display: none; background: none; border: none; font-size: 24px; line-height: 1; color: #9CA3AF; cursor: pointer; }
@@ -354,7 +356,7 @@
 
 <header class="site-header">
   <div style="display:flex;justify-content:flex-start">
-    <button class="menu-btn" onclick="abrirCatNav()" aria-label="Categorías">☰</button>
+    <button class="menu-btn" onclick="toggleCatNav()" aria-label="Categorías" title="Mostrar/ocultar categorías">☰</button>
   </div>
   <div class="logo">
     <img src="/logo.png" alt="BDI Accesorios" style="height:52px;width:auto;display:block;">
@@ -930,6 +932,8 @@ async function cargarImagenesTN() {
 }
 
 async function conectar() {
+  // Aplicar preferencia de barra lateral colapsada (compu).
+  try { if (localStorage.getItem('catColapsada') === '1') document.body.classList.add('cat-collapsed'); } catch (e) {}
   // El catálogo de distribuidores todavía no tiene su FAQ propia definida:
   // ocultamos el botón solo en ese deploy (se detecta por el dominio).
   if (/distribuidor/i.test(location.hostname)) {
@@ -1004,6 +1008,17 @@ function abrirCatNav() {
 function cerrarCatNav() {
   $('overlay').classList.remove('open');
   $('cat-sidebar').classList.remove('open');
+}
+
+// Botón ☰: en celular abre/cierra el panel deslizable; en compu colapsa/expande
+// la barra lateral fija (y recuerda la preferencia).
+function toggleCatNav() {
+  if (window.matchMedia('(max-width: 700px)').matches) {
+    if ($('cat-sidebar').classList.contains('open')) cerrarCatNav(); else abrirCatNav();
+  } else {
+    const colapsada = document.body.classList.toggle('cat-collapsed');
+    try { localStorage.setItem('catColapsada', colapsada ? '1' : '0'); } catch (e) {}
+  }
 }
 
 async function cargarProductos() {
