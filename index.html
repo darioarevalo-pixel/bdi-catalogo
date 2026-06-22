@@ -126,10 +126,12 @@
   .product-discount-badge { font-size: 11px; font-weight: 700; color: var(--danger); background: rgba(220, 38, 38, 0.1); padding: 2px 6px; border-radius: 4px; }
   .product-img-badge { position: absolute; top: 8px; left: 8px; background: var(--danger); color: white; font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 4px; z-index: 2; box-shadow: 0 2px 8px rgba(220, 38, 38, 0.35); letter-spacing: 0.3px; }
   .product-img-badge.nuevo { left: auto; right: 8px; background: #16A34A; box-shadow: 0 2px 8px rgba(22, 163, 74, 0.35); }
+  .product-img-badge.oferta { background: #EA580C; box-shadow: 0 2px 8px rgba(234, 88, 12, 0.35); }
   .product-imgs-badge { position: absolute; bottom: 8px; right: 8px; display: flex; align-items: center; gap: 4px; background: rgba(17,24,39,0.82); color: white; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 20px; z-index: 2; letter-spacing: 0.2px; pointer-events: none; }
   .modal-price-old { font-size: 14px; color: var(--text-muted); text-decoration: line-through; font-weight: 500; margin-right: 8px; }
   .modal-price-current { font-size: 24px; font-weight: 700; color: var(--accent); }
   .modal-discount-badge { font-size: 12px; font-weight: 700; color: var(--danger); background: rgba(220, 38, 38, 0.1); padding: 3px 8px; border-radius: 4px; margin-left: 8px; vertical-align: middle; }
+  .modal-discount-badge.oferta { color: #EA580C; background: rgba(234, 88, 12, 0.12); }
   .product-card-footer { padding: 0 12px 12px; flex-shrink: 0; }
   .btn-ver { width: 100%; padding: 7px; border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; border: 1.5px solid var(--accent); background: var(--accent); color: white; transition: opacity 0.15s; }
   .btn-ver:hover { opacity: 0.85; }
@@ -623,7 +625,7 @@ let filtro = 'todos';
 let categoria = 'todas';
 let viewMode = 'variants';
 let references = null;
-let adminConfig = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, recargos: {}, variantPrices: {}, shownProducts: [], shownProductsInit: false, newProducts: [], cupones: [] };
+let adminConfig = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, recargos: {}, variantPrices: {}, shownProducts: [], shownProductsInit: false, newProducts: [], cupones: [], ofertaMargen: 0 };
 let cuponAplicado = null; // cupón aplicado en el carrito (objeto) o null
 
 // Re-valida un cupón YA aplicado (objeto guardado) contra el subtotal actual.
@@ -678,7 +680,7 @@ function quitarCupon() {
   updateCartUI();
 }
 
-function renderCuponUI(descuento) {
+function renderCuponUI(descuento, hayOferta) {
   const box = $('cupon-aplicado');
   const inputRow = $('cupon-input-row');
   if (!box) return;
@@ -688,8 +690,9 @@ function renderCuponUI(descuento) {
     if (c.tipo === 'envio') txt = '🚚 Envío bonificado';
     else if (c.tipo === 'porcentaje') txt = (parseFloat(c.valor) || 0) + '% de descuento';
     else txt = formatPrecio(descuento) + ' de descuento';
+    const notaOferta = (hayOferta && c.tipo !== 'envio') ? '<div class="cupon-detalle">El descuento no se aplica a los productos en OFERTA.</div>' : '';
     box.innerHTML = '<div class="cupon-aplicado-info"><strong>Cupón ' + (c.codigo || '') + '</strong> — ' + txt +
-      (c.detalle ? '<div class="cupon-detalle">' + c.detalle + '</div>' : '') + '</div>' +
+      (c.detalle ? '<div class="cupon-detalle">' + c.detalle + '</div>' : '') + notaOferta + '</div>' +
       '<button type="button" class="cupon-quitar" onclick="quitarCupon()">Quitar</button>';
     box.style.display = 'flex';
     if (inputRow) inputRow.style.display = 'none';
@@ -1237,6 +1240,22 @@ function getPrecioAnterior(p) {
   return ref > 0 ? ref : 0;
 }
 
+// "Oferta" automática por margen: si el margen del producto es menor al umbral
+// (adminConfig.ofertaMargen, en %), se considera oferta → muestra etiqueta OFERTA
+// y NO recibe el descuento de los cupones. Umbral 0 = función desactivada.
+function esOferta(p) {
+  const umbral = parseFloat(adminConfig.ofertaMargen) || 0;
+  if (umbral <= 0) return false;
+  const costo = parseFloat(p.unit_cost || 0);
+  const precio = getPrecio(p);
+  if (costo <= 0 || precio <= 0) return false;
+  return ((precio - costo) / precio * 100) < umbral;
+}
+function cartItemOferta(i) {
+  const p = allProducts.find(x => (x.id || x.product_id) == i.id);
+  return p ? esOferta(p) : false;
+}
+
 function getDescuentoPct(precioActual, precioAnterior) {
   if (!precioAnterior || precioAnterior <= precioActual) return 0;
   return Math.round((1 - precioActual / precioAnterior) * 100);
@@ -1334,7 +1353,7 @@ function renderProductos() {
 
     return '<div class="product-card" onclick="abrirModal(' + id + ')" style="cursor:pointer">' +
       '<div class="product-img-wrap">' +
-        (pctDisc > 0 ? '<div class="product-img-badge">-' + pctDisc + '%</div>' : '') +
+        (esOferta(p) ? '<div class="product-img-badge oferta">OFERTA</div>' : pctDisc > 0 ? '<div class="product-img-badge">-' + pctDisc + '%</div>' : '') +
         nuevoBadge(id) +
         (img ? '<img src="' + img + '" alt="' + nombre + '" loading="lazy" onerror="this.parentNode.innerHTML=\'<div class=\\\'no-img\\\'>Sin imagen</div>\'">' : '<div class="no-img">Sin imagen</div>') +
         imgsBadge(imgs) +
@@ -1486,7 +1505,7 @@ function renderVariantesGrid(prods) {
     cards.push(
       '<div class="product-card" style="cursor:default">' +
         '<div class="product-img-wrap" style="cursor:pointer" onclick="abrirDesdeCard(' + id + ')">' +
-          (pctDisc > 0 ? '<div class="product-img-badge">-' + pctDisc + '%</div>' : '') +
+          (esOferta(p) ? '<div class="product-img-badge oferta">OFERTA</div>' : pctDisc > 0 ? '<div class="product-img-badge">-' + pctDisc + '%</div>' : '') +
           nuevoBadge(id) +
           (img ? '<img src="' + img + '" alt="' + nombre + '" loading="lazy" onerror="this.parentNode.innerHTML=\'<div class=\\\'no-img\\\'>Sin imagen</div>\'">' : '<div class="no-img">Sin imagen</div>') +
           imgsBadge(imgs) +
@@ -1643,6 +1662,7 @@ function abrirModal(id) {
   } else {
     $('modal-price').textContent = formatPrecio(precio);
   }
+  if (esOferta(p)) $('modal-price').insertAdjacentHTML('beforeend', ' <span class="modal-discount-badge oferta">OFERTA</span>');
   $('modal-price').style.display = 'block';
 
   // Descripción
@@ -1787,14 +1807,17 @@ function updateCartUI() {
   const subtotal = items.reduce((s,i) => s + i.precio * i.qty, 0);
   $('cart-badge').textContent = totalUnits;
 
-  // Cupón: re-validar contra el subtotal actual y calcular descuento.
+  // Subtotal "descontable": excluye los productos en oferta (no reciben descuento).
+  const subtotalDesc = items.reduce((s,i) => s + (cartItemOferta(i) ? 0 : i.precio * i.qty), 0);
+  const hayOferta = items.some(cartItemOferta);
+  // Cupón: re-validar (la compra mínima se mide sobre el subtotal total).
   let descuento = 0, total = subtotal;
   if (cuponAplicado) {
     const res = cuponSigueValido(cuponAplicado, subtotal);
     if (res.error) { cuponAplicado = null; }
-    else { descuento = descuentoCupon(cuponAplicado, subtotal); total = Math.max(0, subtotal - descuento); }
+    else { descuento = descuentoCupon(cuponAplicado, subtotalDesc); total = Math.max(0, subtotal - descuento); }
   }
-  renderCuponUI(descuento);
+  renderCuponUI(descuento, hayOferta);
   if ($('subtotal-row')) $('subtotal-row').style.display = descuento > 0 ? 'flex' : 'none';
   if ($('descuento-row')) $('descuento-row').style.display = descuento > 0 ? 'flex' : 'none';
   if ($('subtotal-amount')) $('subtotal-amount').textContent = formatPrecio(subtotal);
@@ -2012,16 +2035,18 @@ async function confirmarPedido() {
     const currencyId = (monedas.find(m => m.label === 'ARS') || monedas.find(m => m.name === 'Pesos') || monedas[monedas.length - 1])?.id || 1;
     const storeId = references?.configuracion?.default_store_id || 13307;
 
-    // Cupón: re-validar contra el subtotal final y calcular el descuento.
+    // Cupón: re-validar y calcular el descuento SOLO sobre los productos
+    // descontables (los que están en OFERTA quedan afuera).
     const subtotal = items.reduce((s, i) => s + i.precio * i.qty, 0);
+    const subtotalDesc = items.reduce((s, i) => s + (cartItemOferta(i) ? 0 : i.precio * i.qty), 0);
     let cupon = null, descuento = 0;
     if (cuponAplicado && cuponSigueValido(cuponAplicado, subtotal).ok) {
-      cupon = cuponAplicado; descuento = descuentoCupon(cupon, subtotal);
+      cupon = cuponAplicado; descuento = descuentoCupon(cupon, subtotalDesc);
     }
     const totalFinal = Math.max(0, subtotal - descuento);
-    // Aplicamos el descuento bajando proporcionalmente el precio de cada ítem,
-    // así la venta entra a GN ya con el total final (envío gratis no cambia precios).
-    const factorCupon = (subtotal > 0 && descuento > 0) ? totalFinal / subtotal : 1;
+    // Bajamos proporcionalmente el precio de cada ítem descontable; las ofertas
+    // quedan con su precio original (envío gratis no cambia precios).
+    const factorCupon = (subtotalDesc > 0 && descuento > 0) ? (subtotalDesc - descuento) / subtotalDesc : 1;
     const cuponNota = cupon
       ? (cupon.tipo === 'envio'
           ? 'ENVÍO BONIFICADO (' + cupon.codigo + (cupon.detalle ? ' - ' + cupon.detalle : '') + ')'
@@ -2037,7 +2062,7 @@ async function confirmarPedido() {
       sale_state_id: 1,
       discount_inventory: true,
       comments: [clientName, contact, 'Pago: ' + payment, 'Entrega: ' + delivery, cuponNota, obs].filter(Boolean).join(' — '),
-      items: items.map(i => ({ product_id: i.id, ...(i.sizeId ? { size_id: i.sizeId } : {}), quantity: i.qty, unit_price: Math.round(i.precio * factorCupon * 100) / 100 }))
+      items: items.map(i => ({ product_id: i.id, ...(i.sizeId ? { size_id: i.sizeId } : {}), quantity: i.qty, unit_price: cartItemOferta(i) ? i.precio : Math.round(i.precio * factorCupon * 100) / 100 }))
     };
 
     const data = await fetchProxy('/ventas', { method: 'POST', body });

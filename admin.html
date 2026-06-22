@@ -255,6 +255,11 @@
   .pend-ref-val { font-size: 13px; font-weight: 600; color: var(--text-muted); }
   .pend-badge { font-size: 11px; font-weight: 600; color: var(--danger); white-space: nowrap; flex-shrink: 0; }
   @media (max-width: 700px) { .pend-row { flex-wrap: wrap; } .pend-badge { flex-basis: 100%; } }
+  .oferta-setting { background: #fff7ed; border: 1px solid #fed7aa; border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 14px; }
+  .oferta-setting-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text); }
+  .oferta-setting-row input { width: 70px; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; text-align: right; outline: none; }
+  .oferta-setting-hint { font-size: 12px; color: var(--text-muted); margin-top: 6px; line-height: 1.45; }
+  .margen-oferta-badge { font-size: 9px; font-weight: 700; color: #fff; background: #EA580C; padding: 1px 6px; border-radius: 3px; letter-spacing: 0.3px; margin-left: 6px; }
 </style>
 </head>
 <body>
@@ -339,6 +344,14 @@
 
     <div id="tab-cupones" style="display:none">
       <p class="section-note">Creá cupones de descuento que los clientes aplican en el carrito. Tipos: <strong>%</strong>, <strong>monto fijo</strong> o <strong>envío gratis</strong> (este último se marca en el pedido como "envío bonificado" para coordinarlo, no descuenta un monto). El descuento entra automáticamente a Gestión Nube. Acordate de tocar "Guardar cambios".</p>
+      <div class="oferta-setting">
+        <div class="oferta-setting-row">
+          <strong>Margen mínimo para descuentos:</strong>
+          <input type="number" id="oferta-margen-input" min="0" max="100" step="1" placeholder="0" oninput="updateOfertaMargen(this.value)" />
+          <span>%</span>
+        </div>
+        <div class="oferta-setting-hint">Los productos con margen menor a este % se marcan <strong>OFERTA</strong> en el catálogo y <strong>los cupones NO los descuentan</strong> (así no perdés con los que están al costo). Poné <strong>0</strong> para desactivar.</div>
+      </div>
       <button class="btn-save" onclick="addCupon()" style="margin-bottom:14px">+ Agregar cupón</button>
       <div id="cupones-admin-list"><div class="loading-state">Sin cupones cargados</div></div>
     </div>
@@ -428,7 +441,7 @@
 <script>
 let allAdminProducts = [];
 const ALL_KEY = '__todas__';
-let config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, recargos: {}, variantPrices: {}, banners: [], shownProducts: [], shownProductsInit: false, newProducts: [], cupones: [] };
+let config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, recargos: {}, variantPrices: {}, banners: [], shownProducts: [], shownProductsInit: false, newProducts: [], cupones: [], ofertaMargen: 0 };
 let isDistribuidor = false; // se detecta al cargar productos (si vienen con unit_cost)
 let tnImageMap = {}; // imágenes de TiendaNube (para mostrar la foto en el listado del admin)
 let adminPassword = '';
@@ -462,7 +475,7 @@ async function login() {
       return;
     }
     const loaded = await r.json();
-    config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, recargos: {}, variantPrices: {}, banners: [], shownProducts: [], shownProductsInit: false, newProducts: [], cupones: [], ...loaded };
+    config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, recargos: {}, variantPrices: {}, banners: [], shownProducts: [], shownProductsInit: false, newProducts: [], cupones: [], ofertaMargen: 0, ...loaded };
     if (!config.referencePrices) config.referencePrices = {};
     if (!config.recargos) config.recargos = {};
     if (!config.variantPrices) config.variantPrices = {};
@@ -1174,7 +1187,14 @@ function moveBanner(id, delta) {
 }
 
 // ===== Cupones =====
+function updateOfertaMargen(v) {
+  const n = parseFloat(v);
+  config.ofertaMargen = (!v || isNaN(n) || n < 0) ? 0 : Math.min(100, n);
+}
+
 function renderCupones() {
+  const oi = $('oferta-margen-input');
+  if (oi) oi.value = (config.ofertaMargen ? config.ofertaMargen : '');
   const container = $('cupones-admin-list');
   if (!container) return;
   const cupones = config.cupones || [];
@@ -1467,7 +1487,10 @@ function renderMargenes() {
     const thumb = img
       ? '<img class="margen-thumb" src="' + img + '" alt="" loading="lazy" onerror="this.style.visibility=\'hidden\'">'
       : '<div class="margen-thumb"></div>';
-    const head = '<div class="margen-prod"><div class="margen-prod-left">' + thumb + '<strong>' + name + '</strong></div>' + (p.category ? '<span class="margen-cat">' + p.category + '</span>' : '') + '</div>';
+    const umbralOf = parseFloat(config.ofertaMargen) || 0;
+    const esOf = umbralOf > 0 && costo > 0 && precio > 0 && ((precio - costo) / precio * 100) < umbralOf;
+    const ofBadge = esOf ? '<span class="margen-oferta-badge">OFERTA</span>' : '';
+    const head = '<div class="margen-prod"><div class="margen-prod-left">' + thumb + '<strong>' + name + '</strong>' + ofBadge + '</div>' + (p.category ? '<span class="margen-cat">' + p.category + '</span>' : '') + '</div>';
     if (!(costo > 0) || !(precio > 0)) {
       return '<div class="margen-row sincosto">' + head + '<div class="margen-nodata">Sin costo o precio cargado</div></div>';
     }
