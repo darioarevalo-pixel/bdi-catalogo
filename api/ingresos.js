@@ -82,6 +82,22 @@ module.exports = async (req, res) => {
       return res.status(405).json({ error: 'método no permitido' });
     }
 
+    // --- Banco de mensajes del CRM (array de grupos {grupo, mensajes:[...]}) ---
+    if (req.query?.kind === 'mensajes') {
+      const msgKey = `mensajes:${store === 'zattia' ? 'zattia' : 'bdi'}`;
+      if (req.method === 'GET') {
+        const raw = await kvCmd(['GET', msgKey]);
+        return res.status(200).json({ ok: true, bank: raw ? JSON.parse(raw) : null });
+      }
+      if (req.method === 'POST') {
+        const { bank } = req.body || {};
+        if (!Array.isArray(bank)) return res.status(400).json({ error: 'bank inválido' });
+        await kvCmd(['SET', msgKey, JSON.stringify(bank)]);
+        return res.status(200).json({ ok: true, total: bank.length });
+      }
+      return res.status(405).json({ error: 'método no permitido' });
+    }
+
     // --- Tablas de talles vinculadas a productos (map id_producto_TN -> {tipo, talles, gtData, diagramaUrl, html}) ---
     if (req.query?.kind === 'talles') {
       const tallesKey = `talles:${store === 'zattia' ? 'zattia' : 'bdi'}`;
