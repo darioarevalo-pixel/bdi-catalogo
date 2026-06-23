@@ -24,6 +24,8 @@
   .login-box input:focus { border-color: var(--accent); }
   .login-box button { width: 100%; padding: 10px; background: var(--accent); color: white; border: none; border-radius: var(--radius-sm); font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
   .login-err { font-size: 12px; color: var(--danger); margin-top: 8px; display: none; }
+  .login-remember { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-muted); margin: 2px 0 12px; cursor: pointer; user-select: none; }
+  .login-remember input { width: auto; margin: 0; cursor: pointer; }
 
   /* Header */
   .admin-header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 1.5rem; height: 56px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
@@ -32,6 +34,8 @@
   .btn-save { padding: 8px 18px; background: var(--accent); color: white; border: none; border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: background 0.2s; }
   .btn-save:disabled { opacity: 0.5; cursor: default; }
   .btn-save.saved { background: var(--success); }
+  .btn-logout { padding: 8px 14px; background: transparent; color: var(--text-muted); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }
+  .btn-logout:hover { color: var(--text); border-color: var(--text-muted); }
 
   /* Tabs */
   .tabs { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 1.5rem; display: flex; }
@@ -338,6 +342,7 @@
     <div class="login-title">BDI Accesorios</div>
     <div class="login-sub">Panel de administración del catálogo</div>
     <input type="password" id="pwd-input" placeholder="Contraseña" />
+    <label class="login-remember"><input type="checkbox" id="remember-login" checked /> Recordar en este dispositivo</label>
     <button id="login-btn" onclick="login()">Ingresar</button>
     <div class="login-err" id="login-err">Contraseña incorrecta</div>
   </div>
@@ -350,7 +355,10 @@
       <div class="header-title">BDI Accesorios</div>
       <div class="header-sub">Administrador de catálogo</div>
     </div>
-    <button class="btn-save" id="btn-save" onclick="guardarConfig()">Guardar cambios</button>
+    <div style="display:flex; align-items:center; gap:10px">
+      <button class="btn-logout" onclick="cerrarSesion()">Cerrar sesión</button>
+      <button class="btn-save" id="btn-save" onclick="guardarConfig()">Guardar cambios</button>
+    </div>
   </div>
 
   <div class="tabs">
@@ -606,6 +614,27 @@ function showToast(msg, type = '', dur = 2800) {
 
 $('pwd-input').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
 
+const REMEMBER_KEY = 'bdi_admin_pwd';
+
+// Verifica la contraseña contra el servidor y, si es correcta, entra al panel.
+// Devuelve true/false (no muestra errores de UI: eso lo maneja quien la llama).
+async function verificarYEntrar(pwd) {
+  const r = await fetch('/api/config?verify=1', { headers: { 'x-admin-password': pwd } });
+  if (r.status === 401) return false;
+  const loaded = await r.json();
+  config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, recargos: {}, variantPrices: {}, banners: [], shownProducts: [], shownProductsInit: false, newProducts: [], cupones: [], ofertaMargen: 0, ...loaded };
+  if (!config.referencePrices) config.referencePrices = {};
+  if (!config.recargos) config.recargos = {};
+  if (!config.variantPrices) config.variantPrices = {};
+  if (!Array.isArray(config.banners)) config.banners = [];
+  if (!Array.isArray(config.cupones)) config.cupones = [];
+  adminPassword = pwd;
+  $('login-screen').style.display = 'none';
+  $('admin-panel').style.display = 'block';
+  await cargarProductos();
+  return true;
+}
+
 async function login() {
   const pwd = $('pwd-input').value.trim();
   if (!pwd) return;
@@ -614,32 +643,44 @@ async function login() {
   btn.textContent = 'Verificando...';
   $('login-err').style.display = 'none';
   try {
-    const r = await fetch('/api/config?verify=1', {
-      headers: { 'x-admin-password': pwd }
-    });
-    if (r.status === 401) {
+    const ok = await verificarYEntrar(pwd);
+    if (!ok) {
       $('login-err').style.display = 'block';
       btn.disabled = false;
       btn.textContent = 'Ingresar';
       return;
     }
-    const loaded = await r.json();
-    config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, recargos: {}, variantPrices: {}, banners: [], shownProducts: [], shownProductsInit: false, newProducts: [], cupones: [], ofertaMargen: 0, ...loaded };
-    if (!config.referencePrices) config.referencePrices = {};
-    if (!config.recargos) config.recargos = {};
-    if (!config.variantPrices) config.variantPrices = {};
-    if (!Array.isArray(config.banners)) config.banners = [];
-    if (!Array.isArray(config.cupones)) config.cupones = [];
-    adminPassword = pwd;
-    $('login-screen').style.display = 'none';
-    $('admin-panel').style.display = 'block';
-    await cargarProductos();
+    // Recordar en este dispositivo (si el checkbox está tildado).
+    try {
+      const recordar = $('remember-login') && $('remember-login').checked;
+      if (recordar) localStorage.setItem(REMEMBER_KEY, btoa(unescape(encodeURIComponent(pwd))));
+      else localStorage.removeItem(REMEMBER_KEY);
+    } catch (e) {}
   } catch (e) {
     showToast('Error de conexión', 'error');
     btn.disabled = false;
     btn.textContent = 'Ingresar';
   }
 }
+
+// Al cargar: si hay una contraseña recordada, entra solo.
+async function autoLogin() {
+  let pwd = '';
+  try { const v = localStorage.getItem(REMEMBER_KEY); if (v) pwd = decodeURIComponent(escape(atob(v))); } catch (e) {}
+  if (!pwd) return;
+  try {
+    const ok = await verificarYEntrar(pwd);
+    if (!ok) { try { localStorage.removeItem(REMEMBER_KEY); } catch (e) {} } // contraseña cambió → pedir de nuevo
+  } catch (e) { /* sin conexión: queda la pantalla de login */ }
+}
+
+function cerrarSesion() {
+  try { localStorage.removeItem(REMEMBER_KEY); } catch (e) {}
+  location.reload();
+}
+
+if (document.readyState === 'loading') window.addEventListener('DOMContentLoaded', autoLogin);
+else autoLogin();
 
 async function cargarProductos() {
   const baseQs = 'per_page=100&include_stock=1&include_variants=1';
