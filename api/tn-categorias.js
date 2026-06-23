@@ -22,6 +22,23 @@ const CORS = {
 function tnHeaders(token) {
   return { 'Authentication': `bearer ${token}`, 'User-Agent': 'Monitor Areben (brunoarevalo@arebensrl.com)', 'Content-Type': 'application/json' };
 }
+
+// --- Tabla de talles dentro de la descripción de TN: firma + remoción de la anterior ---
+const MARK_INI = '<!--AREBEN-TALLES-INI-->', MARK_FIN = '<!--AREBEN-TALLES-FIN-->';
+const RE_BLOQUE = /<!--AREBEN-TALLES-INI-->[\s\S]*?<!--AREBEN-TALLES-FIN-->/;
+// Saca un wrapper del generador (div con max-width:680px) contando el balance de <div>.
+function removeOneWrapper(html) {
+  const m = /<div[^>]*max-width:\s*680px[^>]*>/i.exec(html);
+  if (!m) return html;
+  let depth = 1; const re = /<\/?div\b[^>]*>/gi; re.lastIndex = m.index + m[0].length;
+  let mm;
+  while ((mm = re.exec(html))) {
+    if (mm[0].slice(0, 2).toLowerCase() === '</') depth--; else depth++;
+    if (depth === 0) return html.slice(0, m.index) + html.slice(mm.index + mm[0].length);
+  }
+  return html; // sin cierre balanceado → no tocar
+}
+function removeWrappers(html) { let out = html, prev; do { prev = out; out = removeOneWrapper(out); } while (out !== prev); return out; }
 const valEs = v => v?.es || (v && Object.values(v)[0]) || '';
 const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); // p/ matchear modelos
 
@@ -130,8 +147,6 @@ module.exports = async (req, res) => {
 
   // --- Cargar la TABLA DE TALLES en la descripción del producto (sin pisar el resto) ---
   if (req.method === 'POST' && req.body && req.body.accion === 'descripcion-talles') {
-    const MARK_INI = '<!--AREBEN-TALLES-INI-->', MARK_FIN = '<!--AREBEN-TALLES-FIN-->';
-    const RE_BLOQUE = /<!--AREBEN-TALLES-INI-->[\s\S]*?<!--AREBEN-TALLES-FIN-->/;
     const productId = req.body.productId;
     const tablaHtml = req.body.tablaHtml;
     if (!productId) return res.status(400).json({ error: 'Falta productId' });
@@ -142,12 +157,20 @@ module.exports = async (req, res) => {
       const descObj = (g.data && g.data.description && typeof g.data.description === 'object') ? g.data.description : {};
       const lang = descObj.es != null ? 'es' : (Object.keys(descObj)[0] || 'es');
       const actual = typeof descObj[lang] === 'string' ? descObj[lang] : '';
+
       const yaMarcado = tablaHtml.match(RE_BLOQUE);
       const bloque = yaMarcado ? yaMarcado[0] : (MARK_INI + tablaHtml.trim() + MARK_FIN);
-      const nuevo = RE_BLOQUE.test(actual)
-        ? actual.replace(RE_BLOQUE, bloque)
-        : (actual.trim() ? actual.trim() + '\n' + bloque : bloque);
-      const reemplazo = RE_BLOQUE.test(actual);
+
+      // Sacar la tabla anterior: bloque marcado → wrapper(s) del generador (legacy) → o una <table> suelta.
+      let base = actual.replace(RE_BLOQUE, '');
+      const sinWrap = removeWrappers(base);
+      let removioAlgo = RE_BLOQUE.test(actual) || sinWrap !== base;
+      base = sinWrap;
+      if (!removioAlgo && /<table[\s\S]*?<\/table>/i.test(base)) { base = base.replace(/<table[\s\S]*?<\/table>/i, ''); removioAlgo = true; }
+      base = base.trim();
+      const nuevo = base ? base + '\n' + bloque : bloque;
+      const reemplazo = removioAlgo;
+
       const r = await fetch(`https://api.tiendanube.com/v1/${cfg.storeId}/products/${productId}`, {
         method: 'PUT', headers: tnHeaders(cfg.token), body: JSON.stringify({ description: { ...descObj, [lang]: nuevo } }),
       });
