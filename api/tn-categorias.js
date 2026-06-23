@@ -128,6 +128,34 @@ module.exports = async (req, res) => {
   const cfg = STORES[storeKey];
   if (!cfg || !cfg.storeId || !cfg.token) return res.status(500).json({ error: 'TiendaNube no configurado para ' + storeKey });
 
+  // --- Cargar la TABLA DE TALLES en la descripción del producto (sin pisar el resto) ---
+  if (req.method === 'POST' && req.body && req.body.accion === 'descripcion-talles') {
+    const MARK_INI = '<!--AREBEN-TALLES-INI-->', MARK_FIN = '<!--AREBEN-TALLES-FIN-->';
+    const RE_BLOQUE = /<!--AREBEN-TALLES-INI-->[\s\S]*?<!--AREBEN-TALLES-FIN-->/;
+    const productId = req.body.productId;
+    const tablaHtml = req.body.tablaHtml;
+    if (!productId) return res.status(400).json({ error: 'Falta productId' });
+    if (!tablaHtml || typeof tablaHtml !== 'string') return res.status(400).json({ error: 'Falta tablaHtml' });
+    try {
+      const g = await tnGet(cfg.storeId, cfg.token, `products/${productId}?fields=id,description`);
+      if (!g.ok) return res.status(g.status).json({ error: 'No se pudo leer el producto en TN', detalle: JSON.stringify(g.data).slice(0, 200) });
+      const descObj = (g.data && g.data.description && typeof g.data.description === 'object') ? g.data.description : {};
+      const lang = descObj.es != null ? 'es' : (Object.keys(descObj)[0] || 'es');
+      const actual = typeof descObj[lang] === 'string' ? descObj[lang] : '';
+      const yaMarcado = tablaHtml.match(RE_BLOQUE);
+      const bloque = yaMarcado ? yaMarcado[0] : (MARK_INI + tablaHtml.trim() + MARK_FIN);
+      const nuevo = RE_BLOQUE.test(actual)
+        ? actual.replace(RE_BLOQUE, bloque)
+        : (actual.trim() ? actual.trim() + '\n' + bloque : bloque);
+      const reemplazo = RE_BLOQUE.test(actual);
+      const r = await fetch(`https://api.tiendanube.com/v1/${cfg.storeId}/products/${productId}`, {
+        method: 'PUT', headers: tnHeaders(cfg.token), body: JSON.stringify({ description: { ...descObj, [lang]: nuevo } }),
+      });
+      if (!r.ok) { const t = await r.text(); return res.status(r.status).json({ error: 'No se pudo guardar la descripción en TN', detalle: t.slice(0, 200) }); }
+      return res.status(200).json({ ok: true, store: storeKey, productId, accion: reemplazo ? 'reemplazada' : 'agregada' });
+    } catch (e) { return res.status(500).json({ error: e.message }); }
+  }
+
   // --- Variantes con SKU / código de barras / color (para completar datos desde TN) ---
   if (req.query?.accion === 'variantes') {
     try {

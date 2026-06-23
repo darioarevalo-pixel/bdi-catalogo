@@ -82,6 +82,22 @@ module.exports = async (req, res) => {
       return res.status(405).json({ error: 'método no permitido' });
     }
 
+    // --- Tablas de talles vinculadas a productos (map id_producto_TN -> {tipo, talles, gtData, diagramaUrl, html}) ---
+    if (req.query?.kind === 'talles') {
+      const tallesKey = `talles:${store === 'zattia' ? 'zattia' : 'bdi'}`;
+      if (req.method === 'GET') {
+        const raw = await kvCmd(['GET', tallesKey]);
+        return res.status(200).json({ ok: true, map: raw ? JSON.parse(raw) : {} });
+      }
+      if (req.method === 'POST') {
+        const { map } = req.body || {};
+        if (!map || typeof map !== 'object') return res.status(400).json({ error: 'map inválido' });
+        await kvCmd(['SET', tallesKey, JSON.stringify(map)]);
+        return res.status(200).json({ ok: true, total: Object.keys(map).length });
+      }
+      return res.status(405).json({ error: 'método no permitido' });
+    }
+
     if (req.method === 'GET') {
       const raw = await kvCmd(['GET', keyFor(store)]);
       return res.status(200).json({ ok: true, ingresos: raw ? JSON.parse(raw) : [] });
