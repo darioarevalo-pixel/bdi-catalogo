@@ -274,6 +274,7 @@
   .gen-tier-head { background: var(--bg); font-size: 10px; text-transform: uppercase; letter-spacing: 0.3px; color: var(--text-hint); font-weight: 600; }
   .gen-tier { border-top: 1px solid var(--border); }
   .gen-tier input { width: 100%; padding: 7px 9px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; text-align: right; outline: none; }
+  .gen-tier input[readonly] { background: var(--bg); color: var(--text-muted); cursor: default; }
   .gen-precio-wrap { display: flex; align-items: center; gap: 3px; }
   .gen-precio-wrap span { font-size: 13px; color: var(--text-muted); }
   .gen-gan { font-size: 13px; font-weight: 600; color: var(--success); text-align: right; }
@@ -436,7 +437,7 @@
     </div>
 
     <div id="tab-generador" style="display:none">
-      <p class="section-note">Armá una <strong>lista de precios por cantidad</strong> para mandarle a un cliente. Elegís un producto, te traemos el <strong>costo</strong> (solo lo ves vos), generás los precios por escala —a mano o con un <strong>% de markup</strong> sobre el costo— y copiás el texto <strong>sin el costo</strong> para pegarlo en WhatsApp.</p>
+      <p class="section-note">Armá una <strong>lista de precios por cantidad</strong> para mandarle a un cliente. Elegís un producto, te traemos el <strong>costo</strong> (solo lo ves vos), generás los precios por escala —a mano o con un <strong>% de markup</strong> sobre el costo— y copiás el texto <strong>sin el costo</strong> para pegarlo en WhatsApp. La fila <strong>x1</strong> queda fija al <strong>precio mayorista</strong> del producto.</p>
       <label class="gen-prod-label">Producto
         <select id="gen-producto" class="admin-select" onchange="genSeleccionar()" style="width:100%;max-width:480px"><option value="">— Elegí un producto —</option></select>
       </label>
@@ -1810,15 +1811,39 @@ function genSeleccionar() {
   genCosto = parseFloat(p.unit_cost || 0);
   $('gen-costo-val').textContent = genCosto > 0 ? fmtAR(genCosto) : 'sin costo cargado';
   $('gen-detalle').style.display = 'block';
-  [0, 1, 2].forEach(i => genDesdeMarkup(i));
+  // La fila x1 queda SIEMPRE fija al precio mayorista del producto (no editable).
+  // Las escalas 25/50 arrancan en blanco para definir el precio por volumen.
+  genFijarMayorista(p);
+  [1, 2].forEach(i => { $('gen-markup-' + i).value = ''; $('gen-precio-' + i).value = ''; genGanancia(i); });
   genPreview();
 }
+// Fija la primera fila (x1) al precio mayorista del producto y bloquea sus campos.
+function genFijarMayorista(p) {
+  const pm = getCurrentPrice(p);
+  const precioInput = $('gen-precio-0');
+  const markupInput = $('gen-markup-0');
+  if (pm > 0) {
+    precioInput.value = Math.round(pm);
+    precioInput.readOnly = true;
+    markupInput.value = (genCosto > 0) ? Math.round((pm / genCosto - 1) * 100) : '';
+    markupInput.readOnly = true;
+  } else {
+    // Sin precio mayorista cargado: dejá la fila editable como antes.
+    precioInput.value = '';
+    precioInput.readOnly = false;
+    markupInput.value = '';
+    markupInput.readOnly = false;
+  }
+  genGanancia(0);
+}
 function genDesdeMarkup(i) {
+  if ($('gen-markup-' + i).readOnly) return; // x1 fija: no se recalcula
   const m = parseFloat($('gen-markup-' + i).value);
   if (!isNaN(m) && genCosto > 0) $('gen-precio-' + i).value = Math.round(genCosto * (1 + m / 100));
   genGanancia(i); genPreview();
 }
 function genDesdePrecio(i) {
+  if ($('gen-precio-' + i).readOnly) return; // x1 fija: no se recalcula
   const precio = parseFloat($('gen-precio-' + i).value);
   if (!isNaN(precio) && precio > 0 && genCosto > 0) $('gen-markup-' + i).value = Math.round((precio / genCosto - 1) * 100);
   genGanancia(i); genPreview();
