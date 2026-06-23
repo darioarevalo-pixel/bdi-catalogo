@@ -220,6 +220,16 @@
   @media (max-width: 700px) { .banner-card { grid-template-columns: 1fr; } .banner-preview { width: 100%; } .banner-actions { flex-direction: row; flex-wrap: wrap; } }
   .cupon-card { padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: white; margin-bottom: 10px; }
   .cupon-card.inactive { opacity: 0.55; background: #fafafa; }
+  .cupon-card-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .cupon-card-head .cc-cod { font-size: 13px; font-weight: 700; color: var(--text); }
+  .cupon-card-head .cc-cod.vacio { color: var(--text-hint); font-weight: 500; font-style: italic; }
+  .cupon-card-head .cc-chip { font-size: 10px; font-weight: 700; letter-spacing: 0.3px; color: #fff; background: var(--accent); padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
+  .cupon-card-head .cc-min { font-size: 11px; color: var(--text-muted); }
+  .cupon-card-head .cc-estado { font-size: 10px; font-weight: 700; color: var(--danger); text-transform: uppercase; letter-spacing: 0.3px; }
+  .cupon-card-head .cc-edit { margin-left: auto; font-size: 11px; color: var(--text-muted); background: var(--bg); border: 1px solid var(--border-strong); cursor: pointer; padding: 4px 12px; border-radius: 20px; white-space: nowrap; font-family: inherit; }
+  .cupon-card-head .cc-edit:hover { color: var(--text); border-color: var(--text-muted); }
+  .cupon-body { margin-top: 12px; }
+  .cupon-card.collapsed .cupon-body { display: none; }
   .cupon-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .cupon-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--text-muted); }
   .cupon-grid input, .cupon-grid select { padding: 7px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; color: var(--text); outline: none; background: white; }
@@ -230,6 +240,14 @@
   .cupon-card-actions .btn-del { background: transparent; color: var(--danger); border: 1px solid var(--danger); padding: 5px 10px; border-radius: var(--radius-sm); cursor: pointer; font-size: 12px; font-family: inherit; }
   .cupon-card-actions .btn-del:hover { background: var(--danger-light); }
   @media (max-width: 700px) { .cupon-grid { grid-template-columns: 1fr; } }
+  .cupon-share { border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); padding: 14px; margin-bottom: 16px; }
+  .cupon-share-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 2px; }
+  .cupon-share-hint { font-size: 11px; color: var(--text-muted); margin-bottom: 10px; }
+  .cupon-share select { width: 100%; max-width: 340px; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; color: var(--text); background: white; outline: none; }
+  .cupon-share-aviso { font-size: 12px; color: var(--danger); font-weight: 600; margin-top: 10px; }
+  .cupon-share-preview { background: white; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; font-family: inherit; font-size: 13px; color: var(--text); white-space: pre-wrap; margin: 10px 0 0; max-width: 480px; }
+  .cupon-share-actions { display: flex; align-items: center; gap: 12px; margin-top: 10px; flex-wrap: wrap; }
+  .cupon-share-ok { font-size: 13px; color: var(--success); font-weight: 600; }
   .margen-sim { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-muted); white-space: nowrap; }
   .margen-sim input { width: 64px; padding: 7px 9px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; text-align: right; outline: none; }
   .margen-resumen { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; font-size: 13px; color: var(--text-muted); padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 12px; }
@@ -433,6 +451,17 @@
           <span>%</span>
         </div>
         <div class="oferta-setting-hint">Los productos con margen menor a este % se marcan <strong>OFERTA</strong> en el catálogo y <strong>los cupones NO los descuentan</strong> (así no perdés con los que están al costo). Poné <strong>0</strong> para desactivar.</div>
+      </div>
+      <div class="cupon-share">
+        <div class="cupon-share-title">Compartir un cupón con un cliente</div>
+        <div class="cupon-share-hint">Elegí un cupón y copiá el texto listo para mandarle por WhatsApp. Usa el estado actual (no hace falta tocar "Guardar cambios").</div>
+        <select id="cupon-compartir" onchange="renderCuponCompartir()"><option value="">— Elegí un cupón —</option></select>
+        <div id="cupon-compartir-aviso" class="cupon-share-aviso" style="display:none"></div>
+        <pre id="cupon-compartir-preview" class="cupon-share-preview" style="display:none"></pre>
+        <div class="cupon-share-actions" id="cupon-compartir-actions" style="display:none">
+          <button class="btn-save" onclick="copiarCuponCompartir()">📋 Copiar para WhatsApp</button>
+          <span id="cupon-compartir-ok" class="cupon-share-ok"></span>
+        </div>
       </div>
       <button class="btn-save" onclick="addCupon()" style="margin-bottom:14px">+ Agregar cupón</button>
       <div id="cupones-admin-list"><div class="loading-state">Sin cupones cargados</div></div>
@@ -1310,7 +1339,7 @@ function setTab(tab) {
     renderRecargosList();
   }
   if (tab === 'banners') renderBannersAdmin();
-  if (tab === 'cupones') renderCupones();
+  if (tab === 'cupones') { renderCupones(); populateCuponCompartir(); }
   if (tab === 'margenes') { populateMargenCatFilter(); renderMargenes(); }
   if (tab === 'pendientes') { populatePendientesCatFilter(); renderPendientes(); }
   if (tab === 'generador') populateGenerador();
@@ -1421,6 +1450,24 @@ function updateOfertaMargen(v) {
   config.ofertaMargen = (!v || isNaN(n) || n < 0) ? 0 : Math.min(100, n);
 }
 
+// Cupones abiertos (expandidos) en el admin. Por defecto nacen colapsados para
+// que la lista sea compacta; el que estás editando queda abierto.
+let cuponesExpandidos = new Set();
+
+// Resumen corto del descuento para el header colapsado y el chip.
+function cuponResumenTexto(c) {
+  const tipo = c.tipo || 'porcentaje';
+  if (tipo === 'envio') return 'Envío gratis';
+  if (tipo === 'monto') return fmtAR(parseFloat(c.valor) || 0);
+  return (parseFloat(c.valor) || 0) + '%';
+}
+// Estado para avisar si no le va a servir al cliente.
+function cuponVencido(c) {
+  if (!c.vence) return false;
+  const fin = new Date(c.vence + 'T23:59:59');
+  return !isNaN(fin.getTime()) && fin < new Date();
+}
+
 function renderCupones() {
   const oi = $('oferta-margen-input');
   if (oi) oi.value = (config.ofertaMargen ? config.ofertaMargen : '');
@@ -1437,36 +1484,63 @@ function renderCupones() {
     const detEsc = (c.detalle || '').replace(/"/g, '&quot;');
     const tipo = c.tipo || 'porcentaje';
     const inactive = c.activo === false ? ' inactive' : '';
+    const abierto = cuponesExpandidos.has(id);
     const opt = (v, label) => '<option value="' + v + '"' + (tipo === v ? ' selected' : '') + '>' + label + '</option>';
     const valorLabel = tipo === 'monto' ? 'Monto a descontar ($)' : tipo === 'envio' ? 'Valor (no aplica)' : '% de descuento';
-    return '<div class="cupon-card' + inactive + '" data-id="' + id + '">' +
-      '<div class="cupon-grid">' +
-        '<label>Código<input type="text" value="' + codEsc + '" placeholder="EJ: BIENVENIDO10" oninput="updateCuponField(\'' + id + '\',\'codigo\',this.value)" style="text-transform:uppercase" /></label>' +
-        '<label>Tipo<select onchange="updateCuponField(\'' + id + '\',\'tipo\',this.value)">' + opt('porcentaje', 'Porcentaje (%)') + opt('monto', 'Monto fijo ($)') + opt('envio', 'Envío gratis') + '</select></label>' +
-        '<label' + (tipo === 'envio' ? ' style="opacity:.45"' : '') + '>' + valorLabel + '<input type="number" min="0" value="' + (c.valor != null ? c.valor : '') + '" placeholder="0" oninput="updateCuponField(\'' + id + '\',\'valor\',this.value)"' + (tipo === 'envio' ? ' disabled' : '') + ' /></label>' +
-        '<label>Compra mínima ($, opcional)<input type="number" min="0" value="' + (c.minimo != null ? c.minimo : '') + '" placeholder="Sin mínimo" oninput="updateCuponField(\'' + id + '\',\'minimo\',this.value)" /></label>' +
-        '<label>Vencimiento (opcional)<input type="date" value="' + (c.vence || '') + '" oninput="updateCuponField(\'' + id + '\',\'vence\',this.value)" /></label>' +
-        '<label class="cupon-detalle-field">Detalle / condición (ej: por Correo Argentino a sucursal)<input type="text" value="' + detEsc + '" placeholder="Texto que ve el cliente" oninput="updateCuponField(\'' + id + '\',\'detalle\',this.value)" /></label>' +
+    const codHead = (c.codigo || '').trim() ? '<span class="cc-cod">' + (c.codigo || '').replace(/</g, '&lt;') + '</span>' : '<span class="cc-cod vacio">Sin código</span>';
+    const minHead = (parseFloat(c.minimo) || 0) > 0 ? 'mín. ' + fmtAR(parseFloat(c.minimo)) : 'sin mínimo';
+    const estadoHead = (c.activo === false ? '<span class="cc-estado">inactivo</span>' : '') + (cuponVencido(c) ? '<span class="cc-estado">vencido</span>' : '');
+    return '<div class="cupon-card' + inactive + (abierto ? '' : ' collapsed') + '" id="cupon-card-' + id + '" data-id="' + id + '">' +
+      '<div class="cupon-card-head">' +
+        codHead +
+        '<span class="cc-chip">' + cuponResumenTexto(c) + '</span>' +
+        '<span class="cc-min">' + minHead + '</span>' +
+        estadoHead +
+        '<button class="cc-edit" id="cupon-edit-btn-' + id + '" onclick="toggleCuponCollapse(\'' + id + '\')">' + (abierto ? 'Ocultar' : 'Editar') + '</button>' +
       '</div>' +
-      '<div class="cupon-card-actions">' +
-        '<label class="toggle-row"><button class="toggle' + (c.activo !== false ? ' on' : '') + '" onclick="toggleCuponActive(\'' + id + '\')"></button>' + (c.activo !== false ? 'Activo' : 'Inactivo') + '</label>' +
-        '<button class="btn-del" onclick="removeCupon(\'' + id + '\')">Eliminar</button>' +
+      '<div class="cupon-body">' +
+        '<div class="cupon-grid">' +
+          '<label>Código<input type="text" value="' + codEsc + '" placeholder="EJ: BIENVENIDO10" oninput="updateCuponField(\'' + id + '\',\'codigo\',this.value)" style="text-transform:uppercase" /></label>' +
+          '<label>Tipo<select onchange="updateCuponField(\'' + id + '\',\'tipo\',this.value)">' + opt('porcentaje', 'Porcentaje (%)') + opt('monto', 'Monto fijo ($)') + opt('envio', 'Envío gratis') + '</select></label>' +
+          '<label' + (tipo === 'envio' ? ' style="opacity:.45"' : '') + '>' + valorLabel + '<input type="number" min="0" value="' + (c.valor != null ? c.valor : '') + '" placeholder="0" oninput="updateCuponField(\'' + id + '\',\'valor\',this.value)"' + (tipo === 'envio' ? ' disabled' : '') + ' /></label>' +
+          '<label>Compra mínima ($, opcional)<input type="number" min="0" value="' + (c.minimo != null ? c.minimo : '') + '" placeholder="Sin mínimo" oninput="updateCuponField(\'' + id + '\',\'minimo\',this.value)" /></label>' +
+          '<label>Vencimiento (opcional)<input type="date" value="' + (c.vence || '') + '" oninput="updateCuponField(\'' + id + '\',\'vence\',this.value)" /></label>' +
+          '<label class="cupon-detalle-field">Detalle / condición (ej: por Correo Argentino a sucursal)<input type="text" value="' + detEsc + '" placeholder="Texto que ve el cliente" oninput="updateCuponField(\'' + id + '\',\'detalle\',this.value)" /></label>' +
+        '</div>' +
+        '<div class="cupon-card-actions">' +
+          '<label class="toggle-row"><button class="toggle' + (c.activo !== false ? ' on' : '') + '" onclick="toggleCuponActive(\'' + id + '\')"></button>' + (c.activo !== false ? 'Activo' : 'Inactivo') + '</label>' +
+          '<button class="btn-del" onclick="removeCupon(\'' + id + '\')">Eliminar</button>' +
+        '</div>' +
       '</div>' +
     '</div>';
   }).join('');
+}
+
+function toggleCuponCollapse(id) {
+  const card = $('cupon-card-' + id);
+  const btn = $('cupon-edit-btn-' + id);
+  if (!card) return;
+  if (cuponesExpandidos.has(id)) cuponesExpandidos.delete(id); else cuponesExpandidos.add(id);
+  const abierto = cuponesExpandidos.has(id);
+  card.classList.toggle('collapsed', !abierto);
+  if (btn) btn.textContent = abierto ? 'Ocultar' : 'Editar';
 }
 
 function addCupon() {
   if (!Array.isArray(config.cupones)) config.cupones = [];
   const id = 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   config.cupones.push({ id, codigo: '', tipo: 'porcentaje', valor: '', detalle: '', minimo: '', vence: '', activo: true });
+  cuponesExpandidos.add(id); // el cupón nuevo abre expandido para completarlo
   renderCupones();
+  populateCuponCompartir();
 }
 
 function removeCupon(id) {
   if (!confirm('¿Eliminar este cupón? (se aplica al tocar Guardar cambios)')) return;
   config.cupones = (config.cupones || []).filter(c => c.id !== id);
+  cuponesExpandidos.delete(id);
   renderCupones();
+  populateCuponCompartir();
 }
 
 function toggleCuponActive(id) {
@@ -1474,6 +1548,7 @@ function toggleCuponActive(id) {
   if (!c) return;
   c.activo = c.activo === false ? true : false;
   renderCupones();
+  populateCuponCompartir();
 }
 
 function updateCuponField(id, field, value) {
@@ -1481,6 +1556,72 @@ function updateCuponField(id, field, value) {
   if (!c) return;
   c[field] = (field === 'codigo') ? value.toUpperCase() : value;
   if (field === 'tipo') renderCupones();
+  // Refrescá el selector de compartir (etiquetas/estado) sin perder la selección.
+  if (field === 'codigo' || field === 'minimo' || field === 'vence' || field === 'valor' || field === 'detalle') populateCuponCompartir();
+}
+
+// ===== Compartir cupón con clientes (solo lectura, no requiere guardar) =====
+function populateCuponCompartir() {
+  const sel = $('cupon-compartir');
+  if (!sel) return;
+  const prev = sel.value;
+  const cupones = (config.cupones || []).filter(c => (c.codigo || '').trim());
+  sel.innerHTML = '<option value="">— Elegí un cupón —</option>' + cupones.map(c => {
+    const suf = c.activo === false ? ' (inactivo)' : (cuponVencido(c) ? ' (vencido)' : '');
+    return '<option value="' + c.id + '">' + (c.codigo || '').replace(/</g, '&lt;') + suf + '</option>';
+  }).join('');
+  // Mantené la selección si el cupón sigue existiendo.
+  if (prev && cupones.some(c => c.id === prev)) sel.value = prev;
+  renderCuponCompartir();
+}
+
+function cuponTextoCompartir(c) {
+  // Sin emojis (se ven rotos como ◆ en algunos teléfonos). Negritas con *...* (WhatsApp).
+  const tipo = c.tipo || 'porcentaje';
+  const lines = ['*Cupón ' + (c.codigo || '').trim() + '*'];
+  if (tipo === 'envio') lines.push('Envío gratis');
+  else if (tipo === 'monto') lines.push(fmtAR(parseFloat(c.valor) || 0) + ' de descuento');
+  else lines.push((parseFloat(c.valor) || 0) + '% de descuento');
+  if ((parseFloat(c.minimo) || 0) > 0) lines.push('Compra mínima: ' + fmtAR(parseFloat(c.minimo)));
+  if (c.vence) lines.push('Válido hasta el ' + c.vence.split('-').reverse().join('/'));
+  if ((c.detalle || '').trim()) lines.push(c.detalle.trim());
+  lines.push('', 'Comprá en: ' + location.origin);
+  return lines.join('\n');
+}
+
+function renderCuponCompartir() {
+  const sel = $('cupon-compartir');
+  const pre = $('cupon-compartir-preview');
+  const actions = $('cupon-compartir-actions');
+  const aviso = $('cupon-compartir-aviso');
+  if (!sel || !pre) return;
+  const c = (config.cupones || []).find(x => x.id === sel.value);
+  if (!c) {
+    pre.style.display = 'none'; actions.style.display = 'none'; aviso.style.display = 'none';
+    return;
+  }
+  pre.textContent = cuponTextoCompartir(c);
+  pre.style.display = 'block';
+  actions.style.display = 'flex';
+  $('cupon-compartir-ok').textContent = '';
+  if (c.activo === false || cuponVencido(c)) {
+    aviso.textContent = c.activo === false
+      ? 'Este cupón está inactivo — no le va a funcionar al cliente.'
+      : 'Este cupón está vencido — no le va a funcionar al cliente.';
+    aviso.style.display = 'block';
+  } else {
+    aviso.style.display = 'none';
+  }
+}
+
+function copiarCuponCompartir() {
+  const pre = $('cupon-compartir-preview');
+  if (!pre || pre.style.display === 'none') return;
+  const txt = pre.textContent;
+  const ok = () => { const s = $('cupon-compartir-ok'); if (s) { s.textContent = '¡Copiado! Pegalo en WhatsApp.'; setTimeout(() => { s.textContent = ''; }, 3000); } };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(txt).then(ok).catch(() => fallbackCopiar(txt, ok));
+  } else { fallbackCopiar(txt, ok); }
 }
 
 function populateRecargoCatFilter() {
