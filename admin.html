@@ -295,6 +295,14 @@
   .pm-var-name { font-size: 12px; color: var(--text); min-width: 0; }
   .pm-var-stock { font-size: 10px; color: var(--text-hint); white-space: nowrap; }
   .pm-var-qty { width: 52px; padding: 6px 7px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; text-align: right; outline: none; flex-shrink: 0; }
+  .fotos-sel { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; margin: 12px 0 16px; max-width: 720px; }
+  .fotos-card { position: relative; border: 1px solid var(--border); border-radius: var(--radius-sm); background: white; padding: 8px; text-align: center; }
+  .fotos-card img { width: 100%; height: 100px; object-fit: contain; }
+  .fotos-noimg { height: 100px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--text-hint); background: var(--bg); border-radius: var(--radius-sm); }
+  .fotos-card-name { font-size: 11px; color: var(--text); margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fotos-x { position: absolute; top: 3px; right: 4px; background: rgba(0,0,0,0.55); color: #fff; border: none; border-radius: 50%; width: 20px; height: 20px; font-size: 14px; line-height: 1; cursor: pointer; }
+  .fotos-acciones { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .fotos-btn-2 { background: transparent !important; color: var(--accent) !important; border: 1px solid var(--border-strong) !important; }
   .pm-hint { font-size: 12px; color: var(--text-muted); margin-bottom: 14px; }
   .pm-hint strong { color: var(--text); }
   .pm-hint-sub { color: var(--text-hint); font-style: italic; }
@@ -350,6 +358,7 @@
     <button class="tab-btn" onclick="setTab('cupones')">Cupones</button>
     <button class="tab-btn" onclick="setTab('generador')">Generador de precios</button>
     <button class="tab-btn" onclick="setTab('pedido')">Cargar pedido</button>
+    <button class="tab-btn" onclick="setTab('fotos')">Fotos</button>
     <button class="tab-btn" onclick="setTab('settings')">Configuración</button>
   </div>
 
@@ -475,6 +484,20 @@
       </div>
     </div>
 
+    <div id="tab-fotos" style="display:none">
+      <p class="section-note">Copiá fotos de productos para pegarlas (Cmd+V) en el chat del cliente, <strong>sin descargarlas</strong>. Elegí <strong>1 producto</strong> para copiar su foto, o <strong>varios</strong> (ej. el mismo modelo en distintos colores cargados por separado) para <strong>combinar la primera foto de cada uno en una sola imagen</strong>.</p>
+      <div class="pm-builder">
+        <select id="fotos-producto" class="admin-select" style="min-width:220px"><option value="">— Elegí un producto —</option></select>
+        <button class="btn-save" onclick="fotosAgregar()">+ Agregar</button>
+      </div>
+      <div id="fotos-sel" class="fotos-sel"></div>
+      <div id="fotos-acciones" class="fotos-acciones" style="display:none">
+        <button class="btn-save" id="fotos-btn-copiar" onclick="fotosCopiar()">📋 Copiar foto</button>
+        <button class="btn-save fotos-btn-2" onclick="fotosDescargar()">⬇️ Descargar</button>
+        <span id="fotos-msg" class="gen-copiado"></span>
+      </div>
+    </div>
+
     <div id="tab-margenes" style="display:none">
       <p class="section-note">Análisis de margen de cada producto (<strong>solo lo ves vos</strong>, el cliente no). Probá un descuento y mirá cómo queda la ganancia y el margen, para decidir cuánto podés bajar sin perder plata. El margen es sobre el precio de venta.</p>
       <div class="admin-toolbar">
@@ -553,6 +576,8 @@
     <div class="preview-info">
       <div class="preview-name" id="preview-name"></div>
       <div class="preview-price" id="preview-price"></div>
+      <button class="btn-save preview-copiar" id="preview-copiar" onclick="previewCopiar()" style="margin-top:10px">📋 Copiar foto</button>
+      <span id="preview-msg" class="gen-copiado"></span>
     </div>
   </div>
 </div>
@@ -699,6 +724,7 @@ async function cargarProductos() {
   if ($('tab-recargos') && $('tab-recargos').style.display !== 'none') { populateRecargoCatFilter(); renderRecargosList(); }
   if ($('tab-generador') && $('tab-generador').style.display !== 'none') populateGenerador();
   if ($('tab-pedido') && $('tab-pedido').style.display !== 'none') populatePedidoManual();
+  if ($('tab-fotos') && $('tab-fotos').style.display !== 'none') populateFotos();
   cargarImagenesTN(); // trae las fotos de TiendaNube y re-renderiza cuando llegan
 }
 
@@ -1218,6 +1244,7 @@ function setTab(tab) {
   $('tab-pendientes').style.display = tab === 'pendientes' ? 'block' : 'none';
   $('tab-generador').style.display = tab === 'generador' ? 'block' : 'none';
   $('tab-pedido').style.display = tab === 'pedido' ? 'block' : 'none';
+  $('tab-fotos').style.display = tab === 'fotos' ? 'block' : 'none';
   $('tab-settings').style.display = tab === 'settings' ? 'block' : 'none';
   document.querySelectorAll('.tab-btn').forEach(btn => {
     const onclickStr = btn.getAttribute('onclick') || '';
@@ -1239,6 +1266,7 @@ function setTab(tab) {
   if (tab === 'pendientes') { populatePendientesCatFilter(); renderPendientes(); }
   if (tab === 'generador') populateGenerador();
   if (tab === 'pedido') populatePedidoManual();
+  if (tab === 'fotos') { populateFotos(); fotosRender(); }
   if (tab === 'products') renderProductList();
 
   // PERFORMANCE: las listas de productos (cientos de filas con fotos) son pesadas.
@@ -1929,6 +1957,134 @@ async function pmConfirmar() {
     $('pm-resultado').innerHTML = '<span class="pm-error">⚠ Error: ' + e.message + '</span>';
   }
   btn.disabled = false; btn.textContent = 'Confirmar pedido en Gestión Nube';
+}
+
+// ===== Fotos: copiar al portapapeles y combinar fotos de varios productos =====
+let fotosSel = [];
+function populateFotos() {
+  const sel = $('fotos-producto');
+  if (sel && sel.options.length <= 1) {
+    [...allAdminProducts].sort((a, b) => (a.name || a.nombre || '').localeCompare(b.name || b.nombre || '')).forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id || p.product_id; opt.textContent = p.name || p.nombre || 'Sin nombre';
+      sel.appendChild(opt);
+    });
+  }
+}
+function fotosAgregar() {
+  const id = $('fotos-producto').value;
+  if (!id) { alert('Elegí un producto.'); return; }
+  if (fotosSel.some(x => x == id)) { return; }
+  fotosSel.push(id);
+  fotosRender();
+}
+function fotosQuitar(idx) { fotosSel.splice(idx, 1); fotosRender(); }
+function fotosUrls() {
+  return fotosSel.map(id => {
+    const p = allAdminProducts.find(x => (x.id || x.product_id) == id);
+    return p ? (p._img || null) : null;
+  }).filter(Boolean);
+}
+function fotosRender() {
+  const cont = $('fotos-sel');
+  if (!cont) return;
+  if (!fotosSel.length) { cont.innerHTML = '<div class="loading-state">Agregá productos para copiar o combinar sus fotos.</div>'; if ($('fotos-acciones')) $('fotos-acciones').style.display = 'none'; return; }
+  cont.innerHTML = fotosSel.map((id, idx) => {
+    const p = allAdminProducts.find(x => (x.id || x.product_id) == id);
+    const nombre = p ? (p.name || p.nombre || 'Sin nombre') : '—';
+    const img = p && p._img ? p._img : '';
+    return '<div class="fotos-card">' +
+      '<button class="fotos-x" onclick="fotosQuitar(' + idx + ')" title="Quitar">×</button>' +
+      (img ? '<img src="' + img.replace(/"/g, '&quot;') + '" loading="lazy" onerror="this.style.visibility=\'hidden\'">' : '<div class="fotos-noimg">Sin foto</div>') +
+      '<div class="fotos-card-name">' + nombre.replace(/</g, '&lt;') + '</div>' +
+    '</div>';
+  }).join('');
+  const acc = $('fotos-acciones');
+  acc.style.display = 'flex';
+  const conFoto = fotosUrls().length;
+  $('fotos-btn-copiar').textContent = fotosSel.length > 1 ? '🖼️ Combinar y copiar (' + conFoto + ')' : '📋 Copiar foto';
+}
+function fotosCargarImg(url) {
+  return new Promise((resolve, reject) => {
+    const im = new Image();
+    im.crossOrigin = 'anonymous';
+    im.onload = () => resolve(im);
+    im.onerror = () => reject(new Error('No se pudo cargar la imagen'));
+    im.src = url;
+  });
+}
+async function fotosCollageBlob(urls) {
+  const imgs = await Promise.all(urls.map(fotosCargarImg));
+  // Una sola foto: se copia en resolución original (sin reducir).
+  if (imgs.length === 1) {
+    const im = imgs[0];
+    const c = document.createElement('canvas');
+    c.width = im.naturalWidth || im.width; c.height = im.naturalHeight || im.height;
+    c.getContext('2d').drawImage(im, 0, 0);
+    return await new Promise(res => c.toBlob(res, 'image/png'));
+  }
+  const n = imgs.length;
+  const cols = n <= 1 ? 1 : n === 2 ? 2 : n <= 4 ? 2 : 3;
+  const rows = Math.ceil(n / cols);
+  const cell = 500, pad = 10;
+  const canvas = document.createElement('canvas');
+  canvas.width = cols * cell + (cols + 1) * pad;
+  canvas.height = rows * cell + (rows + 1) * pad;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  imgs.forEach((im, i) => {
+    const c = i % cols, r = Math.floor(i / cols);
+    const x0 = pad + c * (cell + pad), y0 = pad + r * (cell + pad);
+    const scale = Math.min(cell / im.width, cell / im.height);
+    const w = im.width * scale, h = im.height * scale;
+    ctx.drawImage(im, x0 + (cell - w) / 2, y0 + (cell - h) / 2, w, h);
+  });
+  return await new Promise(res => canvas.toBlob(res, 'image/png'));
+}
+function fotosMsg(txt, err) {
+  const m = $('fotos-msg');
+  if (!m) return;
+  m.textContent = txt; m.style.color = err ? 'var(--danger)' : 'var(--success)';
+  if (!err) setTimeout(() => { m.textContent = ''; }, 4000);
+}
+function fotosCopiar() {
+  const urls = fotosUrls();
+  if (!urls.length) { fotosMsg('Ninguno de los productos tiene foto.', true); return; }
+  fotosMsg('Preparando…');
+  try {
+    // El Blob va como Promise dentro del ClipboardItem (clave para Safari).
+    const item = new ClipboardItem({ 'image/png': fotosCollageBlob(urls) });
+    navigator.clipboard.write([item]).then(() => fotosMsg('¡Copiado! Pegalo en el chat (Cmd+V).'))
+      .catch(() => fotosMsg('Tu navegador no dejó copiar la imagen — usá "Descargar".', true));
+  } catch (e) {
+    fotosMsg('Tu navegador no soporta copiar imágenes — usá "Descargar".', true);
+  }
+}
+async function fotosDescargar() {
+  const urls = fotosUrls();
+  if (!urls.length) { fotosMsg('Ninguno de los productos tiene foto.', true); return; }
+  try {
+    const blob = await fotosCollageBlob(urls);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = (urls.length > 1 ? 'fotos-combinadas' : 'foto') + '.png';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    fotosMsg('Descargada.');
+  } catch (e) { fotosMsg('No se pudo generar la imagen.', true); }
+}
+// Copiar la foto que se está viendo en la previsualización del producto.
+function previewCopiar() {
+  const url = $('preview-img').src;
+  const m = $('preview-msg');
+  const setMsg = (t, err) => { if (m) { m.textContent = t; m.style.color = err ? 'var(--danger)' : 'var(--success)'; if (!err) setTimeout(() => { m.textContent = ''; }, 4000); } };
+  if (!url) { setMsg('No hay foto.', true); return; }
+  try {
+    navigator.clipboard.write([new ClipboardItem({ 'image/png': fotosCollageBlob([url]) })])
+      .then(() => setMsg('¡Copiado! Pegalo en el chat (Cmd+V).'))
+      .catch(() => setMsg('No se pudo copiar — probá desde la pestaña Fotos.', true));
+  } catch (e) { setMsg('Tu navegador no soporta copiar imágenes.', true); }
 }
 
 function getVisibilityStatus(p) {
