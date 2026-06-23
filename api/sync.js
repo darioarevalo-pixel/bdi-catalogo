@@ -1,8 +1,12 @@
-// Dispara el sync rápido de inventario (GitHub Actions) desde el monitor.
-// POST {store: 'bdi'|'zattia'} → ejecuta el workflow sync-inventario.yml con ese input.
+// Dispara syncs en GitHub Actions desde el monitor.
+// POST {store:'bdi'|'zattia', kind?:'inventario'|'ventas'} → ejecuta el workflow con ese input.
+//   kind ausente o 'inventario' → sync-inventario.yml (inventario + productos).
+//   kind 'ventas'               → sync-ventas-hoy.yml (ventas recientes).
+// GET ?kind=ventas → estado del último run de ese workflow.
 // Usa GH_SYNC_TOKEN (token clásico con scope repo+workflow) guardado en el entorno.
 const REPO = 'darioarevalo-pixel/monitor-areben';
-const WORKFLOW = 'sync-inventario.yml';
+const WORKFLOWS = { inventario: 'sync-inventario.yml', ventas: 'sync-ventas-hoy.yml' };
+const resolverWorkflow = kind => WORKFLOWS[(kind || '').toLowerCase()] || WORKFLOWS.inventario;
 const TOKEN = process.env.GH_SYNC_TOKEN;
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -26,6 +30,7 @@ module.exports = async (req, res) => {
   // GET → estado del último run del workflow (para que el monitor sepa cuándo terminó).
   if (req.method === 'GET') {
     try {
+      const WORKFLOW = resolverWorkflow(req.query && req.query.kind);
       const r = await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/${WORKFLOW}/runs?per_page=1`, { headers: ghHeaders() });
       const d = await r.json();
       const run = (d.workflow_runs && d.workflow_runs[0]) || null;
@@ -36,6 +41,7 @@ module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ error: 'método no permitido' });
 
   const store = ((req.body && req.body.store) || 'bdi').toLowerCase() === 'zattia' ? 'zattia' : 'bdi';
+  const WORKFLOW = resolverWorkflow(req.body && req.body.kind);
   try {
     const r = await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/${WORKFLOW}/dispatches`, {
       method: 'POST',
