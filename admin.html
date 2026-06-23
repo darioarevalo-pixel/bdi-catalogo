@@ -243,7 +243,17 @@
   .cupon-share { border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); padding: 14px; margin-bottom: 16px; }
   .cupon-share-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 2px; }
   .cupon-share-hint { font-size: 11px; color: var(--text-muted); margin-bottom: 10px; }
-  .cupon-share select { width: 100%; max-width: 340px; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; color: var(--text); background: white; outline: none; }
+  .cupon-share-tools { display: flex; gap: 8px; margin-bottom: 8px; }
+  .cupon-share-tools button { font-size: 11px; color: var(--text-muted); background: white; border: 1px solid var(--border-strong); cursor: pointer; padding: 4px 12px; border-radius: 20px; font-family: inherit; }
+  .cupon-share-tools button:hover { color: var(--text); border-color: var(--text-muted); }
+  .cupon-share-list { display: flex; flex-direction: column; gap: 2px; max-width: 480px; }
+  .cupon-share-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text); padding: 5px 6px; border-radius: var(--radius-sm); cursor: pointer; }
+  .cupon-share-row:hover { background: white; }
+  .cupon-share-row input { width: auto; margin: 0; cursor: pointer; flex-shrink: 0; }
+  .cupon-share-row .csr-cod { font-weight: 700; }
+  .cupon-share-row .csr-res { color: var(--text-muted); font-size: 12px; }
+  .cupon-share-row .csr-estado { color: var(--danger); font-size: 11px; font-weight: 600; }
+  .cupon-share-empty { font-size: 12px; color: var(--text-muted); font-style: italic; padding: 4px 6px; }
   .cupon-share-aviso { font-size: 12px; color: var(--danger); font-weight: 600; margin-top: 10px; }
   .cupon-share-preview { background: white; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; font-family: inherit; font-size: 13px; color: var(--text); white-space: pre-wrap; margin: 10px 0 0; max-width: 480px; }
   .cupon-share-actions { display: flex; align-items: center; gap: 12px; margin-top: 10px; flex-wrap: wrap; }
@@ -453,9 +463,13 @@
         <div class="oferta-setting-hint">Los productos con margen menor a este % se marcan <strong>OFERTA</strong> en el catálogo y <strong>los cupones NO los descuentan</strong> (así no perdés con los que están al costo). Poné <strong>0</strong> para desactivar.</div>
       </div>
       <div class="cupon-share">
-        <div class="cupon-share-title">Compartir un cupón con un cliente</div>
-        <div class="cupon-share-hint">Elegí un cupón y copiá el texto listo para mandarle por WhatsApp. Usa el estado actual (no hace falta tocar "Guardar cambios").</div>
-        <select id="cupon-compartir" onchange="renderCuponCompartir()"><option value="">— Elegí un cupón —</option></select>
+        <div class="cupon-share-title">Compartir cupones con un cliente</div>
+        <div class="cupon-share-hint">Marcá los cupones que querés mandar y copiá el texto listo para WhatsApp. Usa el estado actual (no hace falta tocar "Guardar cambios").</div>
+        <div class="cupon-share-tools">
+          <button type="button" onclick="cuponShareTodos(true)">Marcar activos</button>
+          <button type="button" onclick="cuponShareTodos(false)">Ninguno</button>
+        </div>
+        <div id="cupon-share-list"></div>
         <div id="cupon-compartir-aviso" class="cupon-share-aviso" style="display:none"></div>
         <pre id="cupon-compartir-preview" class="cupon-share-preview" style="display:none"></pre>
         <div class="cupon-share-actions" id="cupon-compartir-actions" style="display:none">
@@ -1560,22 +1574,58 @@ function updateCuponField(id, field, value) {
   if (field === 'codigo' || field === 'minimo' || field === 'vence' || field === 'valor' || field === 'detalle') populateCuponCompartir();
 }
 
-// ===== Compartir cupón con clientes (solo lectura, no requiere guardar) =====
+// ===== Compartir cupones con clientes (solo lectura, no requiere guardar) =====
+let cuponShareSel = new Set();   // ids de cupones marcados para compartir
+let cuponShareInit = false;      // la primera vez pre-marcamos los activos vigentes
+
+function cuponCompartibles() {
+  return (config.cupones || []).filter(c => (c.codigo || '').trim());
+}
+
 function populateCuponCompartir() {
-  const sel = $('cupon-compartir');
-  if (!sel) return;
-  const prev = sel.value;
-  const cupones = (config.cupones || []).filter(c => (c.codigo || '').trim());
-  sel.innerHTML = '<option value="">— Elegí un cupón —</option>' + cupones.map(c => {
-    const suf = c.activo === false ? ' (inactivo)' : (cuponVencido(c) ? ' (vencido)' : '');
-    return '<option value="' + c.id + '">' + (c.codigo || '').replace(/</g, '&lt;') + suf + '</option>';
+  const cont = $('cupon-share-list');
+  if (!cont) return;
+  const cupones = cuponCompartibles();
+  // Primera vez: arrancá con los activos y vigentes marcados.
+  if (!cuponShareInit) {
+    cupones.forEach(c => { if (c.activo !== false && !cuponVencido(c)) cuponShareSel.add(c.id); });
+    cuponShareInit = true;
+  }
+  // Limpiá del Set ids que ya no existen.
+  const validos = new Set(cupones.map(c => c.id));
+  [...cuponShareSel].forEach(id => { if (!validos.has(id)) cuponShareSel.delete(id); });
+
+  if (!cupones.length) {
+    cont.innerHTML = '<div class="cupon-share-empty">Cargá un cupón (con código) para poder compartirlo.</div>';
+    renderCuponCompartir();
+    return;
+  }
+  cont.innerHTML = cupones.map(c => {
+    const estado = c.activo === false ? '<span class="csr-estado">(inactivo)</span>' : (cuponVencido(c) ? '<span class="csr-estado">(vencido)</span>' : '');
+    const checked = cuponShareSel.has(c.id) ? ' checked' : '';
+    return '<label class="cupon-share-row">' +
+      '<input type="checkbox"' + checked + ' onchange="toggleCuponShare(\'' + c.id + '\',this.checked)" />' +
+      '<span class="csr-cod">' + (c.codigo || '').replace(/</g, '&lt;') + '</span>' +
+      '<span class="csr-res">' + cuponResumenTexto(c) + ((parseFloat(c.minimo) || 0) > 0 ? ' · mín. ' + fmtAR(parseFloat(c.minimo)) : '') + '</span>' +
+      estado +
+    '</label>';
   }).join('');
-  // Mantené la selección si el cupón sigue existiendo.
-  if (prev && cupones.some(c => c.id === prev)) sel.value = prev;
   renderCuponCompartir();
 }
 
-function cuponTextoCompartir(c) {
+function toggleCuponShare(id, checked) {
+  if (checked) cuponShareSel.add(id); else cuponShareSel.delete(id);
+  renderCuponCompartir();
+}
+
+function cuponShareTodos(soloActivos) {
+  cuponShareSel.clear();
+  if (soloActivos) cuponCompartibles().forEach(c => { if (c.activo !== false && !cuponVencido(c)) cuponShareSel.add(c.id); });
+  populateCuponCompartir();
+}
+
+// Un bloque de texto por cupón (sin el link de la tienda; ese va una sola vez).
+function cuponBloqueTexto(c) {
   // Sin emojis (se ven rotos como ◆ en algunos teléfonos). Negritas con *...* (WhatsApp).
   const tipo = c.tipo || 'porcentaje';
   const lines = ['*Cupón ' + (c.codigo || '').trim() + '*'];
@@ -1585,29 +1635,34 @@ function cuponTextoCompartir(c) {
   if ((parseFloat(c.minimo) || 0) > 0) lines.push('Compra mínima: ' + fmtAR(parseFloat(c.minimo)));
   if (c.vence) lines.push('Válido hasta el ' + c.vence.split('-').reverse().join('/'));
   if ((c.detalle || '').trim()) lines.push(c.detalle.trim());
-  lines.push('', 'Comprá en: ' + location.origin);
   return lines.join('\n');
 }
 
+function cuponTextoCompartir() {
+  // En el orden en que están cargados los cupones, solo los marcados.
+  const elegidos = cuponCompartibles().filter(c => cuponShareSel.has(c.id));
+  if (!elegidos.length) return '';
+  return elegidos.map(cuponBloqueTexto).join('\n\n') + '\n\nComprá en: ' + location.origin;
+}
+
 function renderCuponCompartir() {
-  const sel = $('cupon-compartir');
   const pre = $('cupon-compartir-preview');
   const actions = $('cupon-compartir-actions');
   const aviso = $('cupon-compartir-aviso');
-  if (!sel || !pre) return;
-  const c = (config.cupones || []).find(x => x.id === sel.value);
-  if (!c) {
+  if (!pre) return;
+  const txt = cuponTextoCompartir();
+  if (!txt) {
     pre.style.display = 'none'; actions.style.display = 'none'; aviso.style.display = 'none';
     return;
   }
-  pre.textContent = cuponTextoCompartir(c);
+  pre.textContent = txt;
   pre.style.display = 'block';
   actions.style.display = 'flex';
   $('cupon-compartir-ok').textContent = '';
-  if (c.activo === false || cuponVencido(c)) {
-    aviso.textContent = c.activo === false
-      ? 'Este cupón está inactivo — no le va a funcionar al cliente.'
-      : 'Este cupón está vencido — no le va a funcionar al cliente.';
+  // Aviso si alguno de los marcados está inactivo o vencido.
+  const hayMuerto = cuponCompartibles().some(c => cuponShareSel.has(c.id) && (c.activo === false || cuponVencido(c)));
+  if (hayMuerto) {
+    aviso.textContent = 'Hay cupones seleccionados inactivos o vencidos — no le van a funcionar al cliente.';
     aviso.style.display = 'block';
   } else {
     aviso.style.display = 'none';
