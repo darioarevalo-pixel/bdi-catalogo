@@ -303,6 +303,12 @@
   .fotos-x { position: absolute; top: 3px; right: 4px; background: rgba(0,0,0,0.55); color: #fff; border: none; border-radius: 50%; width: 20px; height: 20px; font-size: 14px; line-height: 1; cursor: pointer; }
   .fotos-acciones { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .fotos-btn-2 { background: transparent !important; color: var(--accent) !important; border: 1px solid var(--border-strong) !important; }
+  .fotos-resultados { margin: 8px 0; }
+  .fotos-add-todos { margin-bottom: 10px; }
+  .fotos-res-list { display: flex; flex-wrap: wrap; gap: 6px; }
+  .fotos-res-item { background: white; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); padding: 6px 10px; font-family: inherit; font-size: 12px; color: var(--text); cursor: pointer; }
+  .fotos-res-item:hover { border-color: var(--accent); background: var(--bg); }
+  .fotos-res-vacio { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
   .pm-hint { font-size: 12px; color: var(--text-muted); margin-bottom: 14px; }
   .pm-hint strong { color: var(--text); }
   .pm-hint-sub { color: var(--text-hint); font-style: italic; }
@@ -486,10 +492,8 @@
 
     <div id="tab-fotos" style="display:none">
       <p class="section-note">Copiá fotos de productos para pegarlas (Cmd+V) en el chat del cliente, <strong>sin descargarlas</strong>. Elegí <strong>1 producto</strong> para copiar su foto, o <strong>varios</strong> (ej. el mismo modelo en distintos colores cargados por separado) para <strong>combinar la primera foto de cada uno en una sola imagen</strong>.</p>
-      <div class="pm-builder">
-        <select id="fotos-producto" class="admin-select" style="min-width:220px"><option value="">— Elegí un producto —</option></select>
-        <button class="btn-save" onclick="fotosAgregar()">+ Agregar</button>
-      </div>
+      <input class="admin-search" type="text" id="fotos-buscar" placeholder="Buscar producto (ej. soft case)" oninput="fotosBuscar()" style="max-width:480px" />
+      <div id="fotos-resultados" class="fotos-resultados"></div>
       <div id="fotos-sel" class="fotos-sel"></div>
       <div id="fotos-acciones" class="fotos-acciones" style="display:none">
         <button class="btn-save" id="fotos-btn-copiar" onclick="fotosCopiar()">📋 Copiar foto</button>
@@ -724,7 +728,7 @@ async function cargarProductos() {
   if ($('tab-recargos') && $('tab-recargos').style.display !== 'none') { populateRecargoCatFilter(); renderRecargosList(); }
   if ($('tab-generador') && $('tab-generador').style.display !== 'none') populateGenerador();
   if ($('tab-pedido') && $('tab-pedido').style.display !== 'none') populatePedidoManual();
-  if ($('tab-fotos') && $('tab-fotos').style.display !== 'none') populateFotos();
+  if ($('tab-fotos') && $('tab-fotos').style.display !== 'none') fotosBuscar();
   cargarImagenesTN(); // trae las fotos de TiendaNube y re-renderiza cuando llegan
 }
 
@@ -1266,7 +1270,7 @@ function setTab(tab) {
   if (tab === 'pendientes') { populatePendientesCatFilter(); renderPendientes(); }
   if (tab === 'generador') populateGenerador();
   if (tab === 'pedido') populatePedidoManual();
-  if (tab === 'fotos') { populateFotos(); fotosRender(); }
+  if (tab === 'fotos') { fotosBuscar(); fotosRender(); }
   if (tab === 'products') renderProductList();
 
   // PERFORMANCE: las listas de productos (cientos de filas con fotos) son pesadas.
@@ -1961,22 +1965,41 @@ async function pmConfirmar() {
 
 // ===== Fotos: copiar al portapapeles y combinar fotos de varios productos =====
 let fotosSel = [];
-function populateFotos() {
-  const sel = $('fotos-producto');
-  if (sel && sel.options.length <= 1) {
-    [...allAdminProducts].sort((a, b) => (a.name || a.nombre || '').localeCompare(b.name || b.nombre || '')).forEach(p => {
-      const opt = document.createElement('option');
-      opt.value = p.id || p.product_id; opt.textContent = p.name || p.nombre || 'Sin nombre';
-      sel.appendChild(opt);
-    });
-  }
+// Resultados del buscador para el caso actual (para "Agregar todos").
+function fotosCoincidencias() {
+  const q = ($('fotos-buscar')?.value || '').trim().toLowerCase();
+  if (!q) return [];
+  return allAdminProducts.filter(p => {
+    const id = p.id || p.product_id;
+    if (fotosSel.some(x => x == id)) return false; // ya seleccionado
+    const name = (p.name || p.nombre || '').toLowerCase();
+    const code = (p.code || p.sku || '').toLowerCase();
+    return name.includes(q) || code.includes(q);
+  });
 }
-function fotosAgregar() {
-  const id = $('fotos-producto').value;
-  if (!id) { alert('Elegí un producto.'); return; }
-  if (fotosSel.some(x => x == id)) { return; }
-  fotosSel.push(id);
-  fotosRender();
+function fotosBuscar() {
+  const cont = $('fotos-resultados');
+  if (!cont) return;
+  const q = ($('fotos-buscar')?.value || '').trim();
+  if (!q) { cont.innerHTML = ''; return; }
+  const matches = fotosCoincidencias();
+  if (!matches.length) { cont.innerHTML = '<div class="fotos-res-vacio">Sin coincidencias para "' + q.replace(/</g, '&lt;') + '".</div>'; return; }
+  const lista = matches.slice(0, 40);
+  cont.innerHTML =
+    '<button class="btn-save fotos-add-todos" onclick="fotosAgregarTodos()">+ Agregar todos (' + matches.length + ')</button>' +
+    '<div class="fotos-res-list">' + lista.map(p => {
+      const id = p.id || p.product_id;
+      return '<button class="fotos-res-item" onclick="fotosAgregarId(\'' + id + '\')">+ ' + (p.name || p.nombre || 'Sin nombre').replace(/</g, '&lt;') + '</button>';
+    }).join('') + '</div>' +
+    (matches.length > lista.length ? '<div class="fotos-res-vacio">…y ' + (matches.length - lista.length) + ' más. Afiná la búsqueda o usá "Agregar todos".</div>' : '');
+}
+function fotosAgregarId(id) {
+  if (!fotosSel.some(x => x == id)) fotosSel.push(id);
+  fotosBuscar(); fotosRender();
+}
+function fotosAgregarTodos() {
+  fotosCoincidencias().forEach(p => { const id = p.id || p.product_id; if (!fotosSel.some(x => x == id)) fotosSel.push(id); });
+  fotosBuscar(); fotosRender();
 }
 function fotosQuitar(idx) { fotosSel.splice(idx, 1); fotosRender(); }
 function fotosUrls() {
