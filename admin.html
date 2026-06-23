@@ -75,7 +75,9 @@
   .preview-name { font-size: 15px; font-weight: 700; margin-top: 10px; }
   .preview-price { font-size: 14px; color: var(--text-muted); margin-top: 2px; }
   .product-row-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .product-row.hidden-row { background: #fef2f2; border-color: rgba(220,38,38,0.4); }
   .product-row.hidden-row .product-row-name { color: var(--text-hint); text-decoration: line-through; }
+  .product-badge-off { display: inline-flex; align-items: center; font-size: 9px; font-weight: 700; color: #fff; background: var(--danger); padding: 2px 7px; border-radius: 3px; letter-spacing: 0.4px; white-space: nowrap; flex-shrink: 0; }
   .product-row-cat { font-size: 10px; color: var(--text-muted); margin-top: 1px; }
   .expand-btn { font-size: 10px; color: var(--text-hint); background: var(--bg); border: 1px solid var(--border); cursor: pointer; padding: 2px 6px; border-radius: 20px; white-space: nowrap; font-family: inherit; transition: color 0.12s; flex-shrink: 0; margin-left: auto; }
   .expand-btn:hover { color: var(--text); border-color: var(--border-strong); }
@@ -1054,6 +1056,7 @@ function renderProductList() {
         (!filtered ? '<div class="move-btns"><button class="move-btn" title="Subir" onclick="moveProduct(\'' + id + '\',-1)">▲</button><button class="move-btn" title="Bajar" onclick="moveProduct(\'' + id + '\',1)">▼</button></div>' : '') +
         (!filtered ? '<input class="pos-input" type="number" min="1" max="' + totalOrdered + '" value="' + pos + '" title="Escribí la posición y presioná Enter" onkeydown="if(event.key===\'Enter\')moveProductToPos(\'' + id + '\',this.value)" onblur="moveProductToPos(\'' + id + '\',this.value)" onclick="event.stopPropagation();this.select()" />' : '') +
         '<button class="toggle' + (hidden ? '' : ' on') + '" id="prod-toggle-' + id + '" onclick="toggleProduct(' + id + ')"></button>' +
+        (hidden ? '<span class="product-badge-off">NO DISPONIBLE</span>' : '') +
         '<button class="new-btn' + (isNew(id) ? ' on' : '') + '" id="prod-new-' + id + '" onclick="event.stopPropagation();toggleNew(' + id + ')" title="Mostrar el cartel NUEVO en el catálogo">NUEVO</button>' +
         (variants.length ? '<button class="wa-btn" onclick="event.stopPropagation();copiarModelosWA(' + id + ')" title="Copiar modelos disponibles para WhatsApp">Copiar modelos</button>' : '') +
         (variants.length ? '<button class="expand-btn" id="expand-btn-' + id + '" onclick="toggleExpand(' + id + ')">Variantes</button>' : '') +
