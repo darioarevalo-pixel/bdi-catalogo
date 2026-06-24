@@ -82,6 +82,22 @@ module.exports = async (req, res) => {
       return res.status(405).json({ error: 'método no permitido' });
     }
 
+    // --- Leads del CRM (prospectos cargados a mano: mapa id_lead -> { nombre, telefono, instagram, ciudad, estado, cadencia, ultimo_contacto, proximo_manual, notas, creado }) ---
+    if (req.query?.kind === 'crmleads') {
+      const leadsKey = `crm:leads:${store === 'zattia' ? 'zattia' : 'bdi'}`;
+      if (req.method === 'GET') {
+        const raw = await kvCmd(['GET', leadsKey]);
+        return res.status(200).json({ ok: true, map: raw ? JSON.parse(raw) : {} });
+      }
+      if (req.method === 'POST') {
+        const { map } = req.body || {};
+        if (!map || typeof map !== 'object') return res.status(400).json({ error: 'map inválido' });
+        await kvCmd(['SET', leadsKey, JSON.stringify(map)]);
+        return res.status(200).json({ ok: true, total: Object.keys(map).length });
+      }
+      return res.status(405).json({ error: 'método no permitido' });
+    }
+
     // --- Banco de mensajes del CRM (array de grupos {grupo, mensajes:[...]}) ---
     if (req.query?.kind === 'mensajes') {
       const msgKey = `mensajes:${store === 'zattia' ? 'zattia' : 'bdi'}`;
