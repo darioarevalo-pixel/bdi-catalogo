@@ -723,7 +723,7 @@ function renderCodigoBar() {
   } else {
     bar.innerHTML =
       '<details style="border:1px solid var(--border-strong);border-radius:10px;padding:8px 12px;background:#fff">' +
-        '<summary style="cursor:pointer;font-size:13px;color:var(--text-muted)">🔑 ¿Sos cliente mayorista con código? Ingresalo acá</summary>' +
+        '<summary style="cursor:pointer;font-size:13px;color:var(--text-muted)">🔑 ¿Tenés un código de acceso? Ingresalo acá</summary>' +
         '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">' +
           '<input type="text" id="codigo-input" placeholder="Tu código" autocomplete="off" style="flex:1;min-width:160px;padding:9px 10px;border:1px solid var(--border-strong);border-radius:8px;font-family:inherit;font-size:14px;text-transform:uppercase;outline:none" onkeydown="if(event.key===\'Enter\')aplicarCodigo()" />' +
           '<button type="button" onclick="aplicarCodigo()" style="padding:9px 16px;border:none;border-radius:8px;background:var(--accent,#2563eb);color:#fff;cursor:pointer;font-size:14px;font-weight:600">Aplicar</button>' +
