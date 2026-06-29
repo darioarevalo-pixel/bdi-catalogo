@@ -1598,6 +1598,7 @@ function renderCodigos() {
         '<div class="cupon-grid">' +
           '<label>Código<input type="text" value="' + codEsc + '" placeholder="EJ: JUANSTORE" oninput="updateCodigoField(\'' + id + '\',\'codigo\',this.value)" style="text-transform:uppercase" /></label>' +
           '<label>Cliente<input type="text" value="' + cliEsc + '" placeholder="Nombre del cliente / local" oninput="updateCodigoField(\'' + id + '\',\'cliente\',this.value)" /></label>' +
+          '<label>Descuento % (vacío = usa el % base)<input type="number" min="0" max="90" step="1" value="' + (c.descuento != null ? c.descuento : '') + '" placeholder="ej: 15" oninput="updateCodigoField(\'' + id + '\',\'descuento\',this.value)" /></label>' +
           '<label>Vencimiento (opcional)<input type="date" value="' + (c.vence || '') + '" oninput="updateCodigoField(\'' + id + '\',\'vence\',this.value)" /></label>' +
         '</div>' +
         '<div class="cupon-card-actions">' +
@@ -1613,7 +1614,7 @@ function renderCodigos() {
 function addCodigo() {
   if (!Array.isArray(config.codigosAcceso)) config.codigosAcceso = [];
   const id = 'k' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-  config.codigosAcceso.push({ id, codigo: '', cliente: '', vence: '', activo: true });
+  config.codigosAcceso.push({ id, codigo: '', cliente: '', descuento: '', vence: '', activo: true });
   renderCodigos();
 }
 

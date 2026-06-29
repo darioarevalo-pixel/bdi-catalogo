@@ -75,10 +75,14 @@ module.exports = async (req, res) => {
         const fin = new Date(c.vence + 'T23:59:59');
         if (!isNaN(fin.getTime()) && fin < new Date()) return res.status(400).json({ error: 'El código venció' });
       }
+      // Descuento: el propio del código si lo tiene; si no, el % base general.
+      const descCodigo = parseFloat(c.descuento);
+      const descGlobal = (typeof cfg.descuentoBase === 'number') ? cfg.descuentoBase : 15;
+      const descuentoBase = (c.descuento !== '' && c.descuento != null && !isNaN(descCodigo)) ? descCodigo : descGlobal;
       return res.json({
         ok: true,
         cliente: c.cliente || '',
-        descuentoBase: (typeof cfg.descuentoBase === 'number') ? cfg.descuentoBase : 15,
+        descuentoBase,
         excepciones: cfg.excepciones || {},
       });
     }
