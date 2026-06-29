@@ -1766,7 +1766,9 @@ function precioListaMejor(p) {
   const exc = excepcionDe(id);
   if (exc) {
     if (exc.tipo === 'precio') return parseFloat(exc.valor) || 0;
-    if (exc.tipo === 'costo') return cost;
+    // "Al costo": el costo, pero nunca por encima del precio mayorista público
+    // (si el costo es mayor que el mayorista, es una liquidación → queda al mayorista).
+    if (exc.tipo === 'costo') return may > 0 ? Math.min(cost, may) : cost;
   }
   // Piso: nunca por debajo del costo. PERO si el precio mayorista ya está por
   // debajo del costo (liquidación consciente de fin de temporada), no lo subimos
