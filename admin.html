@@ -396,11 +396,12 @@
     <button class="tab-btn active" onclick="setTab('products')">Productos</button>
     <button class="tab-btn" onclick="setTab('categories')">Categorías</button>
     <button class="tab-btn" id="tab-btn-prices" onclick="setTab('prices')">Precios</button>
-    <button class="tab-btn" id="tab-btn-recargos" onclick="setTab('recargos')" style="display:none">Recargos</button>
+    <button class="tab-btn" id="tab-btn-recargos" onclick="setTab('recargos')">🎯 Lista mejor</button>
     <button class="tab-btn" onclick="setTab('margenes')">Márgenes</button>
     <button class="tab-btn" id="tab-btn-pendientes" onclick="setTab('pendientes')">Pendientes</button>
     <button class="tab-btn" onclick="setTab('banners')">Banners</button>
     <button class="tab-btn" onclick="setTab('cupones')">Cupones</button>
+    <button class="tab-btn" onclick="setTab('codigos')">🔑 Códigos</button>
     <button class="tab-btn" onclick="setTab('generador')">Generador de precios</button>
     <button class="tab-btn" onclick="setTab('pedido')">Cargar pedido</button>
     <button class="tab-btn" onclick="setTab('fotos')">Fotos</button>
@@ -479,6 +480,12 @@
       </div>
       <button class="btn-save" onclick="addCupon()" style="margin-bottom:14px">+ Agregar cupón</button>
       <div id="cupones-admin-list"><div class="loading-state">Sin cupones cargados</div></div>
+    </div>
+
+    <div id="tab-codigos" style="display:none">
+      <p class="section-note">Códigos de acceso a la <strong>lista mejor</strong> (precios para clientes grandes). El cliente entra al catálogo de siempre, ingresa su código y ve los precios de lista mejor. Creá <strong>un código por cliente</strong> para saber quién entra y poder darlo de baja. Acordate de tocar "Guardar cambios".</p>
+      <button class="btn-save" onclick="addCodigo()" style="margin-bottom:14px">+ Agregar código</button>
+      <div id="codigos-admin-list"><div class="loading-state">Sin códigos cargados</div></div>
     </div>
 
     <div id="tab-generador" style="display:none">
@@ -581,7 +588,7 @@
     </div>
 
     <div id="tab-recargos" style="display:none">
-      <p class="section-note">Cargá un % de recargo opcional. <strong>Sin recargo, el producto se vende al costo.</strong> Con recargo, el precio se eleva proporcionalmente. Solo vos ves estos números — el cliente ve únicamente el precio final calculado.</p>
+      <p class="section-note">Precios de la <strong>lista mejor</strong> (clientes con código). Por defecto cada producto sale al <strong>precio mayorista menos el % base</strong> (lo definís en Configuración), <strong>sin bajar del costo</strong>. Podés poner una <strong>excepción</strong> por producto: <em>al costo</em> o un <em>precio fijo</em> (para liquidar, puede quedar bajo costo). Y podés <strong>apagar</strong> un producto (reventa / que no va por mayor) para que no aparezca en el catálogo. Solo vos ves estos números.</p>
       <div class="admin-toolbar">
         <input class="admin-search" type="text" id="recargos-search" placeholder="Buscar producto..." oninput="renderRecargosList()" />
         <select class="admin-select" id="recargos-cat-filter" onchange="renderRecargosList()">
@@ -589,14 +596,10 @@
         </select>
         <select class="admin-select" id="recargos-filter-state" onchange="renderRecargosList()">
           <option value="">Todos los productos</option>
-          <option value="with-recargo">Con recargo cargado</option>
-          <option value="no-recargo">Sin recargo (al costo)</option>
+          <option value="con-exc">Con excepción</option>
+          <option value="apagados">Apagados</option>
+          <option value="bajo-costo">Quedan bajo costo</option>
           <option value="no-cost">Sin costo cargado en GN</option>
-        </select>
-        <select class="admin-select" id="recargos-filter-vis" onchange="renderRecargosList()">
-          <option value="">Visibles y ocultos</option>
-          <option value="visible">Solo visibles</option>
-          <option value="hidden">Solo ocultos</option>
         </select>
       </div>
       <div id="recargos-list"><div class="loading-state">Cargando productos...</div></div>
@@ -618,6 +621,16 @@
         <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
           <span style="font-size:14px;color:var(--text-muted)">$</span>
           <input type="number" id="input-min-purchase" min="0" step="1000" style="width:130px;padding:8px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font-family:inherit;font-size:14px;outline:none" oninput="config.minPurchase=parseInt(this.value)||0" />
+        </div>
+      </div>
+      <div class="setting-row" style="flex-wrap:wrap;gap:8px">
+        <div class="setting-info">
+          <div class="setting-label">Descuento base de la "lista mejor" (%)</div>
+          <div class="setting-desc">Descuento general sobre el precio mayorista para clientes con código. Cada producto puede tener una excepción (pestaña "Lista mejor"). El precio nunca baja del costo, salvo excepción.</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+          <input type="number" id="input-descuento-base" min="0" max="90" step="1" style="width:90px;padding:8px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font-family:inherit;font-size:14px;outline:none" oninput="config.descuentoBase=parseInt(this.value)||0" />
+          <span style="font-size:14px;color:var(--text-muted)">%</span>
         </div>
       </div>
     </div>
@@ -643,8 +656,8 @@
 <script>
 let allAdminProducts = [];
 const ALL_KEY = '__todas__';
-let config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, recargos: {}, variantPrices: {}, banners: [], shownProducts: [], shownProductsInit: false, newProducts: [], cupones: [], ofertaMargen: 0 };
-let isDistribuidor = false; // se detecta al cargar productos (si vienen con unit_cost)
+let config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, variantPrices: {}, banners: [], newProducts: [], cupones: [], ofertaMargen: 0, descuentoBase: 15, excepciones: {}, apagados: [], codigosAcceso: [] };
+let isDistribuidor = false; // catálogo unificado: siempre mayorista
 let tnImageMap = {}; // imágenes de TiendaNube (para mostrar la foto en el listado del admin)
 let tnImageMapKeys = []; // claves del mapa, cacheadas (evita recalcularlas en cada cruce)
 let adminPassword = '';
@@ -668,12 +681,15 @@ async function verificarYEntrar(pwd) {
   const r = await fetch('/api/config?verify=1', { headers: { 'x-admin-password': pwd } });
   if (r.status === 401) return false;
   const loaded = await r.json();
-  config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, recargos: {}, variantPrices: {}, banners: [], shownProducts: [], shownProductsInit: false, newProducts: [], cupones: [], ofertaMargen: 0, ...loaded };
+  config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, variantPrices: {}, banners: [], newProducts: [], cupones: [], ofertaMargen: 0, descuentoBase: 15, excepciones: {}, apagados: [], codigosAcceso: [], ...loaded };
   if (!config.referencePrices) config.referencePrices = {};
-  if (!config.recargos) config.recargos = {};
   if (!config.variantPrices) config.variantPrices = {};
   if (!Array.isArray(config.banners)) config.banners = [];
   if (!Array.isArray(config.cupones)) config.cupones = [];
+  if (typeof config.descuentoBase !== 'number') config.descuentoBase = 15;
+  if (!config.excepciones) config.excepciones = {};
+  if (!Array.isArray(config.apagados)) config.apagados = [];
+  if (!Array.isArray(config.codigosAcceso)) config.codigosAcceso = [];
   adminPassword = pwd;
   $('login-screen').style.display = 'none';
   $('admin-panel').style.display = 'block';
@@ -1312,6 +1328,7 @@ function setTab(tab) {
   $('tab-recargos').style.display = tab === 'recargos' ? 'block' : 'none';
   $('tab-banners').style.display = tab === 'banners' ? 'block' : 'none';
   $('tab-cupones').style.display = tab === 'cupones' ? 'block' : 'none';
+  $('tab-codigos').style.display = tab === 'codigos' ? 'block' : 'none';
   $('tab-margenes').style.display = tab === 'margenes' ? 'block' : 'none';
   $('tab-pendientes').style.display = tab === 'pendientes' ? 'block' : 'none';
   $('tab-generador').style.display = tab === 'generador' ? 'block' : 'none';
@@ -1334,6 +1351,7 @@ function setTab(tab) {
   }
   if (tab === 'banners') renderBannersAdmin();
   if (tab === 'cupones') { renderCupones(); populateCuponCompartir(); }
+  if (tab === 'codigos') renderCodigos();
   if (tab === 'margenes') { populateMargenCatFilter(); renderMargenes(); }
   if (tab === 'pendientes') { populatePendientesCatFilter(); renderPendientes(); }
   if (tab === 'generador') populateGenerador();
@@ -1554,6 +1572,62 @@ function updateCuponField(id, field, value) {
   if (field === 'codigo' || field === 'minimo' || field === 'vence' || field === 'valor' || field === 'detalle') populateCuponCompartir();
 }
 
+// ===== Códigos de acceso a la lista mejor (un código por cliente) =====
+function renderCodigos() {
+  const container = $('codigos-admin-list');
+  if (!container) return;
+  const codigos = config.codigosAcceso || [];
+  if (!codigos.length) { container.innerHTML = '<div class="loading-state">Sin códigos cargados. Apretá "+ Agregar código" para empezar.</div>'; return; }
+  container.innerHTML = codigos.map(c => {
+    const id = c.id || '';
+    const codEsc = (c.codigo || '').replace(/"/g, '&quot;');
+    const cliEsc = (c.cliente || '').replace(/"/g, '&quot;');
+    const inactive = c.activo === false ? ' inactive' : '';
+    const venc = c.vence && new Date(c.vence + 'T23:59:59') < new Date();
+    const estado = (c.activo === false ? '<span class="cc-estado">inactivo</span>' : '') + (venc ? '<span class="cc-estado">vencido</span>' : '');
+    return '<div class="cupon-card' + inactive + '" data-id="' + id + '">' +
+      '<div class="cupon-body" style="display:block">' +
+        '<div class="cupon-grid">' +
+          '<label>Código<input type="text" value="' + codEsc + '" placeholder="EJ: JUANSTORE" oninput="updateCodigoField(\'' + id + '\',\'codigo\',this.value)" style="text-transform:uppercase" /></label>' +
+          '<label>Cliente<input type="text" value="' + cliEsc + '" placeholder="Nombre del cliente / local" oninput="updateCodigoField(\'' + id + '\',\'cliente\',this.value)" /></label>' +
+          '<label>Vencimiento (opcional)<input type="date" value="' + (c.vence || '') + '" oninput="updateCodigoField(\'' + id + '\',\'vence\',this.value)" /></label>' +
+        '</div>' +
+        '<div class="cupon-card-actions">' +
+          estado +
+          '<label class="toggle-row"><button class="toggle' + (c.activo !== false ? ' on' : '') + '" onclick="toggleCodigoActive(\'' + id + '\')"></button>' + (c.activo !== false ? 'Activo' : 'Inactivo') + '</label>' +
+          '<button class="btn-del" onclick="removeCodigo(\'' + id + '\')">Eliminar</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function addCodigo() {
+  if (!Array.isArray(config.codigosAcceso)) config.codigosAcceso = [];
+  const id = 'k' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  config.codigosAcceso.push({ id, codigo: '', cliente: '', vence: '', activo: true });
+  renderCodigos();
+}
+
+function removeCodigo(id) {
+  if (!confirm('¿Eliminar este código? (se aplica al tocar Guardar cambios)')) return;
+  config.codigosAcceso = (config.codigosAcceso || []).filter(c => c.id !== id);
+  renderCodigos();
+}
+
+function toggleCodigoActive(id) {
+  const c = (config.codigosAcceso || []).find(x => x.id === id);
+  if (!c) return;
+  c.activo = c.activo === false ? true : false;
+  renderCodigos();
+}
+
+function updateCodigoField(id, field, value) {
+  const c = (config.codigosAcceso || []).find(x => x.id === id);
+  if (!c) return;
+  c[field] = (field === 'codigo') ? value.toUpperCase().trim() : value;
+}
+
 // ===== Compartir cupones con clientes (solo lectura, no requiere guardar) =====
 let cuponShareSel = new Set();   // ids de cupones marcados para compartir
 let cuponShareInit = false;      // la primera vez pre-marcamos los activos vigentes
@@ -1670,12 +1744,31 @@ function populateRecargoCatFilter() {
   });
 }
 
+function excepcionDe(id) {
+  const e = config.excepciones || {};
+  return e[id] || e[String(id)] || null;
+}
+
+// Precio que verá el cliente con código (MISMO cálculo que usa el catálogo en Fase C):
+// excepción precio fijo → manda; al costo → costo; si no, mayorista − % base, pisado en costo.
+function precioListaMejor(p) {
+  const id = p.id || p.product_id;
+  const cost = parseFloat(p.unit_cost || 0);
+  const may = parseFloat(p.wholesaler_price || p.precio_mayorista || 0);
+  const exc = excepcionDe(id);
+  if (exc) {
+    if (exc.tipo === 'precio') return parseFloat(exc.valor) || 0;
+    if (exc.tipo === 'costo') return cost;
+  }
+  const base = may * (1 - (config.descuentoBase || 0) / 100);
+  return cost > 0 ? Math.max(cost, base) : base;
+}
+
 function renderRecargosList() {
   const q = ($('recargos-search')?.value || '').toLowerCase();
   const cat = $('recargos-cat-filter')?.value || '';
   const state = $('recargos-filter-state')?.value || '';
-  const vis = $('recargos-filter-vis')?.value || '';
-  const recargos = config.recargos || {};
+  const apagados = config.apagados || [];
 
   const prods = allAdminProducts.filter(p => {
     const id = p.id || p.product_id;
@@ -1684,82 +1777,96 @@ function renderRecargosList() {
     const pcat = p.category || '';
     if (q && !name.includes(q) && !code.includes(q)) return false;
     if (cat && pcat !== cat) return false;
-
     const cost = parseFloat(p.unit_cost || 0);
-    const rec = parseFloat(recargos[id] || 0);
-    if (state === 'with-recargo' && !(rec > 0)) return false;
-    if (state === 'no-recargo' && rec > 0) return false;
+    const exc = excepcionDe(id);
+    const apg = apagados.some(a => a == id);
+    if (state === 'con-exc' && !exc) return false;
+    if (state === 'apagados' && !apg) return false;
     if (state === 'no-cost' && cost > 0) return false;
-
-    const visStatus = getVisibilityStatus(p);
-    if (vis === 'visible' && visStatus !== 'visible') return false;
-    if (vis === 'hidden' && visStatus === 'visible') return false;
+    if (state === 'bajo-costo') {
+      if (apg) return false;
+      const lm = precioListaMejor(p);
+      if (!(cost > 0 && lm < cost - 0.5)) return false;
+    }
     return true;
   });
 
   const container = $('recargos-list');
-  if (!prods.length) {
-    container.innerHTML = '<div class="loading-state">Sin resultados</div>';
-    return;
-  }
+  if (!prods.length) { container.innerHTML = '<div class="loading-state">Sin resultados</div>'; return; }
 
   container.innerHTML = prods.map(p => {
     const id = p.id || p.product_id;
-    const name = p.name || p.nombre || 'Sin nombre';
+    const name = (p.name || p.nombre || 'Sin nombre').replace(/</g, '&lt;');
     const cod = p.code || p.sku || '';
     const cost = parseFloat(p.unit_cost || 0);
-    const rec = recargos[id] != null ? recargos[id] : '';
-    const recNum = parseFloat(rec) || 0;
-    const finalPrice = cost > 0 ? cost * (1 + recNum / 100) : 0;
-
-    const visStatus = getVisibilityStatus(p);
-    const visBadge = visStatus === 'prod'
-      ? '<span class="price-badge-hidden" title="Producto oculto desde la pestaña Productos">OCULTO</span>'
-      : visStatus === 'cat'
-      ? '<span class="price-badge-hidden cat" title="Categoría oculta">CATEGORÍA OCULTA</span>'
-      : '';
+    const may = parseFloat(p.wholesaler_price || p.precio_mayorista || 0);
+    const exc = excepcionDe(id);
+    const tipo = exc ? exc.tipo : 'base';
+    const apg = apagados.some(a => a == id);
+    const lm = precioListaMejor(p);
+    const bajoCosto = cost > 0 && lm < cost - 0.5;
 
     let rowCls = '';
-    if (cost <= 0) rowCls = ' no-cost';
-    else if (recNum > 0) rowCls = ' has-recargo';
-    if (visStatus !== 'visible') rowCls += ' is-hidden';
+    if (apg) rowCls = ' is-hidden';
+    else if (exc) rowCls = ' has-recargo';
+    if (cost <= 0) rowCls += ' no-cost';
 
-    const finalCls = recNum > 0 ? 'with-recargo' : '';
-    const finalTxt = cost > 0 ? fmtAR(finalPrice) : '⚠ sin costo';
+    const apagadoBadge = apg ? '<span class="price-badge-hidden" title="No se muestra en el catálogo">APAGADO</span>' : '';
+    const precioInput = tipo === 'precio'
+      ? '<input class="recargo-input" type="number" min="0" step="1" value="' + (exc && exc.valor != null ? exc.valor : '') + '" placeholder="$" oninput="setExcPrecio(' + id + ',this.value)" style="width:90px" />'
+      : '';
+    const lmTxt = apg ? '—' : ((cost > 0 || may > 0) ? fmtAR(lm) : '⚠ sin precio');
+    const lmStyle = bajoCosto ? 'color:var(--danger);font-weight:700' : '';
 
-    return '<div class="recargo-row' + rowCls + '" data-pid="' + id + '">' +
-      '<div class="recargo-info">' +
-        '<div class="pname">' + visBadge + '<span>' + name.replace(/</g,'&lt;') + '</span></div>' +
-        '<div class="pmeta">' + (cod ? cod + ' · ' : '') + (p.category || '') + '</div>' +
-      '</div>' +
+    return '<div class="recargo-row' + rowCls + '" data-pid="' + id + '" style="grid-template-columns:1fr 80px 95px 115px 235px">' +
+      '<div class="recargo-info"><div class="pname">' + apagadoBadge + '<span>' + name + '</span></div><div class="pmeta">' + (cod ? cod + ' · ' : '') + (p.category || '') + '</div></div>' +
       '<div class="recargo-cost"><span class="label">Costo</span>' + (cost > 0 ? fmtAR(cost) : '—') + '</div>' +
-      '<div class="recargo-input-wrap"><input class="recargo-input" type="number" min="0" step="1" value="' + (rec === '' ? '' : rec) + '" placeholder="0" oninput="setRecargo(' + id + ',this.value)" /><span>%</span></div>' +
-      '<div class="recargo-final ' + finalCls + '"><span class="label">Precio final</span>' + finalTxt + '</div>' +
+      '<div class="recargo-cost"><span class="label">Mayorista</span>' + (may > 0 ? fmtAR(may) : '—') + '</div>' +
+      '<div class="recargo-final"><span class="label">Lista mejor</span><span style="' + lmStyle + '">' + lmTxt + (bajoCosto ? ' ⚠' : '') + '</span></div>' +
+      '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
+        '<select class="admin-select" style="padding:6px;font-size:13px" onchange="setExcTipo(' + id + ',this.value)">' +
+          '<option value="base"' + (tipo === 'base' ? ' selected' : '') + '>Base</option>' +
+          '<option value="costo"' + (tipo === 'costo' ? ' selected' : '') + '>Al costo</option>' +
+          '<option value="precio"' + (tipo === 'precio' ? ' selected' : '') + '>Precio fijo</option>' +
+        '</select>' + precioInput +
+        '<button onclick="toggleApagar(' + id + ')" title="Apagar: no mostrar en el catálogo (reventa / no mayorista)" style="padding:6px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:' + (apg ? 'var(--danger)' : '#fff') + ';color:' + (apg ? '#fff' : 'var(--text)') + ';cursor:pointer;font-size:12px">' + (apg ? 'Apagado' : 'Apagar') + '</button>' +
+      '</div>' +
     '</div>';
   }).join('');
 }
 
-function setRecargo(productId, value) {
-  if (!config.recargos) config.recargos = {};
-  const v = parseFloat(value);
-  if (!v || v <= 0) delete config.recargos[productId];
-  else config.recargos[productId] = v;
-
-  const p = allAdminProducts.find(x => (x.id || x.product_id) == productId);
-  if (!p) return;
-  const cost = parseFloat(p.unit_cost || 0);
-  const recNum = v || 0;
-  const finalPrice = cost > 0 ? cost * (1 + recNum / 100) : 0;
-
-  const row = document.querySelector('#recargos-list .recargo-row[data-pid="' + productId + '"]');
-  if (!row) return;
-  row.classList.remove('has-recargo');
-  if (recNum > 0 && cost > 0) row.classList.add('has-recargo');
-  const fin = row.querySelector('.recargo-final');
-  if (fin) {
-    fin.className = 'recargo-final ' + (recNum > 0 ? 'with-recargo' : '');
-    fin.innerHTML = '<span class="label">Precio final</span>' + (cost > 0 ? fmtAR(finalPrice) : '⚠ sin costo');
+function setExcTipo(id, tipo) {
+  if (!config.excepciones) config.excepciones = {};
+  if (tipo === 'base') delete config.excepciones[id];
+  else if (tipo === 'costo') config.excepciones[id] = { tipo: 'costo' };
+  else if (tipo === 'precio') {
+    const prev = excepcionDe(id);
+    config.excepciones[id] = { tipo: 'precio', valor: (prev && prev.tipo === 'precio' && prev.valor != null) ? prev.valor : '' };
   }
+  renderRecargosList();
+}
+
+function setExcPrecio(id, value) {
+  if (!config.excepciones) config.excepciones = {};
+  const v = parseFloat(value);
+  config.excepciones[id] = { tipo: 'precio', valor: (isNaN(v) ? '' : v) };
+  const row = document.querySelector('#recargos-list .recargo-row[data-pid="' + id + '"]');
+  const p = allAdminProducts.find(x => (x.id || x.product_id) == id);
+  if (row && p) {
+    const cost = parseFloat(p.unit_cost || 0);
+    const lm = (isNaN(v) ? 0 : v);
+    const bajo = cost > 0 && lm < cost - 0.5;
+    const fin = row.querySelector('.recargo-final span:last-child');
+    if (fin) { fin.style.cssText = bajo ? 'color:var(--danger);font-weight:700' : ''; fin.textContent = (lm > 0 ? fmtAR(lm) : '$0') + (bajo ? ' ⚠' : ''); }
+  }
+}
+
+function toggleApagar(id) {
+  if (!Array.isArray(config.apagados)) config.apagados = [];
+  const i = config.apagados.findIndex(a => a == id);
+  if (i >= 0) config.apagados.splice(i, 1);
+  else config.apagados.push(parseInt(id));
+  renderRecargosList();
 }
 
 function getCurrentPrice(p) {
@@ -2463,6 +2570,8 @@ function renderSettings() {
   if (tog) tog.classList.toggle('on', !!(config.hideNoStock));
   const minInput = $('input-min-purchase');
   if (minInput) minInput.value = config.minPurchase || 0;
+  const descInput = $('input-descuento-base');
+  if (descInput) descInput.value = (config.descuentoBase != null ? config.descuentoBase : 15);
 }
 
 function toggleSetting(key) {
