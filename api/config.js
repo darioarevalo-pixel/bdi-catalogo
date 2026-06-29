@@ -59,6 +59,29 @@ module.exports = async (req, res) => {
       else if (c.tipo === 'monto') descuento = Math.min(subtotal, parseFloat(c.valor) || 0);
       return res.json({ ok: true, descuento, cupon: { codigo: c.codigo, tipo: c.tipo, valor: c.valor, detalle: c.detalle || '', minimo: c.minimo || '', vence: c.vence || '' } });
     }
+    // Validación de código de acceso a la "lista mejor" (acción pública). No expone
+    // la lista de códigos: valida el tipeado y, si es válido, devuelve las reglas de
+    // precio (descuento base + excepciones) para que el catálogo recalcule.
+    if (req.query.accion === 'codigo') {
+      const codigo = (req.query.codigo || '').trim().toUpperCase();
+      if (!codigo) return res.status(400).json({ error: 'Ingresá tu código' });
+      let cfg = null;
+      try { cfg = await kvGet(); } catch (e) { /* sin config */ }
+      const codigos = (cfg && cfg.codigosAcceso) || [];
+      const c = codigos.find(x => (x.codigo || '').trim().toUpperCase() === codigo);
+      if (!c) return res.status(404).json({ error: 'El código no existe' });
+      if (c.activo === false) return res.status(400).json({ error: 'Este código no está activo' });
+      if (c.vence) {
+        const fin = new Date(c.vence + 'T23:59:59');
+        if (!isNaN(fin.getTime()) && fin < new Date()) return res.status(400).json({ error: 'El código venció' });
+      }
+      return res.json({
+        ok: true,
+        cliente: c.cliente || '',
+        descuentoBase: (typeof cfg.descuentoBase === 'number') ? cfg.descuentoBase : 15,
+        excepciones: cfg.excepciones || {},
+      });
+    }
     // Con ?verify=1 valida la contraseña y devuelve la config (para el login del admin)
     if (req.query.verify) {
       if (req.headers['x-admin-password'] !== ADMIN_PASSWORD)

@@ -434,6 +434,7 @@
 
   <main class="main">
     <div id="banners-section" style="display:none"></div>
+    <div id="codigo-bar" style="margin-bottom:1rem"></div>
     <div id="toolbar" style="display:none">
       <div class="toolbar">
         <div class="search-wrap">
@@ -630,6 +631,8 @@ let viewMode = 'variants';
 let references = null;
 let adminConfig = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, variantPrices: {}, newProducts: [], cupones: [], ofertaMargen: 0, descuentoBase: 15, excepciones: {}, apagados: [], codigosAcceso: [] };
 let cuponAplicado = null; // cupón aplicado en el carrito (objeto) o null
+let codigoAplicado = null; // código de "lista mejor" aplicado: { codigo, cliente, descuentoBase, excepciones } o null
+const CODIGO_LS_KEY = 'bdi_codigo_lista_mejor';
 
 // Re-valida un cupón YA aplicado (objeto guardado) contra el subtotal actual.
 // La validación inicial la hace el servidor (/api/config?accion=cupon); acá solo re-chequeamos
@@ -705,6 +708,84 @@ function renderCuponUI(descuento, hayOferta) {
     if (inputRow) inputRow.style.display = 'flex';
   }
 }
+
+// ===== Código de acceso a la "lista mejor" (precios para clientes mayoristas) =====
+function renderCodigoBar() {
+  const bar = $('codigo-bar');
+  if (!bar) return;
+  if (codigoAplicado) {
+    const cli = (codigoAplicado.cliente || '').replace(/</g, '&lt;');
+    bar.innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:10px;padding:10px 14px">' +
+        '<div style="font-size:14px;color:#065f46"><strong>✅ Precios mayoristas especiales activos</strong>' + (cli ? ' — ' + cli : '') + '</div>' +
+        '<button type="button" onclick="salirCodigo()" style="padding:7px 12px;border:1px solid #6ee7b7;border-radius:8px;background:#fff;color:#065f46;cursor:pointer;font-size:13px">Salir</button>' +
+      '</div>';
+  } else {
+    bar.innerHTML =
+      '<details style="border:1px solid var(--border-strong);border-radius:10px;padding:8px 12px;background:#fff">' +
+        '<summary style="cursor:pointer;font-size:13px;color:var(--text-muted)">🔑 ¿Sos cliente mayorista con código? Ingresalo acá</summary>' +
+        '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">' +
+          '<input type="text" id="codigo-input" placeholder="Tu código" autocomplete="off" style="flex:1;min-width:160px;padding:9px 10px;border:1px solid var(--border-strong);border-radius:8px;font-family:inherit;font-size:14px;text-transform:uppercase;outline:none" onkeydown="if(event.key===\'Enter\')aplicarCodigo()" />' +
+          '<button type="button" onclick="aplicarCodigo()" style="padding:9px 16px;border:none;border-radius:8px;background:var(--accent,#2563eb);color:#fff;cursor:pointer;font-size:14px;font-weight:600">Aplicar</button>' +
+        '</div>' +
+        '<div id="codigo-msg" style="font-size:13px;margin-top:6px;min-height:16px"></div>' +
+      '</details>';
+  }
+}
+
+async function aplicarCodigo() {
+  const input = $('codigo-input');
+  const code = (input ? input.value : '').trim();
+  const m = $('codigo-msg');
+  if (!code) { if (m) { m.textContent = 'Ingresá tu código'; m.style.color = '#dc2626'; } return; }
+  if (m) { m.textContent = 'Validando…'; m.style.color = 'var(--text-muted)'; }
+  try {
+    const r = await fetch('/api/config?accion=codigo&codigo=' + encodeURIComponent(code));
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok || data.error || !data.ok) {
+      if (m) { m.textContent = data.error || 'No se pudo validar el código'; m.style.color = '#dc2626'; }
+      return;
+    }
+    codigoAplicado = { codigo: code.toUpperCase(), cliente: data.cliente || '', descuentoBase: data.descuentoBase, excepciones: data.excepciones || {} };
+    try { localStorage.setItem(CODIGO_LS_KEY, JSON.stringify(codigoAplicado)); } catch (e) {}
+    renderCodigoBar();
+    if (allProducts.length) renderProductos();
+    updateCartUI();
+  } catch (e) {
+    if (m) { m.textContent = 'No se pudo validar (revisá tu conexión)'; m.style.color = '#dc2626'; }
+  }
+}
+
+function salirCodigo() {
+  codigoAplicado = null;
+  try { localStorage.removeItem(CODIGO_LS_KEY); } catch (e) {}
+  renderCodigoBar();
+  if (allProducts.length) renderProductos();
+  updateCartUI();
+}
+
+// Al cargar el catálogo: si había un código guardado, lo re-valida (para respetar
+// bajas/vencimientos) y recalcula los precios.
+async function restaurarCodigo() {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(CODIGO_LS_KEY) || 'null'); } catch (e) {}
+  if (!saved || !saved.codigo) { renderCodigoBar(); return; }
+  try {
+    const r = await fetch('/api/config?accion=codigo&codigo=' + encodeURIComponent(saved.codigo));
+    const data = await r.json().catch(() => ({}));
+    if (r.ok && data.ok) {
+      codigoAplicado = { codigo: saved.codigo, cliente: data.cliente || '', descuentoBase: data.descuentoBase, excepciones: data.excepciones || {} };
+      try { localStorage.setItem(CODIGO_LS_KEY, JSON.stringify(codigoAplicado)); } catch (e) {}
+    } else {
+      codigoAplicado = null;
+      try { localStorage.removeItem(CODIGO_LS_KEY); } catch (e) {}
+    }
+  } catch (e) { codigoAplicado = saved; } // sin conexión: mantenemos lo guardado
+  renderCodigoBar();
+  if (allProducts.length) renderProductos();
+  updateCartUI();
+}
+
 let variantDimsCache = {};
 let cardVariantState = {};
 let tnImageMap = {}; // nombre/SKU -> { imgs: [], desc: '' }
@@ -954,6 +1035,8 @@ async function conectar() {
     $('toolbar').style.display = 'block';
     renderBanners();
     updateCartUI();
+    // Si había un código de "lista mejor" guardado, lo re-valida y recalcula precios.
+    restaurarCodigo();
   } catch(e) {
     $('conn-dot').className = 'conn-dot err';
     $('conn-label').textContent = 'Error de conexión';
@@ -1110,8 +1193,21 @@ function stockText(stock) {
 function getPrecio(p) {
   // Precio mayorista de GN. Regla de negocio: si un producto no tiene precio
   // mayorista, NO se vende (devuelve 0 → cargarProductos lo oculta). No cae al retail.
-  // (La "lista mejor" por código se aplica en Fase C.)
-  return parseFloat(p.wholesaler_price || p.precio_mayorista || 0);
+  const may = parseFloat(p.wholesaler_price || p.precio_mayorista || 0);
+  if (!codigoAplicado) return may;
+  // LISTA MEJOR (cliente con código). Misma lógica que el admin (precioListaMejor):
+  // excepción precio fijo → manda; al costo → min(costo, mayorista); si no, mayorista
+  // − % base, con piso en min(costo, mayorista) (nunca bajo costo ni más caro que el público).
+  const id = p.id || p.product_id;
+  const cost = parseFloat(p.unit_cost || 0);
+  const exc = (codigoAplicado.excepciones || {})[id] || (codigoAplicado.excepciones || {})[String(id)];
+  if (exc) {
+    if (exc.tipo === 'precio') return parseFloat(exc.valor) || 0;
+    if (exc.tipo === 'costo') return may > 0 ? Math.min(cost, may) : cost;
+  }
+  const piso = cost > 0 ? Math.min(cost, may) : 0;
+  const base = may * (1 - (codigoAplicado.descuentoBase || 0) / 100);
+  return Math.max(piso, base);
 }
 
 // Precio especial por variante (guardado en el admin, clave "productId-sizeId").
@@ -1807,7 +1903,21 @@ function removeCart(id) {
   renderCartItems();
 }
 
+// Recalcula el precio de cada item del carrito según el estado actual (con o sin
+// código de lista mejor). Así, si el cliente aplica/saca el código teniendo cosas
+// en el carrito, los precios se actualizan solos.
+function recomputarPreciosCarrito() {
+  Object.keys(cart).forEach(k => {
+    const it = cart[k];
+    const p = (allProducts || []).find(x => (x.id || x.product_id) == it.id);
+    if (!p) return;
+    const base = getPrecio(p);
+    it.precio = it.sizeId ? getPrecioVariante(it.id, it.sizeId, base) : base;
+  });
+}
+
 function updateCartUI() {
+  recomputarPreciosCarrito();
   saveCart();
   const items = Object.values(cart);
   const totalUnits = items.reduce((s,i) => s + i.qty, 0);
