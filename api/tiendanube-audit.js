@@ -84,7 +84,7 @@ async function fetchAllCategories(storeId, token) {
   return map;
 }
 
-function mapProduct(p, catMap) {
+function mapProduct(p, catMap, incluirVariantes) {
   const name    = p.name?.es    || p.name?.pt    || Object.values(p.name    || {})[0] || '(sin nombre)';
   const handle  = p.handle?.es  || p.handle?.pt  || Object.values(p.handle  || {})[0] || null;
   const rawDesc = p.description?.es || p.description?.pt || Object.values(p.description || {})[0] || '';
@@ -110,7 +110,7 @@ function mapProduct(p, catMap) {
   };
   const variantes_sin_foto = images.length > 0 ? variantsRaw.filter(v => v.image_id == null).map(labelVar) : [];
 
-  return {
+  const out = {
     id: p.id, name, handle, sku,
     price, promo_price,   // precio normal y promocional en TN
     published:   p.published ?? true,
@@ -127,6 +127,23 @@ function mapProduct(p, catMap) {
     variantes_con_foto:  images.length > 0 ? variantsRaw.filter(v => v.image_id != null).length : 0,
     variantes_sin_foto,  // etiquetas de las variantes sin foto propia
   };
+  // Detalle por variante (solo si se pide con ?variantes=1): color + foto propia + sku, alineados.
+  if (incluirVariantes) {
+    const imgById = {};
+    (p.images || []).forEach(i => { if (i.id != null) imgById[i.id] = i.src; });
+    out.variantes = variantsRaw.map(v => {
+      const vals = (v.values || []).map(val => val?.es || val?.pt || (val && Object.values(val)[0])).filter(Boolean);
+      const pr = parseFloat(v.promotional_price) > 0 ? parseFloat(v.promotional_price) : (parseFloat(v.price) || null);
+      return {
+        sku: v.sku || null,
+        barcode: v.barcode || null,
+        valores: vals,                                                  // ej. ["iPhone 16 - Azul"] o ["Azul"]
+        image_url: v.image_id != null ? (imgById[v.image_id] || null) : null,  // foto PROPIA de la variante
+        price: pr,
+      };
+    });
+  }
+  return out;
 }
 
 module.exports = async (req, res) => {
@@ -143,9 +160,12 @@ module.exports = async (req, res) => {
   if (!cfg.storeId || !cfg.token) return res.status(500).json({ error: `Tienda Nube no configurado para ${storeKey}` });
 
   const forceRefresh = req.query?.refresh === '1';
+  const incluirVariantes = req.query?.variantes === '1';
+  // Clave de caché separada para la versión con variantes (no pisa la que usa Monitor).
+  const ckey = incluirVariantes ? cfg.cacheKey + ':var' : cfg.cacheKey;
 
   if (!forceRefresh) {
-    const cached = await kvGet(cfg.cacheKey);
+    const cached = await kvGet(ckey);
     if (cached) {
       res.setHeader('X-Cache', 'HIT');
       return res.json(cached);
@@ -161,7 +181,7 @@ module.exports = async (req, res) => {
     const { data: first, total } = firstResult;
     if (!first.length) {
       const empty = { store: storeKey, total: 0, products: [], categories: catMap, cached_at: new Date().toISOString() };
-      await kvSet(cfg.cacheKey, empty);
+      await kvSet(ckey, empty);
       return res.json(empty);
     }
 
@@ -170,10 +190,10 @@ module.exports = async (req, res) => {
     const rest = await Promise.all(restPages.map(p => fetchPage(cfg.storeId, cfg.token, p)));
 
     const all      = [first, ...rest.map(r => r.data)].flat();
-    const products = all.map(p => mapProduct(p, catMap));
+    const products = all.map(p => mapProduct(p, catMap, incluirVariantes));
     const payload  = { store: storeKey, total: products.length, products, categories: catMap, cached_at: new Date().toISOString() };
 
-    await kvSet(cfg.cacheKey, payload);
+    await kvSet(ckey, payload);
     res.setHeader('X-Cache', 'MISS');
     res.json(payload);
   } catch (e) {
