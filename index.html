@@ -628,7 +628,7 @@ let filtro = 'todos';
 let categoria = 'todas';
 let viewMode = 'variants';
 let references = null;
-let adminConfig = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, recargos: {}, variantPrices: {}, shownProducts: [], shownProductsInit: false, newProducts: [], cupones: [], ofertaMargen: 0 };
+let adminConfig = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, variantPrices: {}, newProducts: [], cupones: [], ofertaMargen: 0, descuentoBase: 15, excepciones: {}, apagados: [], codigosAcceso: [] };
 let cuponAplicado = null; // cupón aplicado en el carrito (objeto) o null
 
 // Re-valida un cupón YA aplicado (objeto guardado) contra el subtotal actual.
@@ -705,7 +705,6 @@ function renderCuponUI(descuento, hayOferta) {
     if (inputRow) inputRow.style.display = 'flex';
   }
 }
-let esDistribuidor = null; // lo define el servidor (config.__esDistribuidor); null = aún no cargado
 let variantDimsCache = {};
 let cardVariantState = {};
 let tnImageMap = {}; // nombre/SKU -> { imgs: [], desc: '' }
@@ -863,7 +862,6 @@ async function cargarConfig() {
     if (r.ok) {
       const loaded = await r.json();
       adminConfig = { ...adminConfig, ...loaded };
-      if (typeof loaded.__esDistribuidor === 'boolean') esDistribuidor = loaded.__esDistribuidor;
     }
   } catch(e) {}
 }
@@ -1057,23 +1055,17 @@ async function cargarProductos() {
 
   // Filtrar productos y categorías ocultos por el admin
   const hiddenCats = adminConfig.hiddenCategories || [];
-  const modoDist = (esDistribuidor === null) ? all.some(p => parseFloat(p.unit_cost || 0) > 0) : esDistribuidor;
+  const apagados = adminConfig.apagados || [];
   all = all.filter(p => {
     const pid = p.id || p.product_id;
     if (hiddenCats.includes(p.category || '')) return false;
     if (adminConfig.hideNoStock && getStockTotal(p) === 0) return false;
-    if (modoDist) {
-      // Distribuidores: lista blanca. El producto nuevo nace oculto hasta que lo
-      // aprueben desde el admin. Antes de la migración inicial (shownProductsInit)
-      // se mantiene el comportamiento anterior para no ocultar todo de golpe.
-      if (adminConfig.shownProductsInit &&
-          !(adminConfig.shownProducts || []).some(s => s == pid)) return false;
-    } else {
-      // Mayorista: oculto manual + no publicar sin precio mayorista cargado
-      // (evita que un producto nuevo se muestre con el precio minorista de respaldo).
-      if (adminConfig.hiddenProducts.some(hid => hid == pid)) return false;
-      if (parseFloat(p.wholesaler_price || 0) <= 0) return false;
-    }
+    // Apagado: producto de reventa / que nunca va por mayor → no se muestra nunca.
+    if (apagados.some(a => a == pid)) return false;
+    // Oculto manual + no publicar sin precio mayorista cargado
+    // (evita que un producto nuevo se muestre con el precio minorista de respaldo).
+    if (adminConfig.hiddenProducts.some(hid => hid == pid)) return false;
+    if (parseFloat(p.wholesaler_price || 0) <= 0) return false;
     return true;
   });
   allProducts = all;
@@ -1116,19 +1108,9 @@ function stockText(stock) {
 }
 
 function getPrecio(p) {
-  // El modo lo define el servidor (esDistribuidor). Respaldo: si aún no cargó,
-  // se infiere por presencia de costo (comportamiento anterior).
-  const cost = parseFloat(p.unit_cost || 0);
-  const modoDist = (esDistribuidor === null) ? (cost > 0) : esDistribuidor;
-  if (modoDist && cost > 0) {
-    const id = p.id || p.product_id;
-    const recargos = adminConfig.recargos || {};
-    const pct = parseFloat(recargos[id] || recargos[String(id)] || 0);
-    return cost * (1 + pct / 100);
-  }
-  // Modo mayorista: SOLO el precio mayorista de GN. Regla de negocio: si un
-  // producto no tiene precio mayorista, NO se vende (devuelve 0 → cargarProductos
-  // lo oculta). No se cae al precio retail.
+  // Precio mayorista de GN. Regla de negocio: si un producto no tiene precio
+  // mayorista, NO se vende (devuelve 0 → cargarProductos lo oculta). No cae al retail.
+  // (La "lista mejor" por código se aplica en Fase C.)
   return parseFloat(p.wholesaler_price || p.precio_mayorista || 0);
 }
 

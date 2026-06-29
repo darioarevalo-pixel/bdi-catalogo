@@ -66,15 +66,19 @@ module.exports = async (req, res) => {
     }
     try {
       const config = { ...DEFAULT, ...(await kvGet() || {}) };
-      // Bandera de modo según el CONFIG_KEY del proyecto (no según el costo).
-      // Así el catálogo no depende de que el token tenga permiso de costos.
-      config.__esDistribuidor = (CONFIG_KEY === 'distribuidor-config');
-      // Los códigos de cupón NO se exponen al público: solo el admin (verify con
-      // contraseña correcta) los recibe. El catálogo valida con ?accion=cupon.
-      if (!req.query.verify) delete config.cupones;
+      // Datos sensibles que NO se exponen al público (solo el admin con verify, o
+      // se validan on-demand): cupones (?accion=cupon) y las reglas de la "lista
+      // mejor" + códigos de acceso (?accion=codigo). 'apagados' sí es público
+      // (solo oculta productos, no filtra precios).
+      if (!req.query.verify) {
+        delete config.cupones;
+        delete config.codigosAcceso;
+        delete config.descuentoBase;
+        delete config.excepciones;
+      }
       return res.json(config);
     } catch (e) {
-      return res.json({ ...DEFAULT, __esDistribuidor: (CONFIG_KEY === 'distribuidor-config') });
+      return res.json({ ...DEFAULT });
     }
   }
 

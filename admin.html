@@ -762,29 +762,9 @@ async function cargarProductos() {
   }
   allAdminProducts = all;
 
-  // El modo lo define el servidor (config.__esDistribuidor, según CONFIG_KEY).
-  // Respaldo: si no vino la bandera, se infiere por presencia de costo (como antes).
-  isDistribuidor = (typeof config.__esDistribuidor === 'boolean')
-    ? config.__esDistribuidor
-    : all.some(p => p.unit_cost != null && parseFloat(p.unit_cost) > 0);
-  if (isDistribuidor) {
-    const btnRec = $('tab-btn-recargos');
-    if (btnRec) btnRec.style.display = '';
-    // En distribuidor, "Precios" (referencePrices para descuentos) no aplica tanto — lo ocultamos
-    const btnPrices = $('tab-btn-prices');
-    if (btnPrices) btnPrices.style.display = 'none';
-  }
-
-  // Distribuidores: migración inicial de visibilidad. La primera vez, todos los
-  // productos que hoy se muestran quedan en la lista blanca (shownProducts) para
-  // que sigan visibles. De ahí en más, los productos nuevos nacen ocultos hasta
-  // mostrarlos manualmente. Se persiste al tocar "Guardar cambios".
-  if (isDistribuidor && !config.shownProductsInit) {
-    config.shownProducts = all
-      .map(p => parseInt(p.id || p.product_id))
-      .filter(id => !config.hiddenProducts.some(h => h == id));
-    config.shownProductsInit = true;
-  }
+  // Catálogo unificado: siempre modo mayorista (la "lista mejor" por código se
+  // gestiona aparte). Ya no hay modo distribuidor.
+  isDistribuidor = false;
 
   // Si no hay orden de categorías guardado, inicializar con todas las del catálogo
   const allCats = [...new Set(all.map(p => p.category || '').filter(Boolean).sort())];
