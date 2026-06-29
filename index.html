@@ -1190,14 +1190,23 @@ function stockText(stock) {
   return stock + ' disp.';
 }
 
+// Aplica la "lista mejor" a un precio público (mayorista) dado: si hay código,
+// resta el % del código pero nunca baja del costo ni sube por encima del público.
+// Sirve tanto para el precio del producto como para precios por variante.
+function listaMejorDesde(publico, cost) {
+  if (!codigoAplicado || !(publico > 0)) return publico;
+  const piso = cost > 0 ? Math.min(cost, publico) : 0;
+  const base = publico * (1 - (codigoAplicado.descuentoBase || 0) / 100);
+  return Math.max(piso, base);
+}
+
 function getPrecio(p) {
   // Precio mayorista de GN. Regla de negocio: si un producto no tiene precio
   // mayorista, NO se vende (devuelve 0 → cargarProductos lo oculta). No cae al retail.
   const may = parseFloat(p.wholesaler_price || p.precio_mayorista || 0);
   if (!codigoAplicado) return may;
-  // LISTA MEJOR (cliente con código). Misma lógica que el admin (precioListaMejor):
-  // excepción precio fijo → manda; al costo → min(costo, mayorista); si no, mayorista
-  // − % base, con piso en min(costo, mayorista) (nunca bajo costo ni más caro que el público).
+  // LISTA MEJOR (cliente con código): excepción precio fijo → manda; al costo →
+  // min(costo, mayorista); si no, mayorista − % con piso en min(costo, mayorista).
   const id = p.id || p.product_id;
   const cost = parseFloat(p.unit_cost || 0);
   const exc = (codigoAplicado.excepciones || {})[id] || (codigoAplicado.excepciones || {})[String(id)];
@@ -1205,9 +1214,7 @@ function getPrecio(p) {
     if (exc.tipo === 'precio') return parseFloat(exc.valor) || 0;
     if (exc.tipo === 'costo') return may > 0 ? Math.min(cost, may) : cost;
   }
-  const piso = cost > 0 ? Math.min(cost, may) : 0;
-  const base = may * (1 - (codigoAplicado.descuentoBase || 0) / 100);
-  return Math.max(piso, base);
+  return listaMejorDesde(may, cost);
 }
 
 // Precio especial por variante (guardado en el admin, clave "productId-sizeId").
@@ -1218,7 +1225,12 @@ function precioVarianteOverride(id, sizeId) {
 }
 function getPrecioVariante(id, sizeId, base) {
   const o = precioVarianteOverride(id, sizeId);
-  return o !== null ? o : base;
+  if (o === null) return base; // sin precio especial: usa el del producto (ya con lista mejor)
+  // Con precio especial de variante: si hay código, también recibe el descuento,
+  // con piso en el costo del producto. Sin código, queda a su precio.
+  const p = (allProducts || []).find(x => (x.id || x.product_id) == id);
+  const cost = p ? parseFloat(p.unit_cost || 0) : 0;
+  return listaMejorDesde(o, cost);
 }
 function productoTienePrecioEspecial(p) {
   const id = p.id || p.product_id;
