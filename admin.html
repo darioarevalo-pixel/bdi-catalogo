@@ -602,6 +602,14 @@
           <option value="no-cost">Sin costo cargado en GN</option>
         </select>
       </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;background:#f8fafc;border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:10px">
+        <strong style="font-size:13px">Acción masiva:</strong>
+        <span style="font-size:13px;color:var(--text-muted)">poner <strong>al costo</strong> los productos con markup menor a</span>
+        <input type="number" id="masivo-umbral" min="0" max="100" step="1" value="20" style="width:70px;padding:6px 8px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font-family:inherit;font-size:14px;outline:none" />
+        <span style="font-size:13px;color:var(--text-muted)">%</span>
+        <button onclick="aplicarAlCostoMasivo()" style="padding:7px 12px;border:none;border-radius:var(--radius-sm);background:var(--accent,#2563eb);color:#fff;cursor:pointer;font-size:13px;font-weight:600">⚡ Aplicar</button>
+        <button onclick="limpiarExcepciones()" style="padding:7px 12px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:#fff;color:var(--text);cursor:pointer;font-size:13px">Limpiar excepciones</button>
+      </div>
       <div id="recargos-list"><div class="loading-state">Cargando productos...</div></div>
     </div>
 
@@ -1867,6 +1875,36 @@ function toggleApagar(id) {
   if (i >= 0) config.apagados.splice(i, 1);
   else config.apagados.push(parseInt(id));
   renderRecargosList();
+}
+
+// Masivo: pone "al costo" todos los productos cuyo markup mayorista sobre el costo
+// sea menor al umbral. No toca apagados ni precios fijos (liquidaciones manuales).
+function aplicarAlCostoMasivo() {
+  const umbral = parseFloat($('masivo-umbral')?.value);
+  if (isNaN(umbral)) { showToast('Poné un % válido', 'error'); return; }
+  const apagados = config.apagados || [];
+  if (!config.excepciones) config.excepciones = {};
+  let n = 0;
+  allAdminProducts.forEach(p => {
+    const id = p.id || p.product_id;
+    if (apagados.some(a => a == id)) return;
+    const cost = parseFloat(p.unit_cost || 0);
+    const may = parseFloat(p.wholesaler_price || p.precio_mayorista || 0);
+    if (!(cost > 0 && may > 0)) return;
+    const exc = excepcionDe(id);
+    if (exc && exc.tipo === 'precio') return; // respeta precios fijos cargados a mano
+    const markup = (may / cost - 1) * 100;
+    if (markup < umbral) { config.excepciones[id] = { tipo: 'costo' }; n++; }
+  });
+  renderRecargosList();
+  showToast('✓ ' + n + ' producto(s) puestos al costo (markup < ' + umbral + '%). Tocá Guardar cambios.', '', 4500);
+}
+
+function limpiarExcepciones() {
+  if (!confirm('¿Quitar TODAS las excepciones? Los productos vuelven al descuento base. (Se aplica al tocar Guardar cambios.)')) return;
+  config.excepciones = {};
+  renderRecargosList();
+  showToast('Excepciones limpiadas. Tocá Guardar cambios.', '', 3500);
 }
 
 function getCurrentPrice(p) {
