@@ -657,6 +657,11 @@ function descuentoCupon(cupon, subtotal) {
 }
 
 async function aplicarCupon() {
+  if (codigoAplicado) {
+    const m = $('cupon-msg');
+    if (m) { m.textContent = 'Ya tenés precios especiales con tu código; no se combinan con cupones.'; m.className = 'cupon-msg err'; }
+    return;
+  }
   const input = $('cupon-input');
   const code = (input ? input.value : '').trim();
   const subtotal = Object.values(cart).reduce((s, i) => s + i.precio * i.qty, 0);
@@ -690,6 +695,13 @@ function renderCuponUI(descuento, hayOferta) {
   const box = $('cupon-aplicado');
   const inputRow = $('cupon-input-row');
   if (!box) return;
+  // Con código de precios especiales no se usan cupones: ocultamos el cuadro.
+  if (codigoAplicado) {
+    box.style.display = 'none';
+    if (inputRow) inputRow.style.display = 'none';
+    const m = $('cupon-msg'); if (m) { m.textContent = '🔑 Estás usando tus precios especiales.'; m.className = 'cupon-msg'; }
+    return;
+  }
   if (cuponAplicado) {
     const c = cuponAplicado;
     let txt;
@@ -714,10 +726,9 @@ function renderCodigoBar() {
   const bar = $('codigo-bar');
   if (!bar) return;
   if (codigoAplicado) {
-    const cli = (codigoAplicado.cliente || '').replace(/</g, '&lt;');
     bar.innerHTML =
       '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:10px;padding:10px 14px">' +
-        '<div style="font-size:14px;color:#065f46"><strong>✅ Precios mayoristas especiales activos</strong>' + (cli ? ' — ' + cli : '') + '</div>' +
+        '<div style="font-size:14px;color:#065f46"><strong>✅ Precios mayoristas especiales activos</strong></div>' +
         '<button type="button" onclick="salirCodigo()" style="padding:7px 12px;border:1px solid #6ee7b7;border-radius:8px;background:#fff;color:#065f46;cursor:pointer;font-size:13px">Salir</button>' +
       '</div>';
   } else {
@@ -747,6 +758,7 @@ async function aplicarCodigo() {
       return;
     }
     codigoAplicado = { codigo: code.toUpperCase(), cliente: data.cliente || '', descuentoBase: data.descuentoBase, excepciones: data.excepciones || {} };
+    cuponAplicado = null; // los cupones no se combinan con el código de precios especiales
     try { localStorage.setItem(CODIGO_LS_KEY, JSON.stringify(codigoAplicado)); } catch (e) {}
     renderCodigoBar();
     if (allProducts.length) renderProductos();
@@ -775,6 +787,7 @@ async function restaurarCodigo() {
     const data = await r.json().catch(() => ({}));
     if (r.ok && data.ok) {
       codigoAplicado = { codigo: saved.codigo, cliente: data.cliente || '', descuentoBase: data.descuentoBase, excepciones: data.excepciones || {} };
+      cuponAplicado = null; // no se combinan cupones con el código
       try { localStorage.setItem(CODIGO_LS_KEY, JSON.stringify(codigoAplicado)); } catch (e) {}
     } else {
       codigoAplicado = null;
