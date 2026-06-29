@@ -1768,8 +1768,12 @@ function precioListaMejor(p) {
     if (exc.tipo === 'precio') return parseFloat(exc.valor) || 0;
     if (exc.tipo === 'costo') return cost;
   }
+  // Piso: nunca por debajo del costo. PERO si el precio mayorista ya está por
+  // debajo del costo (liquidación consciente de fin de temporada), no lo subimos
+  // al costo: lo dejamos a ese precio. Por eso el piso es min(costo, mayorista).
+  const piso = cost > 0 ? Math.min(cost, may) : 0;
   const base = may * (1 - (config.descuentoBase || 0) / 100);
-  return cost > 0 ? Math.max(cost, base) : base;
+  return Math.max(piso, base);
 }
 
 function renderRecargosList() {
