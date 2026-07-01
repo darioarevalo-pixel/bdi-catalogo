@@ -386,11 +386,11 @@
           2. Tu pedido se va sumando en el botón <b>"Pedido"</b> de arriba a la derecha.<br>
           3. Cuando termines, tocá <b>"Pedido"</b>, completá tus datos (nombre, teléfono, forma de pago y entrega) y tocá <b>"Confirmar pedido"</b>.<br>
           4. Vas a recibir un link con el detalle de tu compra y un botón para avisarnos por WhatsApp y coordinar el envío y el pago.<br>
-          Recordá que la compra mínima es de $100.000.</div>
+          <span id="faq-min-recordatorio">Recordá que la compra mínima es de <span class="faq-min-monto">$100.000</span>.</span></div>
       </div>
-      <div class="faq-item">
+      <div class="faq-item" id="faq-min-item">
         <div class="faq-q">¿Cuál es la compra mínima?</div>
-        <div class="faq-a">La compra mínima es de $100.000.</div>
+        <div class="faq-a"><span class="faq-min-respuesta">La compra mínima es de <span class="faq-min-monto">$100.000</span>.</span></div>
       </div>
       <div class="faq-item">
         <div class="faq-q">¿A dónde y por dónde envían?</div>
@@ -958,6 +958,21 @@ async function cargarConfig() {
       adminConfig = { ...adminConfig, ...loaded };
     }
   } catch(e) {}
+  aplicarMinimoFAQ();
+}
+
+// La FAQ muestra el mínimo configurado (no un texto fijo). Si no hay mínimo
+// (minPurchase 0), se oculta la mención para no prometer algo que no se exige.
+function aplicarMinimoFAQ() {
+  const min = Number(adminConfig.minPurchase) || 0;
+  const hay = min > 0;
+  document.querySelectorAll('.faq-min-monto').forEach(el => { el.textContent = formatPrecio(min); });
+  const rec = document.getElementById('faq-min-recordatorio');
+  if (rec) rec.style.display = hay ? '' : 'none';
+  const resp = document.querySelector('#faq-min-item .faq-min-respuesta');
+  if (resp) resp.textContent = hay
+    ? 'La compra mínima es de ' + formatPrecio(min) + '.'
+    : 'No tenemos compra mínima: podés pedir la cantidad que quieras.';
 }
 
 let bannerIdx = 0, bannerTimer = null;
