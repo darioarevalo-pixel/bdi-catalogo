@@ -1674,8 +1674,13 @@ function renderVariantesGrid(prods) {
 // Cambia la cantidad directamente en el carrito y actualiza el input
 function chQty(cartKey, productId, nombre, precio, sizeId, varNombre, img, d) {
   const current = cart[cartKey]?.qty || 0;
-  const el = $('q-m-' + cartKey);
-  const max = el?.max ? parseInt(el.max) : null;
+  // Puede haber MÁS DE UN input con este id: el de la tarjeta (oculto en mobile)
+  // y el del modal (visible). getElementById devolvía solo el primero (el de la
+  // tarjeta), por eso en mobile el número del modal no cambiaba. Actualizamos
+  // todos para mantenerlos sincronizados sin importar cuál esté visible.
+  const els = document.querySelectorAll('[id="q-m-' + cartKey + '"]');
+  const el0 = els[0];
+  const max = el0 && el0.max ? parseInt(el0.max) : null;
   let newQty = current + d;
   if (newQty < 0) newQty = 0;
   if (max !== null && newQty > max) newQty = max;
@@ -1688,14 +1693,14 @@ function chQty(cartKey, productId, nombre, precio, sizeId, varNombre, img, d) {
     cart[cartKey] = { id: parseInt(productId), nombre, varNombre: varNombre||'', precio, qty: newQty, sizeId: sizeId||null, img };
   }
 
-  if (el) {
+  els.forEach(el => {
     el.value = newQty;
     const maxVal = el.max ? parseInt(el.max) : null;
     const plusBtn = el.nextElementSibling;
     if (plusBtn && plusBtn.classList.contains('plus')) {
       plusBtn.disabled = maxVal !== null && newQty >= maxVal;
     }
-  }
+  });
   updateCartUI();
 }
 
