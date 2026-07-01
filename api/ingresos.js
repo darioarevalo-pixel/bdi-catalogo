@@ -146,6 +146,22 @@ module.exports = async (req, res) => {
       return res.status(405).json({ error: 'método no permitido' });
     }
 
+    // --- Cupones por marca (array de cupones para aplicar en el local) — baja sensibilidad, sin contraseña ---
+    if (req.query?.kind === 'cupones') {
+      const cupKey = `cupones:${store === 'zattia' ? 'zattia' : 'bdi'}`;
+      if (req.method === 'GET') {
+        const raw = await kvCmd(['GET', cupKey]);
+        return res.status(200).json({ ok: true, cupones: raw ? JSON.parse(raw) : [] });
+      }
+      if (req.method === 'POST') {
+        const { cupones } = req.body || {};
+        if (!Array.isArray(cupones)) return res.status(400).json({ error: 'cupones inválida' });
+        await kvCmd(['SET', cupKey, JSON.stringify(cupones)]);
+        return res.status(200).json({ ok: true, total: cupones.length });
+      }
+      return res.status(405).json({ error: 'método no permitido' });
+    }
+
     if (req.method === 'GET') {
       const raw = await kvCmd(['GET', keyFor(store)]);
       return res.status(200).json({ ok: true, ingresos: raw ? JSON.parse(raw) : [] });
