@@ -210,16 +210,34 @@ async function refrescarDesdeGN(id) {
 
 function cuponBloque(pedido) {
   const c = pedido.cupon;
-  if (!c) return '';
-  if (c.tipo === 'envio') {
-    return '<div class="cupon-bloque"><div class="cupon-line envio">🚚 Envío bonificado' +
-      (c.detalle ? ' · ' + c.detalle : '') + ' <span class="cod">(' + c.codigo + ')</span></div></div>';
+  if (c) {
+    if (c.tipo === 'envio') {
+      return '<div class="cupon-bloque"><div class="cupon-line envio">🚚 Envío bonificado' +
+        (c.detalle ? ' · ' + c.detalle : '') + ' <span class="cod">(' + c.codigo + ')</span></div></div>';
+    }
+    const sub = pedido.subtotal != null ? pedido.subtotal : pedido.total;
+    return '<div class="cupon-bloque">' +
+      '<div class="cupon-sub"><span>Subtotal</span><span>' + fmt(sub) + '</span></div>' +
+      '<div class="cupon-desc"><span>Descuento <span class="cod">(' + c.codigo + (c.detalle ? ' · ' + c.detalle : '') + ')</span></span><span>-' + fmt(c.descuento || 0) + '</span></div>' +
+    '</div>';
   }
-  const sub = pedido.subtotal != null ? pedido.subtotal : pedido.total;
-  return '<div class="cupon-bloque">' +
-    '<div class="cupon-sub"><span>Subtotal</span><span>' + fmt(sub) + '</span></div>' +
-    '<div class="cupon-desc"><span>Descuento <span class="cod">(' + c.codigo + (c.detalle ? ' · ' + c.detalle : '') + ')</span></span><span>-' + fmt(c.descuento || 0) + '</span></div>' +
-  '</div>';
+  // Sin cupón: si el subtotal difiere del total (ej. descuento/ajuste cargado en
+  // Gestión Nube), mostramos el desglose para que el total cierre.
+  const sub = pedido.subtotal;
+  if (sub != null && pedido.total != null && Math.round(sub) !== Math.round(pedido.total)) {
+    const dif = Math.round(sub) - Math.round(pedido.total);
+    if (dif > 0) {
+      return '<div class="cupon-bloque">' +
+        '<div class="cupon-sub"><span>Subtotal</span><span>' + fmt(sub) + '</span></div>' +
+        '<div class="cupon-desc"><span>Descuento</span><span>-' + fmt(dif) + '</span></div>' +
+      '</div>';
+    }
+    return '<div class="cupon-bloque">' +
+      '<div class="cupon-sub"><span>Subtotal</span><span>' + fmt(sub) + '</span></div>' +
+      '<div class="cupon-sub"><span>Otros cargos</span><span>+' + fmt(-dif) + '</span></div>' +
+    '</div>';
+  }
+  return '';
 }
 
 function getId() {

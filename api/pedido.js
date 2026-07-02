@@ -70,15 +70,21 @@ async function refrescarDesdeGN(numero, snap) {
       img: imgPrev[nombre + '|' + variante] || '',
     };
   });
-  const total = items.reduce((s, i) => s + (i.precio || 0) * (i.cantidad || 0), 0);
+  const subtotal = items.reduce((s, i) => s + (i.precio || 0) * (i.cantidad || 0), 0);
+  // Total REAL de GN: respeta descuentos/ajustes cargados a nivel venta (el campo
+  // `discount` de GN no baja los renglones, así que sumarlos ignoraría el descuento).
+  // Fallback a la suma de renglones si GN no trae total_price.
+  const total = (typeof venta.total_price === 'number' && venta.total_price > 0)
+    ? Math.round(venta.total_price) : subtotal;
 
-  // Merge: mantiene cliente/telefono/pago/entrega/obs/cupon del snapshot; refresca items y total.
-  const cupon = snap && snap.cupon ? snap.cupon : null;
+  // Merge: mantiene datos del cliente del snapshot; refresca ítems, subtotal y total.
+  // El descuento/ajuste de GN se muestra por la diferencia subtotal - total (cupon: null).
   return Object.assign({}, snap, {
     gnId,
     items,
+    subtotal,
     total,
-    subtotal: cupon ? (snap.subtotal != null ? snap.subtotal : total) : total,
+    cupon: null,
     actualizado: new Date().toISOString(),
   });
 }
