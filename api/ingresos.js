@@ -162,6 +162,22 @@ module.exports = async (req, res) => {
       return res.status(405).json({ error: 'método no permitido' });
     }
 
+    // --- Solicitudes internas de productos (retiros con motivo/aprobación) por marca — baja sensibilidad ---
+    if (req.query?.kind === 'solicitudesinternas') {
+      const siKey = `solicitudesinternas:${store === 'zattia' ? 'zattia' : 'bdi'}`;
+      if (req.method === 'GET') {
+        const raw = await kvCmd(['GET', siKey]);
+        return res.status(200).json({ ok: true, list: raw ? JSON.parse(raw) : [] });
+      }
+      if (req.method === 'POST') {
+        const { list } = req.body || {};
+        if (!Array.isArray(list)) return res.status(400).json({ error: 'list inválida' });
+        await kvCmd(['SET', siKey, JSON.stringify(list)]);
+        return res.status(200).json({ ok: true, total: list.length });
+      }
+      return res.status(405).json({ error: 'método no permitido' });
+    }
+
     if (req.method === 'GET') {
       const raw = await kvCmd(['GET', keyFor(store)]);
       return res.status(200).json({ ok: true, ingresos: raw ? JSON.parse(raw) : [] });
