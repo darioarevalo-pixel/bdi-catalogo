@@ -25,14 +25,37 @@
   .datos .lbl { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-hint); }
   .datos .val { color: var(--text); margin-top: 1px; }
   .items { padding: 0.5rem 1.5rem; }
+  .items .vacio { padding: 1.5rem 0; text-align: center; font-size: 13px; color: var(--text-muted); }
   .row { display: flex; align-items: center; gap: 12px; padding: 0.85rem 0; border-bottom: 1px solid var(--border); }
   .row:last-child { border-bottom: none; }
+  .row .chk { display: none; width: 18px; height: 18px; flex-shrink: 0; margin: 0; cursor: pointer; accent-color: var(--accent); }
   .row .thumb { width: 48px; height: 48px; border-radius: var(--radius-sm); background: var(--bg); flex-shrink: 0; object-fit: contain; }
   .row .info { flex: 1; min-width: 0; }
   .row .nombre { font-size: 13px; font-weight: 600; line-height: 1.3; }
   .row .variante { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
   .row .qtyprice { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .row .qtyprice .q { font-weight: 600; color: var(--text); }
   .row .subtotal { font-size: 13px; font-weight: 700; white-space: nowrap; }
+  /* Barra de controles (no se imprime) */
+  .tools { background: var(--surface); border-radius: var(--radius); box-shadow: 0 4px 24px rgba(0,0,0,0.06); padding: 0.85rem 1rem; margin-bottom: 0.9rem; display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; }
+  .tools input[type="text"], .tools select { padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; color: var(--text); background: white; outline: none; }
+  .tools input[type="text"] { flex: 1; min-width: 150px; }
+  .tools input[type="text"]:focus, .tools select:focus { border-color: var(--accent); }
+  .tools .remito-toggle { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text); cursor: pointer; user-select: none; white-space: nowrap; }
+  .tools .contador { flex-basis: 100%; font-size: 12px; color: var(--text-muted); }
+  /* Modo remito: sin precios, con casilleros */
+  body.sin-precios .row .chk { display: inline-block; }
+  body.sin-precios .row .qtyprice .p,
+  body.sin-precios .subtotal,
+  body.sin-precios .total,
+  body.sin-precios .cupon-bloque { display: none !important; }
+  @media print {
+    body { background: white; padding: 0; }
+    .card { box-shadow: none; }
+    .actions, .tools { display: none !important; }
+    .row .chk { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body.sin-precios .row .chk { display: inline-block; -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border: 1.5px solid #111; border-radius: 3px; background: #fff; }
+  }
   .cupon-bloque { padding: 0.75rem 1.5rem; border-top: 1px dashed var(--border-strong); font-size: 13px; }
   .cupon-sub, .cupon-desc { display: flex; justify-content: space-between; }
   .cupon-sub { color: var(--text-muted); }
@@ -52,26 +75,103 @@
   .state h2 { font-size: 17px; color: var(--text); margin-bottom: 0.4rem; }
   .state p { font-size: 13px; }
   .foot { text-align: center; font-size: 11px; color: var(--text-hint); margin-top: 1.25rem; }
-  @media print {
-    body { background: white; padding: 0; }
-    .card { box-shadow: none; }
-    .actions { display: none !important; }
-  }
 </style>
 </head>
 <body>
   <div class="wrap">
+    <div class="tools" id="tools" style="display:none">
+      <input type="text" id="buscar" placeholder="Buscar producto o modelo…" oninput="renderItems()" />
+      <select id="orden" onchange="renderItems()">
+        <option value="original">Como se pidió</option>
+        <option value="nombre">Nombre (A-Z)</option>
+        <option value="modelo">Por modelo</option>
+      </select>
+      <label class="remito-toggle"><input type="checkbox" id="sin-precios" onchange="toggleSinPrecios()" /> Ocultar precios (remito)</label>
+      <div class="contador" id="contador"></div>
+    </div>
     <div class="card" id="card">
       <div class="state"><div class="ic">⏳</div><p>Cargando tu pedido…</p></div>
     </div>
     <div class="actions" id="actions" style="display:none">
-      <button class="btn btn-dl" onclick="window.print()">📄 Descargar / Imprimir</button>
+      <button class="btn btn-dl" onclick="imprimirConPrecios()" style="margin-bottom:8px">📄 Imprimir con precios</button>
+      <button class="btn btn-dl" onclick="imprimirSinPrecios()" style="background:var(--surface);color:var(--text);border:1px solid var(--border-strong)">📦 Imprimir remito (sin precios)</button>
     </div>
     <div class="foot">BDI Accesorios · Catálogo Mayorista</div>
   </div>
 
 <script>
 function fmt(n) { return '$' + Number(n || 0).toLocaleString('es-AR'); }
+function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+// Ítems del pedido (con su índice original para el orden "como se pidió").
+let todosItems = [];
+
+function renderItems() {
+  const cont = document.getElementById('items-container');
+  if (!cont) return;
+  const q = (document.getElementById('buscar').value || '').trim().toLowerCase();
+  const orden = document.getElementById('orden').value;
+
+  let lista = todosItems.filter(function (i) {
+    if (!q) return true;
+    return ((i.nombre || '') + ' ' + (i.variante || '')).toLowerCase().includes(q);
+  });
+
+  if (orden === 'nombre') {
+    lista = lista.slice().sort(function (a, b) {
+      return (a.nombre || '').localeCompare(b.nombre || '', 'es', { numeric: true }) ||
+             (a.variante || '').localeCompare(b.variante || '', 'es', { numeric: true });
+    });
+  } else if (orden === 'modelo') {
+    lista = lista.slice().sort(function (a, b) {
+      const av = a.variante || '', bv = b.variante || '';
+      if (!av && bv) return 1;   // los sin modelo, al final
+      if (av && !bv) return -1;
+      return av.localeCompare(bv, 'es', { numeric: true }) ||
+             (a.nombre || '').localeCompare(b.nombre || '', 'es', { numeric: true });
+    });
+  } // 'original' → queda como todosItems (ya vienen en orden)
+
+  if (!lista.length) {
+    cont.innerHTML = '<div class="vacio">No hay productos que coincidan con la búsqueda.</div>';
+  } else {
+    cont.innerHTML = lista.map(function (i) {
+      const subtotal = (i.precio || 0) * (i.cantidad || 0);
+      const thumb = i.img
+        ? '<img class="thumb" src="' + esc(i.img) + '" alt="" onerror="this.style.visibility=\'hidden\'">'
+        : '<div class="thumb"></div>';
+      return '<div class="row">' +
+        '<input type="checkbox" class="chk" aria-label="Preparado">' +
+        thumb +
+        '<div class="info">' +
+          '<div class="nombre">' + esc(i.nombre) + '</div>' +
+          (i.variante ? '<div class="variante">' + esc(i.variante) + '</div>' : '') +
+          '<div class="qtyprice"><span class="q">' + (i.cantidad || 0) + ' u.</span><span class="p"> · ' + fmt(i.precio) + ' c/u</span></div>' +
+        '</div>' +
+        '<div class="subtotal">' + fmt(subtotal) + '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  const nProd = lista.length;
+  const nUnid = lista.reduce(function (s, i) { return s + (i.cantidad || 0); }, 0);
+  document.getElementById('contador').textContent = nProd + (nProd === 1 ? ' producto' : ' productos') + ' · ' + nUnid + (nUnid === 1 ? ' unidad' : ' unidades');
+}
+
+function toggleSinPrecios() {
+  document.body.classList.toggle('sin-precios', document.getElementById('sin-precios').checked);
+}
+
+function imprimirConPrecios() {
+  document.getElementById('sin-precios').checked = false;
+  document.body.classList.remove('sin-precios');
+  window.print();
+}
+function imprimirSinPrecios() {
+  document.getElementById('sin-precios').checked = true;
+  document.body.classList.add('sin-precios');
+  window.print();
+}
 
 function cuponBloque(pedido) {
   const c = pedido.cupon;
@@ -127,22 +227,7 @@ async function cargar() {
   }
 
   document.title = 'Pedido N° ' + pedido.id + ' — BDI Accesorios';
-  const items = pedido.items || [];
-
-  const filas = items.map(function (i) {
-    const subtotal = (i.precio || 0) * (i.cantidad || 0);
-    const thumb = i.img
-      ? '<img class="thumb" src="' + i.img + '" alt="" onerror="this.style.visibility=\'hidden\'">'
-      : '<div class="thumb"></div>';
-    return '<div class="row">' + thumb +
-      '<div class="info">' +
-        '<div class="nombre">' + (i.nombre || '') + '</div>' +
-        (i.variante ? '<div class="variante">' + i.variante + '</div>' : '') +
-        '<div class="qtyprice">' + (i.cantidad || 0) + ' × ' + fmt(i.precio) + '</div>' +
-      '</div>' +
-      '<div class="subtotal">' + fmt(subtotal) + '</div>' +
-    '</div>';
-  }).join('');
+  todosItems = pedido.items || [];
 
   const datos =
     '<div class="item"><div class="lbl">Cliente</div><div class="val">' + (pedido.cliente || '—') + '</div></div>' +
@@ -157,11 +242,13 @@ async function cargar() {
       '<div class="fecha">' + fechaLinda(pedido.fecha) + '</div>' +
     '</div>' +
     '<div class="datos">' + datos + '</div>' +
-    '<div class="items">' + filas + '</div>' +
+    '<div class="items" id="items-container"></div>' +
     cuponBloque(pedido) +
     '<div class="total"><span class="lbl">Total del pedido</span><span class="amount">' + fmt(pedido.total) + '</span></div>' +
-    (pedido.obs ? '<div class="obs"><div class="lbl">Observaciones</div>' + pedido.obs + '</div>' : '');
+    (pedido.obs ? '<div class="obs"><div class="lbl">Observaciones</div>' + esc(pedido.obs) + '</div>' : '');
 
+  renderItems();
+  document.getElementById('tools').style.display = 'flex';
   document.getElementById('actions').style.display = 'block';
 }
 
