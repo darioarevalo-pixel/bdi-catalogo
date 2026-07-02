@@ -20,6 +20,7 @@
   .head img { height: 46px; width: auto; margin-bottom: 0.75rem; }
   .head .num { font-family: 'DM Mono', monospace; font-size: 18px; font-weight: 600; }
   .head .fecha { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+  .head .sync-note { font-size: 11px; color: #16A34A; font-weight: 600; margin-top: 4px; }
   .datos { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
   .datos .item { font-size: 13px; }
   .datos .lbl { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-hint); }
@@ -185,6 +186,26 @@ function imprimirSinPrecios() {
   window.print();
 }
 
+// En segundo plano relee el pedido desde Gestión Nube y, si hubo cambios, los
+// refleja (ítems, total, cupón). Si falla, se queda con lo que ya se mostró.
+async function refrescarDesdeGN(id) {
+  if (id == null || id === '') return;
+  try {
+    const r = await fetch('/api/pedido?id=' + encodeURIComponent(id) + '&refresh=1');
+    if (!r.ok) return;
+    const p = await r.json();
+    if (!p || !Array.isArray(p.items)) return;
+    todosItems = p.items;
+    renderItems();
+    const ta = document.getElementById('total-amount');
+    if (ta) ta.textContent = fmt(p.total);
+    const slot = document.getElementById('cupon-slot');
+    if (slot) slot.innerHTML = cuponBloque(p);
+    const note = document.getElementById('sync-note');
+    if (note) { note.textContent = '✓ Actualizado'; note.style.display = 'block'; }
+  } catch (e) { /* sin conexión con GN: queda la versión guardada */ }
+}
+
 function cuponBloque(pedido) {
   const c = pedido.cupon;
   if (!c) return '';
@@ -252,14 +273,16 @@ async function cargar() {
       '<img src="/logo.png" alt="BDI Accesorios" onerror="this.style.display=\'none\'">' +
       '<div class="num">Pedido N° ' + pedido.id + '</div>' +
       '<div class="fecha">' + fechaLinda(pedido.fecha) + '</div>' +
+      '<div class="sync-note" id="sync-note" style="display:none"></div>' +
     '</div>' +
     '<div class="datos">' + datos + '</div>' +
     '<div class="items" id="items-container"></div>' +
-    cuponBloque(pedido) +
-    '<div class="total"><span class="lbl">Total del pedido</span><span class="amount">' + fmt(pedido.total) + '</span></div>' +
+    '<div id="cupon-slot">' + cuponBloque(pedido) + '</div>' +
+    '<div class="total"><span class="lbl">Total del pedido</span><span class="amount" id="total-amount">' + fmt(pedido.total) + '</span></div>' +
     (pedido.obs ? '<div class="obs"><div class="lbl">Observaciones</div>' + esc(pedido.obs) + '</div>' : '');
 
   renderItems();
+  refrescarDesdeGN(pedido.id);   // en segundo plano: trae lo último de GN
   document.getElementById('tools').style.display = 'flex';
   document.getElementById('actions').style.display = 'block';
 }
