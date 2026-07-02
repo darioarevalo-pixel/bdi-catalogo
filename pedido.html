@@ -54,7 +54,19 @@
     .card { box-shadow: none; }
     .actions, .tools { display: none !important; }
     .row .chk { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    body.sin-precios .row .chk { display: inline-block; -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border: 1.5px solid #111; border-radius: 3px; background: #fff; }
+    body.sin-precios .row .chk { display: inline-block; -webkit-appearance: none; appearance: none; width: 14px; height: 14px; border: 1.5px solid #111; border-radius: 3px; background: #fff; }
+    /* Filas compactas al imprimir: menos alto por renglón = menos hojas */
+    .head { padding: 0.6rem 1.5rem; }
+    .head img { height: 34px; margin-bottom: 0.35rem; }
+    .datos { padding: 0.5rem 1.5rem; gap: 4px 16px; }
+    .items { padding: 0 1.5rem; }
+    .row { padding: 3px 0; gap: 8px; }
+    .row .thumb { width: 26px; height: 26px; }
+    .row .nombre { font-size: 11px; line-height: 1.15; }
+    .row .variante, .row .qtyprice { font-size: 10px; line-height: 1.15; margin-top: 0; }
+    .row .subtotal { font-size: 11px; }
+    /* Remito (sin precios): sin fotos para máxima densidad */
+    body.sin-precios .row .thumb { display: none; }
   }
   .cupon-bloque { padding: 0.75rem 1.5rem; border-top: 1px dashed var(--border-strong); font-size: 13px; }
   .cupon-sub, .cupon-desc { display: flex; justify-content: space-between; }
