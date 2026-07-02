@@ -51,7 +51,9 @@ async function refrescarDesdeGN(numero, snap) {
     gnId = match.id;
   }
   const venta = await gnGet('/ventas/' + gnId);
-  if (!venta || !Array.isArray(venta.items)) return null;
+  // Sin venta, sin renglones, o venta vacía → NO actualizamos (evita pisar la
+  // foto buena con un pedido en blanco si la venta se borró o quedó sin ítems).
+  if (!venta || !Array.isArray(venta.items) || venta.items.length === 0) return null;
 
   // Foto previa por (nombre|variante) para no perder las miniaturas.
   const imgPrev = {};
@@ -103,6 +105,9 @@ module.exports = async (req, res) => {
           const fresco = await refrescarDesdeGN(id, pedido);
           if (fresco) {
             await kvCmd(['SET', clave(id), JSON.stringify(fresco), 'EX', String(TTL_SECONDS)]);
+            // Marca de "sincronizado ahora" SOLO en la respuesta (no se guarda),
+            // para que la página muestre "Actualizado" únicamente si releyó de GN.
+            fresco.sincronizado = true;
             return res.json(fresco);
           }
         } catch (e) { /* cae al snapshot */ }

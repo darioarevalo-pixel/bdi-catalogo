@@ -194,7 +194,9 @@ async function refrescarDesdeGN(id) {
     const r = await fetch('/api/pedido?id=' + encodeURIComponent(id) + '&refresh=1');
     if (!r.ok) return;
     const p = await r.json();
-    if (!p || !Array.isArray(p.items)) return;
+    // Solo tocamos la pantalla si GN devolvió una relectura real (sincronizado).
+    // Si la venta no existe / GN falló, dejamos la versión ya mostrada, sin nota.
+    if (!p || !p.sincronizado || !Array.isArray(p.items)) return;
     todosItems = p.items;
     renderItems();
     const ta = document.getElementById('total-amount');
