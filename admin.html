@@ -363,6 +363,28 @@
   .pm-resultado .pm-ok { color: var(--success); font-weight: 600; }
   .pm-resultado .pm-error { color: var(--danger); font-weight: 500; }
   .pm-resultado a { color: var(--accent); font-weight: 600; }
+  /* Nota de pedido */
+  .nota-emisor { border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); margin-bottom: 16px; padding: 4px 12px; }
+  .nota-emisor summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--text-muted); padding: 8px 0; }
+  .nota-emisor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 6px 0 12px; }
+  .nota-emisor-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--text-muted); }
+  .nota-emisor-grid label.nota-full { grid-column: 1 / -1; }
+  .nota-emisor-grid input { padding: 7px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; color: var(--text); background: white; outline: none; }
+  .nota-cab { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+  .nota-cab label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-weight: 600; color: var(--text-muted); }
+  .nota-cab input { padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 14px; color: var(--text); background: white; outline: none; }
+  .nota-cab label:first-child { flex: 1; min-width: 180px; }
+  .nota-add { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+  .nota-add > input[type="text"] { flex: 1; min-width: 180px; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 14px; outline: none; }
+  .nota-add .nota-precio-wrap { display: flex; align-items: center; gap: 3px; }
+  .nota-add .nota-precio-wrap span { font-size: 13px; color: var(--text-muted); }
+  .nota-add .nota-precio-wrap input { width: 120px; padding: 8px 9px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 14px; text-align: right; outline: none; }
+  .nota-add > input[type="number"] { width: 80px; padding: 8px 9px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 14px; text-align: right; outline: none; }
+  .nota-total-row { font-size: 16px; margin-bottom: 14px; }
+  .nota-total-row strong { font-size: 22px; }
+  .nota-obs-label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 14px; }
+  .nota-obs-label input { display: block; width: 100%; margin-top: 5px; padding: 9px 11px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 14px; outline: none; }
+  .nota-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 </style>
 </head>
 <body>
@@ -404,6 +426,7 @@
     <button class="tab-btn" onclick="setTab('codigos')">🔑 Códigos</button>
     <button class="tab-btn" onclick="setTab('generador')">Generador de precios</button>
     <button class="tab-btn" onclick="setTab('pedido')">Cargar pedido</button>
+    <button class="tab-btn" onclick="setTab('nota')">Nota de pedido</button>
     <button class="tab-btn" onclick="setTab('fotos')">Fotos</button>
     <button class="tab-btn" onclick="setTab('settings')">Configuración</button>
   </div>
@@ -548,6 +571,49 @@
         </label>
         <button class="btn-save pm-confirmar" id="pm-confirmar-btn" onclick="pmConfirmar()">Confirmar pedido en Gestión Nube</button>
         <div id="pm-resultado" class="pm-resultado"></div>
+      </div>
+    </div>
+
+    <div id="tab-nota" style="display:none">
+      <p class="section-note">Armá una <strong>nota de pedido</strong> para productos que <strong>no pasan por el sistema</strong>: cargás cliente y renglones (descripción, precio, cantidad) y calcula el total solo. Después la <strong>imprimís / guardás en PDF</strong> o copiás un texto para WhatsApp. No se carga en Gestión Nube.</p>
+
+      <details class="nota-emisor" id="nota-emisor-box">
+        <summary>Datos del encabezado (BDI Accesorios) — se guardan en este dispositivo</summary>
+        <div class="nota-emisor-grid">
+          <label>Nombre / Razón social<input type="text" id="nota-em-nombre" oninput="notaEmisorSave()" placeholder="BDI Accesorios" /></label>
+          <label>Dirección (Rosario)<input type="text" id="nota-em-dir" oninput="notaEmisorSave()" placeholder="Ej: Calle 123, Rosario, Santa Fe" /></label>
+          <label>Teléfono / WhatsApp<input type="text" id="nota-em-tel" oninput="notaEmisorSave()" placeholder="341 585-1474" /></label>
+          <label>CUIT<input type="text" id="nota-em-cuit" oninput="notaEmisorSave()" placeholder="XX-XXXXXXXX-X" /></label>
+          <label class="nota-full">Aclaración al pie<input type="text" id="nota-em-aclaracion" oninput="notaEmisorSave()" placeholder="Documento no válido como factura" /></label>
+        </div>
+      </details>
+
+      <div class="nota-cab">
+        <label>Cliente<input type="text" id="nota-cliente" placeholder="Nombre del cliente" /></label>
+        <label>N° de nota<input type="text" id="nota-numero" placeholder="0001" /></label>
+        <label>Fecha<input type="date" id="nota-fecha" /></label>
+      </div>
+
+      <div class="nota-add">
+        <input type="text" id="nota-desc" placeholder="Descripción del producto" />
+        <div class="nota-precio-wrap"><span>$</span><input type="number" id="nota-precio" min="0" placeholder="Precio" /></div>
+        <input type="number" id="nota-cant" min="1" placeholder="Cant." value="1" />
+        <button class="btn-save" onclick="notaAgregar()">+ Agregar</button>
+      </div>
+
+      <div id="nota-lineas"><div class="loading-state">Sin renglones cargados.</div></div>
+
+      <div id="nota-footer" style="display:none">
+        <div class="nota-total-row">Total: <strong id="nota-total">$0</strong></div>
+        <label class="nota-obs-label">Observaciones (opcional)
+          <input type="text" id="nota-obs" placeholder="Ej: entrega el viernes / seña $10.000" />
+        </label>
+        <div class="nota-actions">
+          <button class="btn-save" onclick="notaImprimir()">🖨️ Imprimir / PDF</button>
+          <button class="btn-save" onclick="notaCopiar()" style="background:var(--surface);color:var(--text);border:1px solid var(--border-strong)">📋 Copiar para WhatsApp</button>
+          <button class="btn-logout" onclick="notaLimpiar()">Limpiar</button>
+          <span id="nota-copiado" class="gen-copiado"></span>
+        </div>
       </div>
     </div>
 
@@ -1341,6 +1407,7 @@ function setTab(tab) {
   $('tab-pendientes').style.display = tab === 'pendientes' ? 'block' : 'none';
   $('tab-generador').style.display = tab === 'generador' ? 'block' : 'none';
   $('tab-pedido').style.display = tab === 'pedido' ? 'block' : 'none';
+  $('tab-nota').style.display = tab === 'nota' ? 'block' : 'none';
   $('tab-fotos').style.display = tab === 'fotos' ? 'block' : 'none';
   $('tab-settings').style.display = tab === 'settings' ? 'block' : 'none';
   document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -1364,6 +1431,7 @@ function setTab(tab) {
   if (tab === 'pendientes') { populatePendientesCatFilter(); renderPendientes(); }
   if (tab === 'generador') populateGenerador();
   if (tab === 'pedido') populatePedidoManual();
+  if (tab === 'nota') notaInit();
   if (tab === 'fotos') { fotosBuscar(); fotosRender(); }
   if (tab === 'products') renderProductList();
 
@@ -2358,6 +2426,184 @@ async function pmConfirmar() {
     $('pm-resultado').innerHTML = '<span class="pm-error">⚠ Error: ' + e.message + '</span>';
   }
   btn.disabled = false; btn.textContent = 'Confirmar pedido en Gestión Nube';
+}
+
+// ===== Nota de pedido (documento manual para productos fuera del sistema) =====
+let notaLineas = [];
+const NOTA_EMISOR_KEY = 'bdi_nota_emisor';
+const NOTA_CONTADOR_KEY = 'bdi_nota_contador';
+
+function notaEmisorDefault() {
+  return { nombre: 'BDI Accesorios', dir: '', tel: '341 585-1474', cuit: '', aclaracion: 'Documento no válido como factura' };
+}
+function notaEmisorGet() {
+  const em = notaEmisorDefault();
+  try { const raw = localStorage.getItem(NOTA_EMISOR_KEY); if (raw) Object.assign(em, JSON.parse(raw)); } catch (e) {}
+  return em;
+}
+function notaEmisorSave() {
+  const em = {
+    nombre: $('nota-em-nombre').value, dir: $('nota-em-dir').value, tel: $('nota-em-tel').value,
+    cuit: $('nota-em-cuit').value, aclaracion: $('nota-em-aclaracion').value,
+  };
+  try { localStorage.setItem(NOTA_EMISOR_KEY, JSON.stringify(em)); } catch (e) {}
+}
+
+function notaInit() {
+  const em = notaEmisorGet();
+  $('nota-em-nombre').value = em.nombre || '';
+  $('nota-em-dir').value = em.dir || '';
+  $('nota-em-tel').value = em.tel || '';
+  $('nota-em-cuit').value = em.cuit || '';
+  $('nota-em-aclaracion').value = em.aclaracion || '';
+  // Si aún no cargó la dirección, dejamos el panel de emisor abierto.
+  const box = $('nota-emisor-box'); if (box) box.open = !em.dir;
+  if (!$('nota-fecha').value) $('nota-fecha').value = notaHoyISO();
+  if (!$('nota-numero').value) $('nota-numero').value = notaProximoNumero();
+  notaRender();
+}
+function notaHoyISO() {
+  const d = new Date();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return d.getFullYear() + '-' + mm + '-' + dd;
+}
+function notaProximoNumero() {
+  let n = 1;
+  try { n = parseInt(localStorage.getItem(NOTA_CONTADOR_KEY)) || 1; } catch (e) {}
+  return String(n).padStart(4, '0');
+}
+
+function notaAgregar() {
+  const desc = ($('nota-desc').value || '').trim();
+  const precio = Math.round(parseFloat($('nota-precio').value));
+  const cant = parseInt($('nota-cant').value);
+  if (!desc) { alert('Escribí la descripción del producto.'); $('nota-desc').focus(); return; }
+  if (isNaN(precio) || precio < 0) { alert('Ingresá el precio.'); $('nota-precio').focus(); return; }
+  if (isNaN(cant) || cant <= 0) { alert('Ingresá la cantidad.'); $('nota-cant').focus(); return; }
+  notaLineas.push({ desc, precio, cant });
+  $('nota-desc').value = ''; $('nota-precio').value = ''; $('nota-cant').value = '1';
+  $('nota-desc').focus();
+  notaRender();
+}
+function notaQuitar(idx) { notaLineas.splice(idx, 1); notaRender(); }
+function notaRender() {
+  const cont = $('nota-lineas');
+  if (!cont) return;
+  if (!notaLineas.length) {
+    cont.innerHTML = '<div class="loading-state">Sin renglones cargados.</div>';
+    if ($('nota-footer')) $('nota-footer').style.display = 'none';
+    return;
+  }
+  cont.innerHTML = notaLineas.map((l, idx) => {
+    const sub = l.precio * l.cant;
+    return '<div class="pm-linea">' +
+      '<div class="pm-linea-info"><strong>' + (l.desc || '').replace(/</g, '&lt;') + '</strong>' +
+        '<span class="pm-linea-meta">' + l.cant + ' u × ' + fmtAR(l.precio) + '</span></div>' +
+      '<div class="pm-linea-sub">' + fmtAR(sub) + '</div>' +
+      '<button class="btn-del" onclick="notaQuitar(' + idx + ')" title="Quitar">×</button>' +
+    '</div>';
+  }).join('');
+  $('nota-footer').style.display = 'block';
+  $('nota-total').textContent = fmtAR(notaLineas.reduce((s, l) => s + l.precio * l.cant, 0));
+}
+
+function notaFechaLinda(iso) {
+  if (!iso) return '';
+  const p = iso.split('-');
+  return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : iso;
+}
+function notaEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+function notaImprimir() {
+  if (!notaLineas.length) { alert('Agregá al menos un renglón.'); return; }
+  const em = notaEmisorGet();
+  const cliente = $('nota-cliente').value || '';
+  const numero = $('nota-numero').value || '';
+  const fecha = notaFechaLinda($('nota-fecha').value);
+  const obs = $('nota-obs').value || '';
+  const total = notaLineas.reduce((s, l) => s + l.precio * l.cant, 0);
+
+  const filas = notaLineas.map(l =>
+    '<tr><td>' + notaEsc(l.desc) + '</td><td class="c">' + l.cant + '</td><td class="r">' + fmtAR(l.precio) + '</td><td class="r">' + fmtAR(l.precio * l.cant) + '</td></tr>'
+  ).join('');
+
+  const emLineas = [];
+  if (em.dir) emLineas.push(notaEsc(em.dir));
+  const contacto = [em.tel ? 'Tel: ' + notaEsc(em.tel) : '', em.cuit ? 'CUIT: ' + notaEsc(em.cuit) : ''].filter(Boolean).join(' · ');
+  if (contacto) emLineas.push(contacto);
+
+  const html =
+    '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">' +
+    '<title>Nota de pedido ' + notaEsc(numero) + '</title><style>' +
+    '*{margin:0;padding:0;box-sizing:border-box}' +
+    'body{font-family:Arial,Helvetica,sans-serif;color:#111;padding:28px;font-size:13px}' +
+    '.enc{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #111;padding-bottom:12px;margin-bottom:14px}' +
+    '.enc .em-nombre{font-size:20px;font-weight:800;letter-spacing:.5px}' +
+    '.enc .em-datos{font-size:12px;color:#444;margin-top:3px;line-height:1.5}' +
+    '.enc .doc{text-align:right}.enc .doc .t{font-size:15px;font-weight:700}.enc .doc .n{font-size:13px;color:#444;margin-top:3px}' +
+    '.cli{margin-bottom:12px;font-size:13px}.cli b{font-weight:700}' +
+    'table{width:100%;border-collapse:collapse;margin-bottom:14px}' +
+    'th,td{padding:7px 8px;border-bottom:1px solid #ddd;text-align:left;vertical-align:top}' +
+    'th{background:#f3f4f6;font-size:11px;text-transform:uppercase;letter-spacing:.4px}' +
+    'td.c,th.c{text-align:center;white-space:nowrap}td.r,th.r{text-align:right;white-space:nowrap}' +
+    '.tot{display:flex;justify-content:flex-end;gap:24px;font-size:17px;font-weight:800;border-top:2px solid #111;padding-top:10px}' +
+    '.obs{margin-top:14px;font-size:12px;color:#333}.obs .l{font-weight:700;font-size:10px;text-transform:uppercase;color:#888}' +
+    '.pie{margin-top:26px;font-size:11px;color:#888;text-align:center;border-top:1px dashed #bbb;padding-top:10px}' +
+    '@media print{body{padding:0}}' +
+    '</style></head><body>' +
+    '<div class="enc"><div><div class="em-nombre">' + notaEsc(em.nombre || 'BDI Accesorios') + '</div>' +
+      (emLineas.length ? '<div class="em-datos">' + emLineas.join('<br>') + '</div>' : '') + '</div>' +
+      '<div class="doc"><div class="t">NOTA DE PEDIDO</div><div class="n">' + (numero ? 'N° ' + notaEsc(numero) : '') + (fecha ? '<br>' + fecha : '') + '</div></div></div>' +
+    (cliente ? '<div class="cli"><b>Cliente:</b> ' + notaEsc(cliente) + '</div>' : '') +
+    '<table><thead><tr><th>Descripción</th><th class="c">Cant.</th><th class="r">P. unit.</th><th class="r">Subtotal</th></tr></thead>' +
+    '<tbody>' + filas + '</tbody></table>' +
+    '<div class="tot"><span>TOTAL</span><span>' + fmtAR(total) + '</span></div>' +
+    (obs ? '<div class="obs"><div class="l">Observaciones</div>' + notaEsc(obs) + '</div>' : '') +
+    (em.aclaracion ? '<div class="pie">' + notaEsc(em.aclaracion) + '</div>' : '') +
+    '<script>window.onload=function(){window.print();}<\/script></body></html>';
+
+  const win = window.open('', '_blank');
+  if (!win) { alert('El navegador bloqueó la ventana de impresión. Permití las ventanas emergentes para este sitio.'); return; }
+  win.document.open(); win.document.write(html); win.document.close();
+
+  // Avanzar el contador de N° para la próxima nota.
+  try {
+    const actual = parseInt($('nota-numero').value) || parseInt(localStorage.getItem(NOTA_CONTADOR_KEY)) || 1;
+    localStorage.setItem(NOTA_CONTADOR_KEY, String(actual + 1));
+  } catch (e) {}
+}
+
+function notaCopiar() {
+  if (!notaLineas.length) { alert('Agregá al menos un renglón.'); return; }
+  const em = notaEmisorGet();
+  const cliente = $('nota-cliente').value || '';
+  const numero = $('nota-numero').value || '';
+  const fecha = notaFechaLinda($('nota-fecha').value);
+  const total = notaLineas.reduce((s, l) => s + l.precio * l.cant, 0);
+  const lines = ['*' + (em.nombre || 'BDI Accesorios') + ' — Nota de pedido' + (numero ? ' N° ' + numero : '') + '*'];
+  if (fecha) lines.push(fecha);
+  if (cliente) lines.push('Cliente: ' + cliente);
+  lines.push('');
+  notaLineas.forEach(l => lines.push('• ' + l.desc + ' — ' + l.cant + ' x ' + fmtAR(l.precio) + ' = ' + fmtAR(l.precio * l.cant)));
+  lines.push('', '*Total: ' + fmtAR(total) + '*');
+  const obs = $('nota-obs').value || '';
+  if (obs) lines.push('', obs);
+  const txt = lines.join('\n');
+  const ok = () => { const c = $('nota-copiado'); if (c) { c.textContent = '¡Copiado! Pegalo en WhatsApp.'; setTimeout(() => { c.textContent = ''; }, 3000); } };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(txt).then(ok).catch(() => fallbackCopiar(txt, ok));
+  } else { fallbackCopiar(txt, ok); }
+}
+
+function notaLimpiar() {
+  if (notaLineas.length && !confirm('¿Vaciar la nota actual? (se conservan los datos del encabezado)')) return;
+  notaLineas = [];
+  $('nota-cliente').value = '';
+  $('nota-obs').value = '';
+  $('nota-numero').value = notaProximoNumero();
+  $('nota-fecha').value = notaHoyISO();
+  notaRender();
 }
 
 // ===== Fotos: copiar al portapapeles y combinar fotos de varios productos =====
