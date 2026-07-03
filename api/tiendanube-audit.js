@@ -162,15 +162,17 @@ async function tnFetchCanceladas(cfg, from, to) {
   const out = [];
   const base = `https://api.tiendanube.com/v1/${cfg.storeId}/orders`;
   const qs = `status=cancelled&created_at_min=${from}T00:00:00-03:00&created_at_max=${to}T23:59:59-03:00&per_page=200&fields=id,number,status,cancelled_at,total,contact_name,created_at`;
+  const debug = { status: null, error: null };
   for (let page = 1; page <= 30; page++) {
     const r = await fetch(`${base}?${qs}&page=${page}`, { headers: tnHeaders(cfg.token) });
-    if (!r.ok) break;
+    if (page === 1) debug.status = r.status;
+    if (!r.ok) { debug.error = (await r.text()).slice(0, 300); break; }
     const data = await r.json();
     if (!Array.isArray(data) || !data.length) break;
     out.push(...data);
     if (data.length < 200) break;
   }
-  return out;
+  return { out, debug };
 }
 async function gnFetchVentas(gnToken, from, to) {
   const out = [];
@@ -207,10 +209,11 @@ module.exports = async (req, res) => {
     const from = req.query.from, to = req.query.to;
     if (!from || !to) return res.status(400).json({ error: 'Faltan from/to (YYYY-MM-DD)' });
     try {
-      const [tnCanc, gnVentas] = await Promise.all([
+      const [tnRes, gnVentas] = await Promise.all([
         tnFetchCanceladas(cfg, from, to),
         gnFetchVentas(cfg.gnToken, from, to),
       ]);
+      const tnCanc = tnRes.out;
       const cancByNum = {};
       tnCanc.forEach(o => { if (o.number != null) cancByNum[String(o.number)] = o; });
       const discrepancias = [];
@@ -234,6 +237,7 @@ module.exports = async (req, res) => {
       return res.status(200).json({
         ok: true, store: storeKey, from, to,
         resumen: { tn_cancelados: tnCanc.length, gn_ventas: gnVentas.length, discrepancias: discrepancias.length },
+        tn_debug: tnRes.debug,
         discrepancias,
       });
     } catch (e) {
