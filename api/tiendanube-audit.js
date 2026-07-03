@@ -203,6 +203,21 @@ module.exports = async (req, res) => {
   if (!cfg) return res.status(400).json({ error: 'Store desconocido. Usar ?store=bdi o ?store=zattia' });
   if (!cfg.storeId || !cfg.token) return res.status(500).json({ error: `Tienda Nube no configurado para ${storeKey}` });
 
+  // Diagnóstico: qué variables de entorno relevantes ve la función (solo presencia, sin valores)
+  if (req.query?.envcheck === '1') {
+    const has = n => !!process.env[n];
+    return res.status(200).json({ store: storeKey, env: {
+      GESTIONNUBE_TOKEN_ZATTIA: has('GESTIONNUBE_TOKEN_ZATTIA'),
+      GN_TOKEN_ZATTIA: has('GN_TOKEN_ZATTIA'),
+      TIENDANUBE_TOKEN_ZATTIA: has('TIENDANUBE_TOKEN_ZATTIA'),
+      TIENDANNUBE_TOKEN_ZATTIA: has('TIENDANNUBE_TOKEN_ZATTIA'),
+      TIENDANUBE_STORE_ID_ZATTIA: has('TIENDANUBE_STORE_ID_ZATTIA'),
+      GESTIONNUBE_TOKEN: has('GESTIONNUBE_TOKEN'),
+      GN_TOKEN: has('GN_TOKEN'),
+      TIENDANUBE_TOKEN: has('TIENDANUBE_TOKEN'),
+    }, cfg_tiene: { token: !!cfg.token, gnToken: !!cfg.gnToken, storeId: !!cfg.storeId } });
+  }
+
   // ── Verificación de ventas: cancelada en TN pero activa en GN ──
   if (req.query?.verificar_ventas === '1') {
     if (!cfg.gnToken) return res.status(500).json({ error: `Falta el token de Gestión Nube para ${storeKey} (GESTIONNUBE_TOKEN${storeKey === 'zattia' ? '_ZATTIA' : ''}).` });
