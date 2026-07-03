@@ -215,7 +215,7 @@ module.exports = async (req, res) => {
       GESTIONNUBE_TOKEN: has('GESTIONNUBE_TOKEN'),
       GN_TOKEN: has('GN_TOKEN'),
       TIENDANUBE_TOKEN: has('TIENDANUBE_TOKEN'),
-    }, cfg_tiene: { token: !!cfg.token, gnToken: !!cfg.gnToken, storeId: !!cfg.storeId } });
+    }, nombres_reales: Object.keys(process.env).filter(k => /ZATTIA|GESTION|NUBE|GN_|TIENDA/i.test(k)).sort(), cfg_tiene: { token: !!cfg.token, gnToken: !!cfg.gnToken, storeId: !!cfg.storeId } });
   }
 
   // ── Verificación de ventas: cancelada en TN pero activa en GN ──
