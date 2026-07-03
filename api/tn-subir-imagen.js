@@ -19,9 +19,38 @@ const _esTalle = t => { const x = String(t || '').toLowerCase().trim(); return T
 // El "color" de una variante = value que NO es modelo de iPhone NI talle
 const coloresDeVariante = v => (v.values || []).map(valEs).filter(t => t && !/iphone/i.test(t) && !_esTalle(t));
 
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+// fetch a TN con reintento ante 429 (rate limit) y 5xx, respetando Retry-After. Sin esto,
+// al subir varias fotos seguidas TN rechaza los PUT de vinculación y la foto queda sin color.
+async function tnReq(url, opts, retries = 5) {
+  for (let a = 1; a <= retries; a++) {
+    const r = await fetch(url, opts);
+    if ((r.status === 429 || r.status >= 500) && a < retries) {
+      const ra = parseInt(r.headers.get('Retry-After') || '0', 10);
+      await sleep(ra > 0 ? ra * 1000 : Math.min(1200 * a, 5000));
+      continue;
+    }
+    return r;
+  }
+}
 async function tnGet(storeId, token, path) {
-  const r = await fetch(`https://api.tiendanube.com/v1/${storeId}/${path}`, { headers: tnH(token) });
+  const r = await tnReq(`https://api.tiendanube.com/v1/${storeId}/${path}`, { headers: tnH(token) });
   return { ok: r.ok, status: r.status, total: parseInt(r.headers.get('X-Total-Count') || '0', 10), data: await r.json() };
+}
+// Vincula una imagen (imageId) a todas las variantes de un color. Reintenta y throttlea para no saturar.
+async function asignarColor(cfg, product_id, imageId, color) {
+  const vr = await tnGet(cfg.storeId, cfg.token, `products/${product_id}/variants?fields=id,values`);
+  if (!Array.isArray(vr.data)) return { objetivo: 0, asignadas: 0, errores: ['no se pudieron leer variantes'] };
+  const objetivo = vr.data.filter(v => coloresDeVariante(v).some(c => c.toLowerCase() === String(color).toLowerCase()));
+  let asignadas = 0; const errores = [];
+  for (const v of objetivo) {
+    const pr = await tnReq(`https://api.tiendanube.com/v1/${cfg.storeId}/products/${product_id}/variants/${v.id}`, {
+      method: 'PUT', headers: tnH(cfg.token), body: JSON.stringify({ image_id: imageId }),
+    });
+    if (pr.ok) asignadas++; else errores.push(`v${v.id}:${pr.status}`);
+    await sleep(300); // no saturar el rate limit de TN
+  }
+  return { objetivo: objetivo.length, asignadas, errores };
 }
 
 module.exports = async (req, res) => {
@@ -54,31 +83,29 @@ module.exports = async (req, res) => {
 
     if (req.method === 'POST') {
       const body = req.body || {};
-      const { product_id, image, filename, color } = body;
-      if (!product_id || !image) return res.status(400).json({ error: 'Faltan product_id o image' });
+      const { product_id, image, filename, color, action, image_id } = body;
+      if (!product_id) return res.status(400).json({ error: 'Falta product_id' });
+
+      // Acción "link": vincular una imagen YA subida a las variantes de un color (sin re-subir → sin duplicar)
+      if (action === 'link') {
+        if (!image_id || !color) return res.status(400).json({ error: 'Faltan image_id o color' });
+        const r = await asignarColor(cfg, product_id, image_id, color);
+        return res.status(200).json({ ok: true, image_id, color, variantesObjetivo: r.objetivo, variantesAsignadas: r.asignadas, linkErrores: r.errores });
+      }
+
+      if (!image) return res.status(400).json({ error: 'Falta image' });
       const base64 = String(image).includes(',') ? String(image).split(',')[1] : String(image);
-      // 1) Subir la imagen al producto
-      const up = await fetch(`https://api.tiendanube.com/v1/${cfg.storeId}/products/${product_id}/images`, {
+      // 1) Subir la imagen al producto (con reintentos ante rate limit)
+      const up = await tnReq(`https://api.tiendanube.com/v1/${cfg.storeId}/products/${product_id}/images`, {
         method: 'POST', headers: tnH(cfg.token), body: JSON.stringify({ attachment: base64, filename: filename || ('foto-' + product_id + '.jpg') }),
       });
       const upBody = await up.json();
       if (!up.ok) return res.status(up.status).json({ error: 'Error subiendo imagen', detalle: upBody });
       const imageId = upBody.id;
-      // 2) Si hay color, asignar la imagen a las variantes de ese color
-      let variantesAsignadas = 0;
-      if (color) {
-        const vr = await tnGet(cfg.storeId, cfg.token, `products/${product_id}/variants?fields=id,values`);
-        if (Array.isArray(vr.data)) {
-          const objetivo = vr.data.filter(v => coloresDeVariante(v).some(c => c.toLowerCase() === String(color).toLowerCase()));
-          for (const v of objetivo) {
-            const pr = await fetch(`https://api.tiendanube.com/v1/${cfg.storeId}/products/${product_id}/variants/${v.id}`, {
-              method: 'PUT', headers: tnH(cfg.token), body: JSON.stringify({ image_id: imageId }),
-            });
-            if (pr.ok) variantesAsignadas++;
-          }
-        }
-      }
-      return res.status(200).json({ ok: true, image_id: imageId, variantesAsignadas });
+      // 2) Si hay color, asignar la imagen a las variantes de ese color (con reintentos/throttle)
+      let r = { objetivo: 0, asignadas: 0, errores: [] };
+      if (color) r = await asignarColor(cfg, product_id, imageId, color);
+      return res.status(200).json({ ok: true, image_id: imageId, color: color || null, variantesObjetivo: r.objetivo, variantesAsignadas: r.asignadas, linkErrores: r.errores });
     }
 
     return res.status(405).json({ error: 'Método no permitido' });
