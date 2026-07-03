@@ -84,6 +84,12 @@ async function fetchAllCategories(storeId, token) {
   return map;
 }
 
+// Color de una variante = value que NO es modelo de iPhone NI talle (misma regla que tn-subir-imagen.js).
+const _TALLES = new Set(['s', 'm', 'l', 'xl', 'xxl', 'xs', 'xxs', 'xxxl', 'xxxxl', 'u', 'unico', 'único']);
+const _esTalle = t => { const x = String(t || '').toLowerCase().trim(); return _TALLES.has(x) || /^\d{1,3}$/.test(x) || x.startsWith('talle'); };
+const _valEs = v => v?.es || v?.pt || (v && Object.values(v)[0]) || '';
+const _colorDeVariante = v => ((v.values || []).map(_valEs).filter(t => t && !/iphone/i.test(t) && !_esTalle(t))[0]) || '';
+
 function mapProduct(p, catMap, incluirVariantes) {
   const name    = p.name?.es    || p.name?.pt    || Object.values(p.name    || {})[0] || '(sin nombre)';
   const handle  = p.handle?.es  || p.handle?.pt  || Object.values(p.handle  || {})[0] || null;
@@ -131,6 +137,7 @@ function mapProduct(p, catMap, incluirVariantes) {
   if (incluirVariantes) {
     const imgById = {};
     (p.images || []).forEach(i => { if (i.id != null) imgById[i.id] = i.src; });
+    out.imagenes = (p.images || []).map(i => ({ id: i.id, src: i.src })).filter(x => x.id != null && x.src); // fotos del producto (id+src) para vincular
     out.variantes = variantsRaw.map(v => {
       const vals = (v.values || []).map(val => val?.es || val?.pt || (val && Object.values(val)[0])).filter(Boolean);
       const pr = parseFloat(v.promotional_price) > 0 ? parseFloat(v.promotional_price) : (parseFloat(v.price) || null);
@@ -138,6 +145,7 @@ function mapProduct(p, catMap, incluirVariantes) {
         sku: v.sku || null,
         barcode: v.barcode || null,
         valores: vals,                                                  // ej. ["iPhone 16 - Azul"] o ["Azul"]
+        color: _colorDeVariante(v),                                     // color para agrupar/vincular
         image_url: v.image_id != null ? (imgById[v.image_id] || null) : null,  // foto PROPIA de la variante
         price: pr,
       };
@@ -162,7 +170,7 @@ module.exports = async (req, res) => {
   const forceRefresh = req.query?.refresh === '1';
   const incluirVariantes = req.query?.variantes === '1';
   // Clave de caché separada para la versión con variantes (no pisa la que usa Monitor).
-  const ckey = incluirVariantes ? cfg.cacheKey + ':var' : cfg.cacheKey;
+  const ckey = incluirVariantes ? cfg.cacheKey + ':var2' : cfg.cacheKey; // :var2 = incluye imagenes[id,src] + color por variante
 
   if (!forceRefresh) {
     const cached = await kvGet(ckey);
