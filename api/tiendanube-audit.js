@@ -7,13 +7,13 @@ const STORES = {
   bdi: {
     storeId: process.env.TIENDANUBE_STORE_ID,
     token:   process.env.TIENDANUBE_TOKEN,
-    gnToken: process.env.GESTIONNUBE_TOKEN,          // GN BDI (mismo que usa proxy.js)
+    gnToken: process.env.GESTIONNUBE_TOKEN || process.env.GN_TOKEN,          // GN BDI (acepta ambos nombres)
     cacheKey:'tiendanube-audit',
   },
   zattia: {
     storeId: process.env.TIENDANUBE_STORE_ID_ZATTIA,
     token:   process.env.TIENDANUBE_TOKEN_ZATTIA,
-    gnToken: process.env.GESTIONNUBE_TOKEN_ZATTIA,   // GN Zattia (cargar en Vercel)
+    gnToken: process.env.GESTIONNUBE_TOKEN_ZATTIA || process.env.GN_TOKEN_ZATTIA,   // GN Zattia (acepta ambos nombres)
     cacheKey:'tiendanube-audit-zattia',
   },
 };
