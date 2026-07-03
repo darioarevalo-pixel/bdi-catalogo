@@ -162,6 +162,22 @@ module.exports = async (req, res) => {
       return res.status(405).json({ error: 'método no permitido' });
     }
 
+    // --- Verificación de ventas: checklist de discrepancias ya anuladas en GN (por marca) — baja sensibilidad ---
+    if (req.query?.kind === 'verifventas') {
+      const vvKey = `verifventas:${store === 'zattia' ? 'zattia' : 'bdi'}`;
+      if (req.method === 'GET') {
+        const raw = await kvCmd(['GET', vvKey]);
+        return res.status(200).json({ ok: true, resueltas: raw ? JSON.parse(raw) : {} });
+      }
+      if (req.method === 'POST') {
+        const { resueltas } = req.body || {};
+        if (!resueltas || typeof resueltas !== 'object' || Array.isArray(resueltas)) return res.status(400).json({ error: 'resueltas inválida' });
+        await kvCmd(['SET', vvKey, JSON.stringify(resueltas)]);
+        return res.status(200).json({ ok: true, total: Object.keys(resueltas).length });
+      }
+      return res.status(405).json({ error: 'método no permitido' });
+    }
+
     // --- Solicitudes internas de productos (retiros con motivo/aprobación) por marca — baja sensibilidad ---
     if (req.query?.kind === 'solicitudesinternas') {
       const siKey = `solicitudesinternas:${store === 'zattia' ? 'zattia' : 'bdi'}`;

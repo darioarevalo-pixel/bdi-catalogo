@@ -7,11 +7,13 @@ const STORES = {
   bdi: {
     storeId: process.env.TIENDANUBE_STORE_ID,
     token:   process.env.TIENDANUBE_TOKEN,
+    gnToken: process.env.GESTIONNUBE_TOKEN,          // GN BDI (mismo que usa proxy.js)
     cacheKey:'tiendanube-audit',
   },
   zattia: {
     storeId: process.env.TIENDANUBE_STORE_ID_ZATTIA,
     token:   process.env.TIENDANUBE_TOKEN_ZATTIA,
+    gnToken: process.env.GESTIONNUBE_TOKEN_ZATTIA,   // GN Zattia (cargar en Vercel)
     cacheKey:'tiendanube-audit-zattia',
   },
 };
@@ -154,6 +156,38 @@ function mapProduct(p, catMap, incluirVariantes) {
   return out;
 }
 
+// ── Verificación de ventas: pedidos cancelados en TN vs ventas activas en GN ──
+const GN_BASE = 'https://www.gestionnube.com/api/v1';
+async function tnFetchCanceladas(cfg, from, to) {
+  const out = [];
+  const base = `https://api.tiendanube.com/v1/${cfg.storeId}/orders`;
+  const qs = `status=cancelled&created_at_min=${from}T00:00:00-03:00&created_at_max=${to}T23:59:59-03:00&per_page=200&fields=id,number,status,cancelled_at,total,contact_name,created_at`;
+  for (let page = 1; page <= 30; page++) {
+    const r = await fetch(`${base}?${qs}&page=${page}`, { headers: tnHeaders(cfg.token) });
+    if (!r.ok) break;
+    const data = await r.json();
+    if (!Array.isArray(data) || !data.length) break;
+    out.push(...data);
+    if (data.length < 200) break;
+  }
+  return out;
+}
+async function gnFetchVentas(gnToken, from, to) {
+  const out = [];
+  for (let page = 1; page <= 200; page++) {
+    const r = await fetch(`${GN_BASE}/ventas/obtener?from=${from}&to=${to}&per_page=50&page=${page}`, {
+      headers: { Authorization: `Bearer ${gnToken}`, Accept: 'application/json' },
+    });
+    if (!r.ok) break;
+    const j = await r.json().catch(() => null);
+    const lista = (j && Array.isArray(j.data)) ? j.data : (Array.isArray(j) ? j : []);
+    if (!lista.length) break;
+    out.push(...lista);
+    if (j?.meta?.has_more_pages === false || lista.length < 50) break;
+  }
+  return out;
+}
+
 module.exports = async (req, res) => {
   Object.entries(CORS).forEach(([k, v]) => res.setHeader(k, v));
   // Evitar caché del navegador: el caché real vive en KV del servidor (1h),
@@ -166,6 +200,46 @@ module.exports = async (req, res) => {
   const cfg = STORES[storeKey];
   if (!cfg) return res.status(400).json({ error: 'Store desconocido. Usar ?store=bdi o ?store=zattia' });
   if (!cfg.storeId || !cfg.token) return res.status(500).json({ error: `Tienda Nube no configurado para ${storeKey}` });
+
+  // ── Verificación de ventas: cancelada en TN pero activa en GN ──
+  if (req.query?.verificar_ventas === '1') {
+    if (!cfg.gnToken) return res.status(500).json({ error: `Falta el token de Gestión Nube para ${storeKey} (GESTIONNUBE_TOKEN${storeKey === 'zattia' ? '_ZATTIA' : ''}).` });
+    const from = req.query.from, to = req.query.to;
+    if (!from || !to) return res.status(400).json({ error: 'Faltan from/to (YYYY-MM-DD)' });
+    try {
+      const [tnCanc, gnVentas] = await Promise.all([
+        tnFetchCanceladas(cfg, from, to),
+        gnFetchVentas(cfg.gnToken, from, to),
+      ]);
+      const cancByNum = {};
+      tnCanc.forEach(o => { if (o.number != null) cancByNum[String(o.number)] = o; });
+      const discrepancias = [];
+      for (const v of gnVentas) {
+        if (v.channel_id !== 16) continue;                          // solo Tienda Nube
+        if (!(v.active === true && v.archived !== true)) continue;  // solo activas en GN
+        const num = v.tn_order != null ? String(v.tn_order) : null;
+        if (!num || !cancByNum[num]) continue;                      // solo las canceladas en TN
+        const o = cancByNum[num];
+        discrepancias.push({
+          tn_order: num,
+          gn_id: v.id,
+          gn_number: v.number || null,
+          date_sale: v.date_sale || null,
+          total_price: v.total_price ?? null,
+          client_name: v.client_name || (v.client && v.client.name) || null,
+          tn_cancelled_at: o.cancelled_at || null,
+        });
+      }
+      discrepancias.sort((a, b) => String(a.date_sale).localeCompare(String(b.date_sale)));
+      return res.status(200).json({
+        ok: true, store: storeKey, from, to,
+        resumen: { tn_cancelados: tnCanc.length, gn_ventas: gnVentas.length, discrepancias: discrepancias.length },
+        discrepancias,
+      });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
 
   const forceRefresh = req.query?.refresh === '1';
   const incluirVariantes = req.query?.variantes === '1';
