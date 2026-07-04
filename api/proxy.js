@@ -6,6 +6,8 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type, x-api-token',
 };
 
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
 async function gnFetch(path, token) {
   const r = await fetch(API_BASE + path, {
     headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
@@ -13,6 +15,26 @@ async function gnFetch(path, token) {
   const text = await r.text();
   try { return { ok: r.ok, status: r.status, data: JSON.parse(text) }; }
   catch { return { ok: r.ok, status: r.status, data: text }; }
+}
+
+// Igual que gnFetch pero reintenta ante rate limit (429) o errores de GN (5xx),
+// con backoff. Clave para verificar stock: si una página del catálogo se cae por
+// saturación, NO queremos darla por vacía (eso marcaba productos como "no existe").
+async function gnFetchRetry(path, token, tries = 3) {
+  let last = { ok: false, status: 0, data: null };
+  for (let i = 0; i < tries; i++) {
+    try {
+      const r = await gnFetch(path, token);
+      if (r.ok) return r;
+      last = r;
+      if (r.status === 429 || r.status >= 500) { await sleep(300 * (i + 1)); continue; }
+      return r; // otros 4xx no se reintentan
+    } catch (e) {
+      last = { ok: false, status: 0, data: String(e && e.message || e) };
+      await sleep(300 * (i + 1));
+    }
+  }
+  return last;
 }
 
 // Lee stock de una variante usando stock_por_tienda (formato real de GN).
@@ -39,19 +61,31 @@ async function verificarStockServer(items, token) {
   const productos = {};
 
   let page = 1;
+  let completo = true; // ¿pudimos leer TODO el catálogo sin fallas?
   while (productIds.size > Object.keys(productos).length) {
-    const { data } = await gnFetch(`/productos/obtener?include_stock=1&include_variants=1&per_page=100&page=${page}`, token);
+    const resp = await gnFetchRetry(`/productos/obtener?include_stock=1&include_variants=1&per_page=100&page=${page}`, token);
+    // Si una página no se pudo leer (429/5xx tras reintentos), NO damos por
+    // inexistentes los productos que faltan: abortamos y dejamos pasar la venta
+    // (fail-open). Un falso "no existe" que traba al cliente es peor que un raro
+    // sobre-stock (el stock igual se controla en GN).
+    if (!resp.ok) { completo = false; break; }
+    const data = resp.data;
     const lista = Array.isArray(data) ? data : (data?.data || []);
-    if (!lista.length) break;
     for (const p of lista) {
       if (productIds.has(String(p.id))) productos[p.id] = p;
     }
-    const hasMore = data?.meta?.has_more_pages !== false &&
+    // Página vacía o última página → terminamos de leer el catálogo (esto SÍ es
+    // fin legítimo, distinto de una página caída).
+    const hasMore = lista.length > 0 &&
+                    data?.meta?.has_more_pages !== false &&
                     (data?.meta?.last_page ? page < data.meta.last_page : lista.length >= 100);
     if (!hasMore) break;
     page++;
-    if (page > 20) break; // safeguard contra loops infinitos
+    if (page > 30) break; // safeguard contra loops infinitos
   }
+
+  // No pudimos leer el catálogo completo → fail-open: sin problemas, que la venta pase.
+  if (!completo) return { problemas: [], completo: false };
 
   const problemas = [];
   for (const item of items) {
@@ -111,7 +145,7 @@ async function verificarStockServer(items, token) {
       }
     }
   }
-  return problemas;
+  return { problemas, completo: true };
 }
 
 module.exports = async (req, res) => {
@@ -136,8 +170,10 @@ module.exports = async (req, res) => {
     if (req.method === 'POST' && apiPath === '/ventas') {
       const items = req.body?.items || [];
       if (items.length > 0) {
-        const problemas = await verificarStockServer(items, token);
-        if (problemas.length > 0) {
+        const { problemas, completo } = await verificarStockServer(items, token);
+        // Solo bloqueamos si pudimos verificar el catálogo COMPLETO y hay faltantes
+        // reales. Si la verificación quedó incompleta (GN saturado), dejamos pasar.
+        if (completo && problemas.length > 0) {
           const detalle = problemas.map(p =>
             `${p.nombre}${p.variante ? ' (' + p.variante + ')' : ''}: pedido ${p.pedido}, disponible ${p.disponible}`
           ).join('; ');

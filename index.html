@@ -552,6 +552,7 @@
     </div>
     <p class="note-small">Una vez confirmado el pedido, nuestro vendedor se contactará con vos para coordinar el pago y la entrega.</p>
     <button class="btn btn-accent" onclick="confirmarPedido()" id="btn-confirmar">Confirmar pedido</button>
+    <button type="button" onclick="vaciarCarrito()" style="width:100%;margin-top:8px;background:none;border:none;color:var(--text-hint);font-family:inherit;font-size:12px;text-decoration:underline;cursor:pointer;padding:6px">Vaciar carrito</button>
   </div>
 </div>
 
@@ -2069,44 +2070,19 @@ function cerrarCarrito() {
   $('cart-drawer').classList.remove('open');
 }
 
-
-async function verificarStock() {
-  const cartItems = Object.values(cart);
-  const productIds = [...new Set(cartItems.map(i => i.id))];
-  const freshProducts = {};
-
-  for (const pid of productIds) {
-    try {
-      const data = await fetchProxy('/productos/obtener', {
-        qs: 'include_stock=1&include_variants=1&per_page=1&id=' + pid
-      });
-      const raw = Array.isArray(data) ? data : (data.data || data.products || data.items || []);
-      const p = raw.find(p => (p.id || p.product_id) == pid);
-      if (p) freshProducts[pid] = p;
-    } catch(e) {}
-  }
-
-  const problemas = [];
-  for (const item of cartItems) {
-    const p = freshProducts[item.id];
-    if (!p) continue;
-    if (item.sizeId) {
-      const variant = (p.variantes || []).find(v => v.size_id == item.sizeId);
-      if (variant) {
-        const stock = getStockVariante(variant) ?? null;
-        if (stock !== null && stock < item.qty) {
-          problemas.push({ nombre: item.nombre, variante: item.varNombre, pedido: item.qty, disponible: stock });
-        }
-      }
-    } else {
-      const stock = getStock(p);
-      if (stock !== null && stock < item.qty) {
-        problemas.push({ nombre: item.nombre, variante: null, pedido: item.qty, disponible: stock });
-      }
-    }
-  }
-  return problemas;
+// Válvula de escape: si un carrito queda trabado (p. ej. guardado hace días),
+// vaciarlo de una en vez de tener que sacar producto por producto.
+function vaciarCarrito() {
+  if (!Object.keys(cart).length) return;
+  if (!confirm('¿Vaciar el carrito? Se van a quitar todos los productos de tu pedido.')) return;
+  cart = {};
+  cuponAplicado = null;
+  if ($('cupon-input')) $('cupon-input').value = '';
+  saveCart();
+  updateCartUI();
+  renderCartItems();
 }
+
 
 function validarTelefono() {
   const input = $('client-phone');
@@ -2159,37 +2135,13 @@ async function confirmarPedido() {
   const contact = phone;
 
   const btn = $('btn-confirmar');
-  btn.innerHTML = '<span class="spinner"></span>Verificando stock...';
-  btn.disabled = true;
-
-  const problemas = await verificarStock();
-  if (problemas.length > 0) {
-    const lista = problemas.map(p =>
-      '• ' + p.nombre + (p.variante ? ' (' + p.variante + ')' : '') +
-      ': pediste ' + p.pedido + ', quedan ' + p.disponible
-    ).join('\n');
-    const continuar = confirm('Algunos productos no tienen stock suficiente:\n\n' + lista + '\n\n¿Querés confirmar el pedido igual con las cantidades disponibles?');
-    if (!continuar) {
-      btn.innerHTML = 'Confirmar pedido';
-      btn.disabled = false;
-      return;
-    }
-    // Ajustar cantidades al stock disponible
-    for (const prob of problemas) {
-      const key = Object.keys(cart).find(k => {
-        const i = cart[k];
-        return i.nombre === prob.nombre && (!prob.variante || i.varNombre === prob.variante);
-      });
-      if (key) {
-        if (prob.disponible === 0) delete cart[key];
-        else cart[key].qty = prob.disponible;
-      }
-    }
-    updateCartUI();
-  }
-
   btn.innerHTML = '<span class="spinner"></span>Enviando...';
   btn.disabled = true;
+  // La verificación de stock la hace el servidor (api/proxy.js) al crear la venta,
+  // en una sola pasada y con reintentos. Antes había acá un pre-chequeo que
+  // consultaba GN una vez por producto: era lento (tildaba con carritos grandes) y
+  // saturaba GN, lo que hacía fallar la verificación real del servidor y marcaba
+  // productos como "no disponibles" por error. Se eliminó a propósito.
 
   try {
     const clientId = 563310; // Cliente "Pedido Catalogo" en Gestión Nube
