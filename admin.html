@@ -398,6 +398,8 @@
   .pedido-total { font-weight: 700; color: var(--text); font-size: 15px; white-space: nowrap; }
   .pedido-ver { flex-shrink: 0; padding: 7px 16px; background: var(--accent); color: #fff; border-radius: var(--radius-sm); text-decoration: none; font-size: 13px; font-weight: 600; }
   .pedido-ver:hover { opacity: 0.9; }
+  .load-more-btn { display: block; width: 100%; margin: 10px 0 4px; padding: 10px; background: var(--surface); border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); color: var(--text-muted); font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .load-more-btn:hover { background: var(--bg); }
 </style>
 </head>
 <body>
@@ -1034,10 +1036,45 @@ function toggleVariant(productId, variantId) {
   if (tog) tog.classList.toggle('on', !hidden);
 }
 
+// Construye el HTML de las variantes de un producto (costo + filas). Se llama al
+// expandir una card, no al pintar la lista.
+function buildVarRows(p) {
+  const id = p.id || p.product_id;
+  const variants = p.variantes || [];
+  const baseAdmin = precioBaseAdmin(p);
+  const phPrecio = baseAdmin > 0 ? Math.round(baseAdmin).toLocaleString('es-AR') : 'especial';
+  const costoProd = parseFloat(p.unit_cost || 0);
+  const costoHead = '<div class="variant-cost-head">' +
+    (costoProd > 0
+      ? 'Costo del producto: <b>' + fmtAR(costoProd) + '</b>'
+      : '<span class="no-cost-hint">Costo no disponible (el token de este catálogo no tiene permiso de costos)</span>') +
+    '</div>';
+  const varRows = variants.map(v => {
+    const vh = isVariantHidden(id, v.size_id);
+    const vpVal = (config.variantPrices || {})[id + '-' + v.size_id];
+    const vstock = getStockVarianteAdmin(v);
+    const stockTxt = vstock === null ? '<div class="variant-row-stock">—</div>'
+      : '<div class="variant-row-stock' + (vstock <= 5 ? ' low' : '') + '">' + vstock + ' u</div>';
+    return '<div class="variant-row' + (vh ? ' hidden-var' : '') + (vpVal != null ? ' has-vprice' : '') + '" id="var-row-' + id + '-' + v.size_id + '">' +
+      '<button class="toggle' + (vh ? '' : ' on') + '" id="var-tog-' + id + '-' + v.size_id + '" onclick="toggleVariant(' + id + ',' + v.size_id + ')"></button>' +
+      '<div class="variant-row-name">' + v.size + '</div>' +
+      stockTxt +
+      '<div class="vprice-wrap"><span>$</span><input class="vprice-input" type="number" min="0" step="1" value="' + (vpVal != null ? vpVal : '') + '" placeholder="' + phPrecio + '" title="Precio especial para esta variante. Vacío = precio normal." onclick="event.stopPropagation()" oninput="setVariantPrice(' + id + ',' + v.size_id + ',this.value)" /></div>' +
+      '</div>';
+  }).join('');
+  return costoHead + varRows;
+}
+
 function toggleExpand(id) {
   const rows = $('var-rows-' + id);
   const btn = $('expand-btn-' + id);
   if (!rows) return;
+  // Construir las variantes la primera vez que se abre.
+  if (!rows.dataset.built) {
+    const p = allAdminProducts.find(x => String(x.id || x.product_id) === String(id));
+    if (p) rows.innerHTML = buildVarRows(p);
+    rows.dataset.built = '1';
+  }
   const open = rows.classList.toggle('open');
   btn.textContent = open ? 'Ocultar' : 'Ver variantes';
 }
@@ -1134,6 +1171,34 @@ function renderProductListKeepScroll() {
   window.scrollTo(0, y);
 }
 
+// Render por lotes: pinta las primeras `batch` filas y agrega un botón "Cargar
+// más" para el resto. Evita pintar cientos de filas de golpe (lo que trababa el
+// admin). `chunks` es un array de strings HTML (una entrada por fila). Los
+// buscadores/filtros ya reducen el array antes de llamar acá, así que en el uso
+// típico (búsqueda) el botón ni aparece.
+function renderBatched(container, chunks, batch) {
+  batch = batch || 60;
+  if (!container) return;
+  container.innerHTML = '';
+  if (!chunks || !chunks.length) { container.innerHTML = '<div class="loading-state">Sin resultados</div>'; return; }
+  let shown = 0;
+  function paint() {
+    const old = container.querySelector('.load-more-btn');
+    if (old) old.remove();
+    container.insertAdjacentHTML('beforeend', chunks.slice(shown, shown + batch).join(''));
+    shown = Math.min(shown + batch, chunks.length);
+    if (shown < chunks.length) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'load-more-btn';
+      b.textContent = 'Cargar más (' + (chunks.length - shown) + ' restantes)';
+      b.addEventListener('click', paint);
+      container.appendChild(b);
+    }
+  }
+  paint();
+}
+
 function renderProductList() {
   const q = ($('admin-search')?.value || '').toLowerCase();
   const cat = $('admin-cat-filter')?.value || '';
@@ -1173,27 +1238,9 @@ function renderProductList() {
     const hidden = isHidden(id);
     const pos = posMap[String(id)] || (i + 1);
 
-    const baseAdmin = precioBaseAdmin(p);
-    const phPrecio = baseAdmin > 0 ? Math.round(baseAdmin).toLocaleString('es-AR') : 'especial';
-    const costoProd = parseFloat(p.unit_cost || 0);
-    const costoHead = '<div class="variant-cost-head">' +
-      (costoProd > 0
-        ? 'Costo del producto: <b>' + fmtAR(costoProd) + '</b>'
-        : '<span class="no-cost-hint">Costo no disponible (el token de este catálogo no tiene permiso de costos)</span>') +
-      '</div>';
-    const varRows = variants.map(v => {
-      const vh = isVariantHidden(id, v.size_id);
-      const vpVal = (config.variantPrices || {})[id + '-' + v.size_id];
-      const vstock = getStockVarianteAdmin(v);
-      const stockTxt = vstock === null ? '<div class="variant-row-stock">—</div>'
-        : '<div class="variant-row-stock' + (vstock <= 5 ? ' low' : '') + '">' + vstock + ' u</div>';
-      return '<div class="variant-row' + (vh ? ' hidden-var' : '') + (vpVal != null ? ' has-vprice' : '') + '" id="var-row-' + id + '-' + v.size_id + '">' +
-        '<button class="toggle' + (vh ? '' : ' on') + '" id="var-tog-' + id + '-' + v.size_id + '" onclick="toggleVariant(' + id + ',' + v.size_id + ')"></button>' +
-        '<div class="variant-row-name">' + v.size + '</div>' +
-        stockTxt +
-        '<div class="vprice-wrap"><span>$</span><input class="vprice-input" type="number" min="0" step="1" value="' + (vpVal != null ? vpVal : '') + '" placeholder="' + phPrecio + '" title="Precio especial para esta variante. Vacío = precio normal." onclick="event.stopPropagation()" oninput="setVariantPrice(' + id + ',' + v.size_id + ',this.value)" /></div>' +
-        '</div>';
-    }).join('');
+    // Las variantes se construyen on-demand al expandir la card (buildVarRows +
+    // toggleExpand), no al pintar la lista: así no metemos miles de filas ocultas
+    // en el DOM de entrada (era el mayor peso del tab Productos).
 
     const dragAttrs = filtered ? '' :
       ' draggable="true"' +
@@ -1221,7 +1268,7 @@ function renderProductList() {
           (pcat ? '<div class="product-row-cat">' + pcat + '</div>' : '') +
         '</div>' +
       '</div>' +
-      (variants.length ? '<div class="variant-rows" id="var-rows-' + id + '">' + costoHead + varRows + '</div>' : '') +
+      (variants.length ? '<div class="variant-rows" id="var-rows-' + id + '"></div>' : '') +
     '</div>';
   }).join('');
 }
@@ -1944,7 +1991,7 @@ function renderRecargosList() {
   const container = $('recargos-list');
   if (!prods.length) { container.innerHTML = '<div class="loading-state">Sin resultados</div>'; return; }
 
-  container.innerHTML = prods.map(p => {
+  renderBatched(container, prods.map(p => {
     const id = p.id || p.product_id;
     const name = (p.name || p.nombre || 'Sin nombre').replace(/</g, '&lt;');
     const cod = p.code || p.sku || '';
@@ -1982,7 +2029,7 @@ function renderRecargosList() {
         '<button onclick="toggleApagar(' + id + ')" title="Apagar: no mostrar en el catálogo (reventa / no mayorista)" style="padding:6px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:' + (apg ? 'var(--danger)' : '#fff') + ';color:' + (apg ? '#fff' : 'var(--text)') + ';cursor:pointer;font-size:12px">' + (apg ? 'Apagado' : 'Apagar') + '</button>' +
       '</div>' +
     '</div>';
-  }).join('');
+  }));
 }
 
 function setExcTipo(id, tipo) {
@@ -2228,7 +2275,7 @@ function renderMargenes() {
 
   const cell = (label, val, cls) => '<div class="margen-cell' + (cls ? ' ' + cls : '') + '"><span class="ml">' + label + '</span><span class="mv">' + val + '</span></div>';
 
-  container.innerHTML = prods.map(p => {
+  renderBatched(container, prods.map(p => {
     const name = (p.name || p.nombre || 'Sin nombre').replace(/</g, '&lt;');
     const costo = parseFloat(p.unit_cost || 0);
     const precio = precioBaseAdmin(p);
@@ -2260,7 +2307,7 @@ function renderMargenes() {
         cell('Margen', mgD.toFixed(0) + '%', lossCls) +
       '</div>' +
     '</div>';
-  }).join('');
+  }));
 }
 
 // ===== Pendientes de precio mayorista =====
@@ -2288,7 +2335,7 @@ function renderPendientes() {
     container.innerHTML = '<div class="loading-state">🎉 No hay productos pendientes — todos los visibles tienen precio mayorista.</div>';
     return;
   }
-  container.innerHTML = prods.map(p => {
+  renderBatched(container, prods.map(p => {
     const name = (p.name || p.nombre || 'Sin nombre').replace(/</g, '&lt;');
     const img = p._img || null;
     const thumb = img ? '<img class="margen-thumb" src="' + img + '" alt="" loading="lazy" onerror="this.style.visibility=\'hidden\'">' : '<div class="margen-thumb"></div>';
@@ -2300,7 +2347,7 @@ function renderPendientes() {
       '<div class="pend-ref"><span class="pend-ref-lbl">Precio público (ref.)</span><span class="pend-ref-val">' + fmtAR(r) + '</span></div>' +
       '<div class="pend-badge">⚠ Falta precio mayorista</div>' +
     '</div>';
-  }).join('');
+  }));
 }
 
 // Muestra/oculta el botón "Pendientes" y actualiza el contador.
@@ -2924,7 +2971,7 @@ function renderPriceList() {
     return;
   }
 
-  container.innerHTML = prods.map(p => {
+  renderBatched(container, prods.map(p => {
     const id = p.id || p.product_id;
     const name = p.name || p.nombre || 'Sin nombre';
     const cod = p.code || p.sku || '';
@@ -2957,7 +3004,7 @@ function renderPriceList() {
       '</div>' +
       '<div class="price-discount ' + discCls + '">' + discTxt + '</div>' +
     '</div>';
-  }).join('');
+  }));
 }
 
 function setRefPrice(productId, value) {
