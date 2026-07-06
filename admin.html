@@ -385,6 +385,14 @@
   .nota-obs-label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 14px; }
   .nota-obs-label input { display: block; width: 100%; margin-top: 5px; padding: 9px 11px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 14px; outline: none; }
   .nota-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  /* Panel de pedidos */
+  .pedido-row { display: flex; align-items: center; gap: 14px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 8px; }
+  .pedido-main { flex: 1; min-width: 0; }
+  .pedido-cliente { font-weight: 600; color: var(--text); font-size: 15px; }
+  .pedido-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .pedido-total { font-weight: 700; color: var(--text); font-size: 15px; white-space: nowrap; }
+  .pedido-ver { flex-shrink: 0; padding: 7px 16px; background: var(--accent); color: #fff; border-radius: var(--radius-sm); text-decoration: none; font-size: 13px; font-weight: 600; }
+  .pedido-ver:hover { opacity: 0.9; }
 </style>
 </head>
 <body>
@@ -425,6 +433,7 @@
     <button class="tab-btn" onclick="setTab('cupones')">Cupones</button>
     <button class="tab-btn" onclick="setTab('codigos')">🔑 Códigos</button>
     <button class="tab-btn" onclick="setTab('generador')">Generador de precios</button>
+    <button class="tab-btn" onclick="setTab('pedidos')">📋 Pedidos</button>
     <button class="tab-btn" onclick="setTab('pedido')">Cargar pedido</button>
     <button class="tab-btn" onclick="setTab('nota')">Nota de pedido</button>
     <button class="tab-btn" onclick="setTab('fotos')">Fotos</button>
@@ -545,6 +554,15 @@
         </div>
         <div class="gen-preview-wrap"><div class="gen-preview-lbl">Esto se copia (sin el costo):</div><pre class="gen-preview" id="gen-preview"></pre></div>
       </div>
+    </div>
+
+    <div id="tab-pedidos" style="display:none">
+      <p class="section-note">Los pedidos que los clientes confirmaron desde el catálogo (últimos 90 días). Tocá "Ver" para abrir el detalle con los productos.</p>
+      <div class="admin-toolbar">
+        <input class="admin-search" type="text" id="pedidos-search" placeholder="Buscar por cliente o teléfono..." oninput="renderPedidos()" />
+        <button class="tab-btn" onclick="cargarPedidos(true)" title="Volver a traer la lista">↻ Actualizar</button>
+      </div>
+      <div id="pedidos-list"><div class="loading-state">Cargando pedidos...</div></div>
     </div>
 
     <div id="tab-pedido" style="display:none">
@@ -1406,6 +1424,7 @@ function setTab(tab) {
   $('tab-margenes').style.display = tab === 'margenes' ? 'block' : 'none';
   $('tab-pendientes').style.display = tab === 'pendientes' ? 'block' : 'none';
   $('tab-generador').style.display = tab === 'generador' ? 'block' : 'none';
+  $('tab-pedidos').style.display = tab === 'pedidos' ? 'block' : 'none';
   $('tab-pedido').style.display = tab === 'pedido' ? 'block' : 'none';
   $('tab-nota').style.display = tab === 'nota' ? 'block' : 'none';
   $('tab-fotos').style.display = tab === 'fotos' ? 'block' : 'none';
@@ -1430,6 +1449,7 @@ function setTab(tab) {
   if (tab === 'margenes') { populateMargenCatFilter(); renderMargenes(); }
   if (tab === 'pendientes') { populatePendientesCatFilter(); renderPendientes(); }
   if (tab === 'generador') populateGenerador();
+  if (tab === 'pedidos') cargarPedidos();
   if (tab === 'pedido') populatePedidoManual();
   if (tab === 'nota') notaInit();
   if (tab === 'fotos') { fotosBuscar(); fotosRender(); }
@@ -2027,6 +2047,63 @@ function setVariantPrice(productId, sizeId, value) {
 
 function fmtAR(n) {
   return '$' + Math.round(n).toLocaleString('es-AR');
+}
+
+// ---- Panel de pedidos ----
+// Lista los pedidos que los clientes confirmaron desde el catálogo (guardados en
+// KV con TTL 90 días). El backend GET /api/pedido?list=1 devuelve un resumen liviano.
+let allPedidos = null; // cache de la lista (resúmenes), se re-trae con "Actualizar"
+
+async function cargarPedidos(force) {
+  const cont = $('pedidos-list');
+  if (allPedidos && !force) { renderPedidos(); return; }
+  if (cont) cont.innerHTML = '<div class="loading-state">Cargando pedidos...</div>';
+  try {
+    const r = await fetch('/api/pedido?list=1');
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || 'HTTP ' + r.status);
+    allPedidos = Array.isArray(data.pedidos) ? data.pedidos : [];
+    renderPedidos();
+  } catch (e) {
+    if (cont) cont.innerHTML = '<div class="loading-state">No se pudieron cargar los pedidos.</div>';
+    showToast('Error al cargar pedidos: ' + e.message, 'error', 4000);
+  }
+}
+
+function fmtFechaPedido(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }) +
+         ' ' + d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+}
+
+function renderPedidos() {
+  const cont = $('pedidos-list');
+  if (!cont) return;
+  if (!allPedidos) { cargarPedidos(); return; }
+  const q = ($('pedidos-search') ? $('pedidos-search').value : '').trim().toLowerCase();
+  let lista = allPedidos;
+  if (q) lista = lista.filter(p =>
+    (p.cliente || '').toLowerCase().includes(q) ||
+    (p.telefono || '').toLowerCase().includes(q) ||
+    String(p.id).toLowerCase().includes(q)
+  );
+  if (!lista.length) {
+    cont.innerHTML = '<div class="loading-state">' + (q ? 'Sin resultados.' : 'Todavía no hay pedidos.') + '</div>';
+    return;
+  }
+  cont.innerHTML = lista.map(p => `
+    <div class="pedido-row">
+      <div class="pedido-main">
+        <div class="pedido-cliente">${p.cliente || 'Sin nombre'}</div>
+        <div class="pedido-meta">N° ${p.id} · ${fmtFechaPedido(p.fecha)}${p.telefono ? ' · ' + p.telefono : ''}</div>
+        <div class="pedido-meta">${p.nItems} ítem${p.nItems === 1 ? '' : 's'}${p.pago ? ' · ' + p.pago : ''}${p.entrega ? ' · ' + p.entrega : ''}</div>
+      </div>
+      <div class="pedido-total">${fmtAR(p.total || 0)}</div>
+      <a class="pedido-ver" href="/pedido/${encodeURIComponent(p.id)}" target="_blank" rel="noopener">Ver</a>
+    </div>
+  `).join('');
 }
 
 function populatePriceCatFilter() {

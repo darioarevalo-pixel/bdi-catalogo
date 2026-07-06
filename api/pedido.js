@@ -96,6 +96,53 @@ module.exports = async (req, res) => {
   if (!KV_URL || !KV_TOKEN) return res.status(500).json({ error: 'Almacenamiento no configurado' });
 
   try {
+    // Listado para el panel del admin: GET /api/pedido?list=1
+    // Devuelve un resumen liviano por pedido (sin los items completos); el detalle
+    // se obtiene con GET ?id=<id> o navegando a /pedido/<id>.
+    if (req.method === 'GET' && req.query.list) {
+      // 1) Juntar las claves pedido:* con SCAN (no bloqueante, a diferencia de KEYS).
+      //    Iterar hasta cursor '0'; tope de 20 vueltas por seguridad.
+      const keys = [];
+      let cursor = '0';
+      for (let i = 0; i < 20; i++) {
+        const s = await kvCmd(['SCAN', cursor, 'MATCH', 'pedido:*', 'COUNT', '200']);
+        const r = s && s.result;
+        if (!Array.isArray(r)) break;
+        cursor = String(r[0]);
+        if (Array.isArray(r[1])) keys.push(...r[1]);
+        if (cursor === '0') break;
+      }
+      if (!keys.length) return res.json({ pedidos: [] });
+
+      // 2) Traer los snapshots en bloque (chunks de 100 para no armar un body enorme).
+      const pedidos = [];
+      for (let i = 0; i < keys.length; i += 100) {
+        const chunk = keys.slice(i, i + 100);
+        const m = await kvCmd(['MGET', ...chunk]);
+        const vals = (m && m.result) || [];
+        vals.forEach((v, j) => {
+          if (!v) return; // vencido por TTL entre el SCAN y el MGET
+          let p;
+          try { p = JSON.parse(v); } catch (e) { return; }
+          pedidos.push({
+            id: p.id != null ? p.id : chunk[j].replace(/^pedido:/, ''),
+            fecha: p.fecha || null,
+            cliente: p.cliente || '',
+            telefono: p.telefono || '',
+            pago: p.pago || '',
+            entrega: p.entrega || '',
+            total: p.total || 0,
+            subtotal: p.subtotal || 0,
+            nItems: Array.isArray(p.items) ? p.items.length : 0,
+          });
+        });
+      }
+
+      // 3) Más nuevos primero (fecha ISO → orden lexicográfico sirve).
+      pedidos.sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')));
+      return res.json({ pedidos });
+    }
+
     // Leer un pedido para mostrarlo en la página /pedido/<id>
     if (req.method === 'GET') {
       const id = req.query.id;
