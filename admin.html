@@ -41,6 +41,11 @@
   .tabs { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 1.5rem; display: flex; }
   .tab-btn { padding: 12px 16px; font-family: inherit; font-size: 13px; font-weight: 500; border: none; background: transparent; cursor: pointer; color: var(--text-muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
   .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-groups { background: var(--surface); padding: 10px 1.5rem 0; display: flex; flex-wrap: wrap; gap: 8px; }
+  .tab-group-btn { padding: 8px 18px; font-family: inherit; font-size: 14px; font-weight: 600; border: 1px solid var(--border); background: var(--bg); cursor: pointer; color: var(--text-muted); border-radius: var(--radius-sm); }
+  .tab-group-btn.active { color: #fff; background: var(--accent); border-color: var(--accent); }
+  .tab-subs { display: none; flex: 1; flex-wrap: wrap; }
+  .tab-subs.active { display: flex; }
 
   /* Content */
   .admin-content { max-width: 1600px; margin: 0 auto; padding: 1.5rem; }
@@ -422,22 +427,39 @@
     </div>
   </div>
 
+  <div class="tab-groups">
+    <button class="tab-group-btn active" data-group="catalogo" onclick="setGroup('catalogo')">Catálogo</button>
+    <button class="tab-group-btn" data-group="precios" onclick="setGroup('precios')">Precios</button>
+    <button class="tab-group-btn" data-group="pedidos" onclick="setGroup('pedidos')">Pedidos</button>
+    <button class="tab-group-btn" data-group="marketing" onclick="setGroup('marketing')">Marketing</button>
+    <button class="tab-group-btn" data-group="ajustes" onclick="setGroup('ajustes')">Ajustes</button>
+  </div>
   <div class="tabs">
-    <button class="tab-btn active" onclick="setTab('products')">Productos</button>
-    <button class="tab-btn" onclick="setTab('categories')">Categorías</button>
-    <button class="tab-btn" id="tab-btn-prices" onclick="setTab('prices')">Precios</button>
-    <button class="tab-btn" id="tab-btn-recargos" onclick="setTab('recargos')">🎯 Lista mejor</button>
-    <button class="tab-btn" onclick="setTab('margenes')">Márgenes</button>
-    <button class="tab-btn" id="tab-btn-pendientes" onclick="setTab('pendientes')">Pendientes</button>
-    <button class="tab-btn" onclick="setTab('banners')">Banners</button>
-    <button class="tab-btn" onclick="setTab('cupones')">Cupones</button>
-    <button class="tab-btn" onclick="setTab('codigos')">🔑 Códigos</button>
-    <button class="tab-btn" onclick="setTab('generador')">Generador de precios</button>
-    <button class="tab-btn" onclick="setTab('pedidos')">📋 Pedidos</button>
-    <button class="tab-btn" onclick="setTab('pedido')">Cargar pedido</button>
-    <button class="tab-btn" onclick="setTab('nota')">Nota de pedido</button>
-    <button class="tab-btn" onclick="setTab('fotos')">Fotos</button>
-    <button class="tab-btn" onclick="setTab('settings')">Configuración</button>
+    <div class="tab-subs active" data-group="catalogo">
+      <button class="tab-btn active" onclick="setTab('products')">Productos</button>
+      <button class="tab-btn" onclick="setTab('categories')">Categorías</button>
+      <button class="tab-btn" onclick="setTab('fotos')">Fotos</button>
+    </div>
+    <div class="tab-subs" data-group="precios">
+      <button class="tab-btn" id="tab-btn-recargos" onclick="setTab('recargos')">🎯 Lista mejor</button>
+      <button class="tab-btn" id="tab-btn-prices" onclick="setTab('prices')">Precios</button>
+      <button class="tab-btn" onclick="setTab('margenes')">Márgenes</button>
+      <button class="tab-btn" id="tab-btn-pendientes" onclick="setTab('pendientes')">Pendientes</button>
+      <button class="tab-btn" onclick="setTab('generador')">Generador de precios</button>
+    </div>
+    <div class="tab-subs" data-group="pedidos">
+      <button class="tab-btn" onclick="setTab('pedidos')">📋 Pedidos</button>
+      <button class="tab-btn" onclick="setTab('pedido')">Cargar pedido</button>
+      <button class="tab-btn" onclick="setTab('nota')">Nota de pedido</button>
+    </div>
+    <div class="tab-subs" data-group="marketing">
+      <button class="tab-btn" onclick="setTab('banners')">Banners</button>
+      <button class="tab-btn" onclick="setTab('cupones')">Cupones</button>
+      <button class="tab-btn" onclick="setTab('codigos')">🔑 Códigos</button>
+    </div>
+    <div class="tab-subs" data-group="ajustes">
+      <button class="tab-btn" onclick="setTab('settings')">Configuración</button>
+    </div>
   </div>
 
   <div class="admin-content">
@@ -1413,6 +1435,24 @@ function prodDrop(e, cat, catIdx, toProdIdx) {
   renderCatProductRows(cat, catIdx);
 }
 
+// Agrupación de las pestañas en 5 grupos (navegación de 2 niveles).
+const TAB_GROUPS = {
+  catalogo: ['products', 'categories', 'fotos'],
+  precios: ['recargos', 'prices', 'margenes', 'pendientes', 'generador'],
+  pedidos: ['pedidos', 'pedido', 'nota'],
+  marketing: ['banners', 'cupones', 'codigos'],
+  ajustes: ['settings'],
+};
+function grupoDeTab(tab) {
+  for (const g in TAB_GROUPS) if (TAB_GROUPS[g].indexOf(tab) !== -1) return g;
+  return 'catalogo';
+}
+// Abre un grupo: muestra su fila de sub-tabs y abre el primer tab del grupo.
+function setGroup(group) {
+  const first = (TAB_GROUPS[group] || [])[0];
+  if (first) setTab(first);
+}
+
 function setTab(tab) {
   $('tab-products').style.display = tab === 'products' ? 'block' : 'none';
   $('tab-categories').style.display = tab === 'categories' ? 'block' : 'none';
@@ -1434,6 +1474,13 @@ function setTab(tab) {
     const match = onclickStr.match(/setTab\('([^']+)'\)/);
     btn.classList.toggle('active', match && match[1] === tab);
   });
+  // Sincronizar el grupo activo + mostrar su fila de sub-tabs (cubre también que
+  // se llame setTab('...') directo desde otra parte del código).
+  const grupoActivo = grupoDeTab(tab);
+  document.querySelectorAll('.tab-group-btn').forEach(b =>
+    b.classList.toggle('active', b.getAttribute('data-group') === grupoActivo));
+  document.querySelectorAll('.tab-subs').forEach(el =>
+    el.classList.toggle('active', el.getAttribute('data-group') === grupoActivo));
   if (tab === 'settings') renderSettings();
   if (tab === 'prices') {
     populatePriceCatFilter();
@@ -2264,6 +2311,10 @@ function updatePendientesCount() {
   btn.style.display = '';
   const n = allAdminProducts.filter(faltaPrecioMayorista).length;
   btn.innerHTML = 'Pendientes' + (n > 0 ? ' <span class="tab-badge">' + n + '</span>' : '');
+  // Reflejar el aviso en el botón del grupo "Precios" (el sub-tab está oculto
+  // hasta abrir el grupo, así que sin esto el badge no se vería).
+  const grpBtn = document.querySelector('.tab-group-btn[data-group="precios"]');
+  if (grpBtn) grpBtn.innerHTML = 'Precios' + (n > 0 ? ' <span class="tab-badge">' + n + '</span>' : '');
 }
 
 // ===== Generador de precios por cantidad (herramienta interna para cotizar) =====
