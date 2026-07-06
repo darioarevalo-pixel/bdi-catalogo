@@ -113,8 +113,20 @@ module.exports = async (req, res) => {
     if (req.headers['x-admin-password'] !== ADMIN_PASSWORD)
       return res.status(401).json({ error: 'Contraseña incorrecta' });
     try {
-      await kvSet(req.body);
-      return res.json({ ok: true });
+      const incoming = req.body || {};
+      // Control de concurrencia optimista (repo/admin compartido): el cliente
+      // manda en el header el updatedAt que vio al cargar. Si la config guardada
+      // cambió desde entonces, otra sesión guardó en el medio → NO pisamos.
+      const clientBase = req.headers['x-base-updated-at'] || '';
+      const current = await kvGet();
+      const currentUpdatedAt = (current && current.updatedAt) || '';
+      if (clientBase && currentUpdatedAt && clientBase !== currentUpdatedAt) {
+        return res.status(409).json({ error: 'conflict', updatedAt: currentUpdatedAt });
+      }
+      // Sellar un nuevo updatedAt y guardar.
+      incoming.updatedAt = new Date().toISOString();
+      await kvSet(incoming);
+      return res.json({ ok: true, updatedAt: incoming.updatedAt });
     } catch (e) {
       return res.status(500).json({ error: e.message });
     }
