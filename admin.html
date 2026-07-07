@@ -660,8 +660,12 @@
     </div>
 
     <div id="tab-fotos" style="display:none">
-      <p class="section-note">Copiá fotos de productos para pegarlas (Cmd+V) en el chat del cliente, <strong>sin descargarlas</strong>. Elegí <strong>1 producto</strong> para copiar su foto, o <strong>varios</strong> (ej. el mismo modelo en distintos colores cargados por separado) para <strong>combinar la primera foto de cada uno en una sola imagen</strong>.</p>
+      <p class="section-note">Copiá fotos de productos para pegarlas (Cmd+V) en el chat del cliente, <strong>sin descargarlas</strong>. Elegí <strong>1 producto</strong> para copiar su foto, o <strong>varios</strong> (ej. el mismo modelo en distintos colores) para <strong>combinar la portada de cada uno en una sola imagen</strong>. Tildá <strong>"Incluir todas las fotos"</strong> para copiar todas las vistas del producto (ej. una funda de 4 ángulos → collage listo para mandar).</p>
       <input class="admin-search" type="text" id="fotos-buscar" placeholder="Buscar producto (ej. soft case)" oninput="fotosBuscar()" style="max-width:480px" />
+      <label style="display:flex;align-items:center;gap:7px;margin:9px 0 2px;font-size:13px;color:var(--text);cursor:pointer;user-select:none;">
+        <input type="checkbox" id="fotos-todas" onchange="fotosRender()" style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent);">
+        Incluir <strong>todas las fotos</strong> del producto (no solo la portada)
+      </label>
       <div id="fotos-resultados" class="fotos-resultados"></div>
       <div id="fotos-sel" class="fotos-sel"></div>
       <div id="fotos-acciones" class="fotos-acciones" style="display:none">
@@ -1123,6 +1127,11 @@ function getImagenAdmin(p) {
   const e = tnLookupAdmin(p);
   return (e && e.imgs && e.imgs.length) ? e.imgs[0] : null;
 }
+// Todas las fotos del producto (para la sección Fotos con "todas las fotos").
+function getImagenesAdmin(p) {
+  const e = tnLookupAdmin(p);
+  return (e && Array.isArray(e.imgs)) ? e.imgs.filter(Boolean) : [];
+}
 async function cargarImagenesTN() {
   try {
     const r = await fetch('/api/tiendanube');
@@ -1131,7 +1140,7 @@ async function cargarImagenesTN() {
     tnImageMapKeys = Object.keys(tnImageMap);
     // Precalcular la imagen de cada producto (una sola vez) para que el listado
     // no recalcule el cruce en cada tecla del buscador.
-    allAdminProducts.forEach(p => { p._img = getImagenAdmin(p); });
+    allAdminProducts.forEach(p => { p._img = getImagenAdmin(p); p._imgs = getImagenesAdmin(p); });
     // Re-renderizar SOLO la pestaña que se está viendo (antes rearmaba las 234
     // filas de "Productos" aunque estuviera oculta, re-trabando el navegador).
     if ($('tab-products') && $('tab-products').style.display !== 'none') renderProductList();
@@ -2826,29 +2835,41 @@ function fotosAgregarTodos() {
 }
 function fotosQuitar(idx) { fotosSel.splice(idx, 1); fotosRender(); }
 function fotosUrls() {
-  return fotosSel.map(id => {
+  const todas = $('fotos-todas') && $('fotos-todas').checked;
+  const urls = [];
+  fotosSel.forEach(id => {
     const p = allAdminProducts.find(x => (x.id || x.product_id) == id);
-    return p ? (p._img || null) : null;
-  }).filter(Boolean);
+    if (!p) return;
+    if (todas) {
+      const imgs = (p._imgs && p._imgs.length) ? p._imgs : (p._img ? [p._img] : []);
+      imgs.forEach(u => { if (u) urls.push(u); });
+    } else if (p._img) {
+      urls.push(p._img);
+    }
+  });
+  return urls;
 }
 function fotosRender() {
   const cont = $('fotos-sel');
   if (!cont) return;
   if (!fotosSel.length) { cont.innerHTML = '<div class="loading-state">Agregá productos para copiar o combinar sus fotos.</div>'; if ($('fotos-acciones')) $('fotos-acciones').style.display = 'none'; return; }
+  const todas = $('fotos-todas') && $('fotos-todas').checked;
   cont.innerHTML = fotosSel.map((id, idx) => {
     const p = allAdminProducts.find(x => (x.id || x.product_id) == id);
     const nombre = p ? (p.name || p.nombre || 'Sin nombre') : '—';
     const img = p && p._img ? p._img : '';
+    const nFotos = p && p._imgs ? p._imgs.length : (img ? 1 : 0);
+    const badge = (todas && nFotos > 1) ? ' <span style="color:var(--text-muted);font-weight:400;">· ' + nFotos + ' fotos</span>' : '';
     return '<div class="fotos-card">' +
       '<button class="fotos-x" onclick="fotosQuitar(' + idx + ')" title="Quitar">×</button>' +
       (img ? '<img src="' + img.replace(/"/g, '&quot;') + '" loading="lazy" onerror="this.style.visibility=\'hidden\'">' : '<div class="fotos-noimg">Sin foto</div>') +
-      '<div class="fotos-card-name">' + nombre.replace(/</g, '&lt;') + '</div>' +
+      '<div class="fotos-card-name">' + nombre.replace(/</g, '&lt;') + badge + '</div>' +
     '</div>';
   }).join('');
   const acc = $('fotos-acciones');
   acc.style.display = 'flex';
   const conFoto = fotosUrls().length;
-  $('fotos-btn-copiar').textContent = fotosSel.length > 1 ? '🖼️ Combinar y copiar (' + conFoto + ')' : '📋 Copiar foto';
+  $('fotos-btn-copiar').textContent = conFoto > 1 ? '🖼️ Combinar y copiar (' + conFoto + ')' : '📋 Copiar foto';
 }
 function fotosCargarImg(url) {
   return new Promise((resolve, reject) => {
@@ -2872,7 +2893,7 @@ async function fotosCollageBlob(urls) {
   const n = imgs.length;
   const cols = n <= 1 ? 1 : n === 2 ? 2 : n <= 4 ? 2 : 3;
   const rows = Math.ceil(n / cols);
-  const cell = 500, pad = 10;
+  const cell = 600, pad = 10;
   const canvas = document.createElement('canvas');
   canvas.width = cols * cell + (cols + 1) * pad;
   canvas.height = rows * cell + (rows + 1) * pad;
