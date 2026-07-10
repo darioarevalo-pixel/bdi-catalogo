@@ -803,6 +803,7 @@ async function restaurarCodigo() {
 let variantDimsCache = {};
 let cardVariantState = {};
 let tnImageMap = {}; // nombre/SKU -> { imgs: [], desc: '' }
+let tnNormIndex = []; // [{key, words}] claves normalizadas (sin acentos/puntuación) para el cruce por prefijo
 let modalGallery = [];
 
 const COLOR_WORDS = ['negro','blanco','rojo','azul','verde','amarillo','rosa','naranja','violeta','gris','plateado','dorado','celeste','bordó','bordo','turquesa','beige','crema','lila','fucsia','marrón','marron','nude'];
@@ -1035,7 +1036,10 @@ function setBannerSlide(target, isRelative) {
 async function cargarImagenesTN() {
   try {
     const r = await fetch('/api/tiendanube');
-    if (r.ok) tnImageMap = await r.json();
+    if (r.ok) {
+      tnImageMap = await r.json();
+      tnNormIndex = Object.keys(tnImageMap).map(k => ({ key: k, words: normWords(k) }));
+    }
   } catch(e) {}
 }
 
@@ -1288,25 +1292,37 @@ function precioModaProducto(p) {
   return precioModaVariantes(p.id || p.product_id, p.variantes || [], getPrecio(p));
 }
 
+// Normaliza un nombre a palabras comparables: minúsculas, sin acentos, sin
+// puntuación (guion, "|", etc. pasan a separador). Para cruzar nombres de GN vs
+// TiendaNube que difieren en acentos o guiones.
+function normWords(s) {
+  return (s == null ? '' : String(s))
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
 function tnLookup(p) {
-  // Busca en el mapa de TN por SKU, nombre exacto o nombre parcial
+  // Busca la imagen de TiendaNube por SKU o por PREFIJO del nombre (en orden).
   const sku = (p.code || p.sku || p.codigo || '').trim().toLowerCase();
   if (sku && tnImageMap[sku]) return tnImageMap[sku];
-  const nombre = (p.name || p.nombre || p.product_name || '').trim().toLowerCase();
-  if (nombre) {
-    if (tnImageMap[nombre]) return tnImageMap[nombre];
-    const gnWords = nombre.split(/\s+/);
-    let bestMatch = null, bestLen = 0;
-    for (const tnNombre of Object.keys(tnImageMap)) {
-      const tnWords = tnNombre.split(/\s+/);
-      if (tnWords.every(w => gnWords.includes(w)) && tnWords.length > bestLen) {
-        bestMatch = tnNombre;
-        bestLen = tnWords.length;
-      }
-    }
-    if (bestMatch) return tnImageMap[bestMatch];
+  const gnWords = normWords(p.name || p.nombre || p.product_name || '');
+  if (!gnWords.length) return null;
+  // Las palabras de TN deben ser el comienzo exacto (en orden) del nombre de GN.
+  // Así una variante con sufijo ("... | iPhone 14", "... MAYORISTA") toma la foto
+  // del producto base, pero un producto DISTINTO con "de" en el medio (ej.
+  // "protector DE camara brillo" vs "protector camara brillo") NO se la roba.
+  // Gana el prefijo más largo (el más específico).
+  let best = null, bestLen = 0;
+  for (const e of tnNormIndex) {
+    const tw = e.words;
+    if (tw.length && tw.length <= gnWords.length && tw.length > bestLen &&
+        tw.every((w, i) => w === gnWords[i])) { best = e.key; bestLen = tw.length; }
   }
-  return null;
+  return best ? tnImageMap[best] : null;
 }
 
 function getImagenes(p) {
