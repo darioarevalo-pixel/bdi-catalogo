@@ -784,6 +784,7 @@ let config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], cat
 let isDistribuidor = false; // catálogo unificado: siempre mayorista
 let tnImageMap = {}; // imágenes de TiendaNube (para mostrar la foto en el listado del admin)
 let tnImageMapKeys = []; // claves del mapa, cacheadas (evita recalcularlas en cada cruce)
+let tnNormIndex = []; // [{key, words}] con las claves normalizadas (sin acentos/puntuación) para el cruce por prefijo
 let adminPassword = '';
 
 function $(id) { return document.getElementById(id); }
@@ -1111,21 +1112,37 @@ function getOrderedAllProducts() {
 let dragAllFrom = null;
 
 // Busca la imagen de un producto en el mapa de TiendaNube (por SKU o por nombre).
+// Normaliza un nombre a palabras comparables: minúsculas, sin acentos, sin
+// puntuación (guion, "|", etc. pasan a separador). Clave para cruzar nombres de
+// GN vs TiendaNube que difieren en acentos o guiones.
+function normWords(s) {
+  return (s == null ? '' : String(s))
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
 function tnLookupAdmin(p) {
   const sku = (p.code || p.sku || p.codigo || '').trim().toLowerCase();
   if (sku && tnImageMap[sku]) return tnImageMap[sku];
-  const nombre = (p.name || p.nombre || p.product_name || '').trim().toLowerCase();
-  if (nombre) {
-    if (tnImageMap[nombre]) return tnImageMap[nombre];
-    const gnWords = nombre.split(/\s+/);
-    let best = null, bestLen = 0;
-    for (const tn of tnImageMapKeys) {
-      const tw = tn.split(/\s+/);
-      if (tw.every(w => gnWords.includes(w)) && tw.length > bestLen) { best = tn; bestLen = tw.length; }
-    }
-    if (best) return tnImageMap[best];
+  const gnWords = normWords(p.name || p.nombre || p.product_name || '');
+  if (!gnWords.length) return null;
+  // Match por PREFIJO en orden: las palabras del nombre de TiendaNube deben ser
+  // el comienzo exacto (en orden) del nombre de GN. Así una variante con sufijo
+  // ("... | iPhone 14", "... MAYORISTA") toma la foto del producto base, pero un
+  // producto DISTINTO que solo comparte palabras sueltas y en otro orden (ej.
+  // "protector DE camara brillo" vs "protector camara brillo") NO se la roba.
+  // Gana el prefijo más largo (el más específico); longitud igual al nombre = exacto.
+  let best = null, bestLen = 0;
+  for (const e of tnNormIndex) {
+    const tw = e.words;
+    if (tw.length && tw.length <= gnWords.length && tw.length > bestLen &&
+        tw.every((w, i) => w === gnWords[i])) { best = e.key; bestLen = tw.length; }
   }
-  return null;
+  return best ? tnImageMap[best] : null;
 }
 function getImagenAdmin(p) {
   const e = tnLookupAdmin(p);
@@ -1142,6 +1159,7 @@ async function cargarImagenesTN() {
     if (!r.ok) return;
     tnImageMap = await r.json();
     tnImageMapKeys = Object.keys(tnImageMap);
+    tnNormIndex = tnImageMapKeys.map(k => ({ key: k, words: normWords(k) }));
     // Precalcular la imagen de cada producto (una sola vez) para que el listado
     // no recalcule el cruce en cada tecla del buscador.
     allAdminProducts.forEach(p => { p._img = getImagenAdmin(p); p._imgs = getImagenesAdmin(p); });
