@@ -335,11 +335,14 @@
   .pm-var-name { font-size: 12px; color: var(--text); min-width: 0; }
   .pm-var-stock { font-size: 10px; color: var(--text-hint); white-space: nowrap; }
   .pm-var-qty { width: 52px; padding: 6px 7px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; text-align: right; outline: none; flex-shrink: 0; }
-  .fotos-sel { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; margin: 12px 0 16px; max-width: 720px; }
-  .fotos-card { position: relative; border: 1px solid var(--border); border-radius: var(--radius-sm); background: white; padding: 8px; text-align: center; }
-  .fotos-card img { width: 100%; height: 100px; object-fit: contain; }
-  .fotos-noimg { height: 100px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--text-hint); background: var(--bg); border-radius: var(--radius-sm); }
-  .fotos-card-name { font-size: 11px; color: var(--text); margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fotos-sel { display: flex; flex-direction: column; gap: 10px; margin: 12px 0 16px; max-width: 720px; }
+  .fotos-card { position: relative; border: 1px solid var(--border); border-radius: var(--radius-sm); background: white; padding: 10px 12px; }
+  .fotos-thumbs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .fotos-thumb { width: 78px; height: 78px; object-fit: contain; background: var(--bg); border: 2px solid var(--accent); border-radius: var(--radius-sm); cursor: pointer; }
+  .fotos-thumb.off { opacity: 0.35; filter: grayscale(1); border-color: var(--border); }
+  .fotos-noimg { height: 78px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--text-hint); background: var(--bg); border-radius: var(--radius-sm); margin-top: 8px; }
+  .fotos-card-name { font-size: 13px; font-weight: 600; color: var(--text); padding-right: 24px; }
+  .fotos-count { font-size: 11px; color: var(--text-muted); font-weight: 400; }
   .fotos-x { position: absolute; top: 3px; right: 4px; background: rgba(0,0,0,0.55); color: #fff; border: none; border-radius: 50%; width: 20px; height: 20px; font-size: 14px; line-height: 1; cursor: pointer; }
   .fotos-acciones { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .fotos-btn-2 { background: transparent !important; color: var(--accent) !important; border: 1px solid var(--border-strong) !important; }
@@ -660,21 +663,14 @@
     </div>
 
     <div id="tab-fotos" style="display:none">
-      <p class="section-note">Copiá fotos de productos para pegarlas (Cmd+V) en el chat del cliente, <strong>sin descargarlas</strong>. Elegí <strong>1 producto</strong> para copiar su foto, o <strong>varios</strong> (ej. el mismo modelo en distintos colores) para <strong>combinar la portada de cada uno en una sola imagen</strong>. Con <strong>"Fotos a copiar"</strong> elegís qué tomar: la <strong>portada</strong>, <strong>todas</strong>, o <strong>de la 2ª a la última</strong> (para saltear la foto de "todos los colores juntos" y quedarte solo con las individuales).</p>
+      <p class="section-note">Agregá productos y elegí <strong>foto por foto</strong> cuál copiar: cada producto muestra <strong>todas sus fotos</strong> marcadas; hacé <strong>clic en una para sacarla</strong> (ej. la que está fea). <strong>Copiar foto</strong> las pega (Cmd+V) en el chat sin descargar (si hay varias, las combina en una imagen). <strong>Copiar info</strong> copia el nombre, el precio y los modelos disponibles para pegar en tu estado.</p>
       <input class="admin-search" type="text" id="fotos-buscar" placeholder="Buscar producto (ej. soft case)" oninput="fotosBuscar()" style="max-width:480px" />
-      <div style="display:flex;align-items:center;gap:8px;margin:9px 0 2px;font-size:13px;color:var(--text);flex-wrap:wrap;">
-        <label for="fotos-modo">Fotos a copiar:</label>
-        <select id="fotos-modo" class="admin-select" onchange="fotosRender()" style="max-width:420px">
-          <option value="portada">Solo la portada (1ª foto)</option>
-          <option value="todas">Todas las fotos</option>
-          <option value="colores">Colores: de la 2ª a la última (sin la foto de todos juntos)</option>
-        </select>
-      </div>
       <div id="fotos-resultados" class="fotos-resultados"></div>
       <div id="fotos-sel" class="fotos-sel"></div>
       <div id="fotos-acciones" class="fotos-acciones" style="display:none">
         <button class="btn-save" id="fotos-btn-copiar" onclick="fotosCopiar()">📋 Copiar foto</button>
         <button class="btn-save fotos-btn-2" onclick="fotosDescargar()">⬇️ Descargar</button>
+        <button class="btn-save fotos-btn-2" onclick="fotosCopiarInfo()">📝 Copiar info</button>
         <span id="fotos-msg" class="gen-copiado"></span>
       </div>
     </div>
@@ -2824,6 +2820,7 @@ function notaLimpiar() {
 
 // ===== Fotos: copiar al portapapeles y combinar fotos de varios productos =====
 let fotosSel = [];
+let fotosImgSel = {}; // productId -> array de índices de foto marcados (todas por defecto)
 // Resultados del buscador para el caso actual (para "Agregar todos").
 function fotosCoincidencias() {
   const q = ($('fotos-buscar')?.value || '').trim().toLowerCase();
@@ -2860,18 +2857,37 @@ function fotosAgregarTodos() {
   fotosCoincidencias().forEach(p => { const id = p.id || p.product_id; if (!fotosSel.some(x => x == id)) fotosSel.push(id); });
   fotosBuscar(); fotosRender();
 }
-function fotosQuitar(idx) { fotosSel.splice(idx, 1); fotosRender(); }
-// Fotos de UN producto según el modo elegido:
-//  portada = 1ª | todas = todas | colores = de la 2ª a la última (saltea la de
-//  "todos los colores juntos"; si solo tiene 1 foto, toma esa para no dejar vacío).
+function fotosQuitar(idx) {
+  const id = fotosSel[idx];
+  fotosSel.splice(idx, 1);
+  if (id != null) delete fotosImgSel[id];
+  fotosRender();
+}
+// Índices de foto marcados de un producto (por defecto: TODAS).
+function fotosImgsDe(p) {
+  return (p && p._imgs && p._imgs.length) ? p._imgs : (p && p._img ? [p._img] : []);
+}
+function fotosMarcadas(id, total) {
+  if (!(id in fotosImgSel)) fotosImgSel[id] = Array.from({ length: total }, (_, i) => i);
+  return fotosImgSel[id];
+}
+// Marca/desmarca una foto puntual de un producto.
+function fotosToggleImg(id, i) {
+  const p = allAdminProducts.find(x => (x.id || x.product_id) == id);
+  const total = fotosImgsDe(p).length;
+  const sel = fotosMarcadas(id, total);
+  const pos = sel.indexOf(i);
+  if (pos >= 0) sel.splice(pos, 1); else sel.push(i);
+  fotosRender();
+}
+// Fotos de UN producto: solo las que están marcadas (todas por defecto).
 function fotosDeProducto(p) {
   if (!p) return [];
-  const modo = ($('fotos-modo') && $('fotos-modo').value) || 'portada';
-  const imgs = (p._imgs && p._imgs.length) ? p._imgs : (p._img ? [p._img] : []);
+  const id = p.id || p.product_id;
+  const imgs = fotosImgsDe(p);
   if (!imgs.length) return [];
-  if (modo === 'todas') return imgs;
-  if (modo === 'colores') return imgs.length > 1 ? imgs.slice(1) : imgs;
-  return [imgs[0]];
+  const sel = fotosMarcadas(id, imgs.length);
+  return imgs.filter((u, i) => sel.indexOf(i) >= 0);
 }
 function fotosUrls() {
   const urls = [];
@@ -2884,24 +2900,61 @@ function fotosUrls() {
 function fotosRender() {
   const cont = $('fotos-sel');
   if (!cont) return;
-  if (!fotosSel.length) { cont.innerHTML = '<div class="loading-state">Agregá productos para copiar o combinar sus fotos.</div>'; if ($('fotos-acciones')) $('fotos-acciones').style.display = 'none'; return; }
-  const modo = ($('fotos-modo') && $('fotos-modo').value) || 'portada';
+  if (!fotosSel.length) { cont.innerHTML = '<div class="loading-state">Agregá productos para copiar sus fotos o su info.</div>'; if ($('fotos-acciones')) $('fotos-acciones').style.display = 'none'; return; }
   cont.innerHTML = fotosSel.map((id, idx) => {
     const p = allAdminProducts.find(x => (x.id || x.product_id) == id);
     const nombre = p ? (p.name || p.nombre || 'Sin nombre') : '—';
-    const img = p && p._img ? p._img : '';
-    const nSel = fotosDeProducto(p).length;
-    const badge = (modo !== 'portada' && nSel > 1) ? ' <span style="color:var(--text-muted);font-weight:400;">· ' + nSel + ' fotos</span>' : '';
+    const imgs = fotosImgsDe(p);
+    const sel = imgs.length ? fotosMarcadas(id, imgs.length) : [];
+    const thumbs = imgs.length
+      ? '<div class="fotos-thumbs">' + imgs.map((u, i) => {
+          const on = sel.indexOf(i) >= 0;
+          return '<img class="fotos-thumb' + (on ? '' : ' off') + '" src="' + u.replace(/"/g, '&quot;') + '" loading="lazy" title="' + (on ? 'Sacar esta foto' : 'Incluir esta foto') + '" onclick="fotosToggleImg(\'' + id + '\',' + i + ')" onerror="this.style.visibility=\'hidden\'">';
+        }).join('') + '</div>'
+      : '<div class="fotos-noimg">Sin foto</div>';
+    const cnt = imgs.length ? ' <span class="fotos-count">' + fotosDeProducto(p).length + '/' + imgs.length + ' fotos</span>' : '';
     return '<div class="fotos-card">' +
-      '<button class="fotos-x" onclick="fotosQuitar(' + idx + ')" title="Quitar">×</button>' +
-      (img ? '<img src="' + img.replace(/"/g, '&quot;') + '" loading="lazy" onerror="this.style.visibility=\'hidden\'">' : '<div class="fotos-noimg">Sin foto</div>') +
-      '<div class="fotos-card-name">' + nombre.replace(/</g, '&lt;') + badge + '</div>' +
+      '<button class="fotos-x" onclick="fotosQuitar(' + idx + ')" title="Quitar producto">×</button>' +
+      '<div class="fotos-card-name">' + nombre.replace(/</g, '&lt;') + cnt + '</div>' +
+      thumbs +
     '</div>';
   }).join('');
   const acc = $('fotos-acciones');
   acc.style.display = 'flex';
   const conFoto = fotosUrls().length;
   $('fotos-btn-copiar').textContent = conFoto > 1 ? '🖼️ Combinar y copiar (' + conFoto + ')' : '📋 Copiar foto';
+}
+// Texto de info de un producto para pegar en WhatsApp/estados: nombre, precio y
+// modelos disponibles (con stock y visibles). Mismo criterio que "Copiar modelos".
+function fotosInfoTexto(p) {
+  if (!p) return '';
+  const id = p.id || p.product_id;
+  const nombre = p.name || p.nombre || 'Sin nombre';
+  const modelos = (p.variantes || [])
+    .filter(v => !isVariantHidden(id, v.size_id))
+    .filter(v => { const st = getStockVarianteAdmin(v); return st === null || st > 0; })
+    .map(v => v.size)
+    .filter(Boolean);
+  const precio = precioBaseAdmin(p);
+  const lineas = ['*' + nombre + '*'];
+  if (precio > 0) lineas.push('💵 *Precio:* ' + fmtAR(precio));
+  if (modelos.length) lineas.push('📱 *Modelos disponibles:*', ...modelos);
+  return lineas.join('\n');
+}
+// Copia la info (nombre + precio + modelos) de los productos seleccionados.
+function fotosCopiarInfo() {
+  if (!fotosSel.length) { fotosMsg('Agregá al menos un producto.', true); return; }
+  const bloques = fotosSel
+    .map(id => fotosInfoTexto(allAdminProducts.find(x => (x.id || x.product_id) == id)))
+    .filter(Boolean);
+  if (!bloques.length) { fotosMsg('No hay info para copiar.', true); return; }
+  const texto = bloques.join('\n\n');
+  const ok = () => fotosMsg('Info copiada · ' + bloques.length + (bloques.length === 1 ? ' producto' : ' productos'));
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(texto).then(ok).catch(() => fallbackCopiar(texto, ok));
+  } else {
+    fallbackCopiar(texto, ok);
+  }
 }
 function fotosCargarImg(url) {
   return new Promise((resolve, reject) => {
