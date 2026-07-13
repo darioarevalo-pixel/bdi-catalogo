@@ -115,6 +115,9 @@
   .vprice-input { width: 92px; padding: 5px 7px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 12px; outline: none; text-align: right; }
   .vprice-input:focus { border-color: var(--accent); }
   .variant-row.has-vprice .vprice-input { border-color: var(--success); background: #f0fdf4; font-weight: 600; }
+  .vprice-clear { border: none; background: #fef2f2; color: var(--danger); width: 22px; height: 22px; border-radius: 50%; font-size: 15px; line-height: 1; cursor: pointer; flex-shrink: 0; }
+  .vprice-clear:hover { background: var(--danger); color: #fff; }
+  .vprice-badge { display: inline-flex; align-items: center; font-size: 9px; font-weight: 700; color: #92400e; background: #fef3c7; padding: 2px 7px; border-radius: 3px; letter-spacing: 0.3px; white-space: nowrap; flex-shrink: 0; cursor: pointer; }
 
   /* Category rows */
   .cat-section { margin-bottom: 6px; }
@@ -1089,6 +1092,7 @@ function buildVarRows(p) {
       '<div class="variant-row-name">' + v.size + '</div>' +
       stockTxt +
       '<div class="vprice-wrap"><span>$</span><input class="vprice-input" type="number" min="0" step="1" value="' + (vpVal != null ? vpVal : '') + '" placeholder="' + phPrecio + '" title="Precio especial para esta variante. Vacío = precio normal." onclick="event.stopPropagation()" oninput="setVariantPrice(' + id + ',' + v.size_id + ',this.value)" /></div>' +
+      (vpVal != null ? '<button class="vprice-clear" onclick="event.stopPropagation();clearVariantPrice(' + id + ',' + v.size_id + ')" title="Quitar el precio especial de esta variante">×</button>' : '') +
       '</div>';
   }).join('');
   return costoHead + varRows;
@@ -1308,6 +1312,9 @@ function renderProductList() {
         (!filtered ? '<input class="pos-input" type="number" min="1" max="' + totalOrdered + '" value="' + pos + '" title="Escribí la posición y presioná Enter" onkeydown="if(event.key===\'Enter\')moveProductToPos(\'' + id + '\',this.value)" onblur="moveProductToPos(\'' + id + '\',this.value)" onclick="event.stopPropagation();this.select()" />' : '') +
         '<button class="toggle' + (hidden ? '' : ' on') + '" id="prod-toggle-' + id + '" onclick="toggleProduct(' + id + ')"></button>' +
         (hidden ? '<span class="product-badge-off">NO DISPONIBLE</span>' : '') +
+        (variants.some(v => (config.variantPrices || {})[id + '-' + v.size_id] != null)
+          ? '<span class="vprice-badge" id="vprice-badge-' + id + '" onclick="event.stopPropagation();toggleExpand(' + id + ')" title="Este producto tiene precio especial en alguna variante. Clic para ver/quitar.">💲 precio x variante</span>'
+          : '') +
         '<button class="new-btn' + (isNew(id) ? ' on' : '') + '" id="prod-new-' + id + '" onclick="event.stopPropagation();toggleNew(' + id + ')" title="Mostrar el cartel NUEVO en el catálogo">NUEVO</button>' +
         (variants.length ? '<button class="wa-btn" onclick="event.stopPropagation();copiarModelosWA(' + id + ')" title="Copiar modelos disponibles para WhatsApp">Copiar modelos</button>' : '') +
         (variants.length ? '<button class="expand-btn" id="expand-btn-' + id + '" onclick="toggleExpand(' + id + ')">Variantes</button>' : '') +
@@ -2188,6 +2195,19 @@ function setVariantPrice(productId, sizeId, value) {
   else config.variantPrices[key] = v;
   const row = $('var-row-' + productId + '-' + sizeId);
   if (row) row.classList.toggle('has-vprice', config.variantPrices[key] != null);
+}
+// Quita en un clic el precio especial de una variante (desde el botón "×").
+function clearVariantPrice(productId, sizeId) {
+  if (config.variantPrices) delete config.variantPrices[productId + '-' + sizeId];
+  const p = allAdminProducts.find(x => (x.id || x.product_id) == productId);
+  // Reconstruir las variantes del producto: saca el resaltado verde y el botón ×.
+  const rows = $('var-rows-' + productId);
+  if (rows && p) rows.innerHTML = buildVarRows(p);
+  // Si el producto ya no tiene ninguna variante con precio, sacar el cartelito.
+  const quedan = ((p && p.variantes) || []).some(v => (config.variantPrices || {})[productId + '-' + v.size_id] != null);
+  const badge = $('vprice-badge-' + productId);
+  if (badge && !quedan) badge.remove();
+  showToast('Precio especial quitado — acordate de Guardar cambios', 'success');
 }
 
 function fmtAR(n) {
