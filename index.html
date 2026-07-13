@@ -2039,6 +2039,12 @@ function renderCartItems() {
     return;
   }
   footer.style.display = 'block';
+  // Interruptor de cupones: si están apagados, ocultamos la caja al abrir el
+  // carrito (defensivo, por si updateCartUI aún no corrió y quedaría el CSS default).
+  if (!adminConfig.mostrarCupones) {
+    if ($('cupon-input-row')) $('cupon-input-row').style.display = 'none';
+    if ($('cupon-aplicado')) $('cupon-aplicado').style.display = 'none';
+  }
 
   // Agrupar por producto (id numérico)
   const groups = {};
