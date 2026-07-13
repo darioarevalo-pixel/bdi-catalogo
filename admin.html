@@ -978,8 +978,7 @@ function copiarModelosWA(id) {
   if (!modelos.length) { showToast('Este producto no tiene modelos con stock', 'error'); return; }
   const precio = precioBaseAdmin(p);
   const lineas = ['*' + nombre + '*', '', '📱 *Modelos disponibles:*', ...modelos, ''];
-  if (precio > 0) lineas.push('💵 *Precio:* ' + fmtAR(precio), '');
-  lineas.push('🛍️ *Tienda online:* ' + location.origin);
+  if (precio > 0) lineas.push('💵 *Precio:* ' + fmtAR(precio));
   const texto = lineas.join('\n');
   const ok = () => showToast('Copiado para WhatsApp · ' + modelos.length + ' modelos', 'success');
   if (navigator.clipboard && navigator.clipboard.writeText) {
