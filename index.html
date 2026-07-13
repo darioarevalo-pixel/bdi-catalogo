@@ -630,7 +630,7 @@ let filtro = 'todos';
 let categoria = 'todas';
 let viewMode = 'variants';
 let references = null;
-let adminConfig = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, variantPrices: {}, newProducts: [], cupones: [], ofertaMargen: 0, descuentoBase: 15, excepciones: {}, apagados: [], codigosAcceso: [] };
+let adminConfig = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, mostrarCupones: false, minPurchase: 0, referencePrices: {}, variantPrices: {}, newProducts: [], cupones: [], ofertaMargen: 0, descuentoBase: 15, excepciones: {}, apagados: [], codigosAcceso: [] };
 let cuponAplicado = null; // cupón aplicado en el carrito (objeto) o null
 let codigoAplicado = null; // código de "lista mejor" aplicado: { codigo, cliente, descuentoBase, excepciones } o null
 const CODIGO_LS_KEY = 'bdi_codigo_lista_mejor';
@@ -696,6 +696,14 @@ function renderCuponUI(descuento, hayOferta) {
   const box = $('cupon-aplicado');
   const inputRow = $('cupon-input-row');
   if (!box) return;
+  // Interruptor del admin: si los cupones están apagados, no mostramos nada de
+  // la caja de cupón (el resto del carrito sigue igual).
+  if (!adminConfig.mostrarCupones) {
+    box.style.display = 'none';
+    if (inputRow) inputRow.style.display = 'none';
+    const m = $('cupon-msg'); if (m) m.textContent = '';
+    return;
+  }
   // Con código de precios especiales no se usan cupones: ocultamos el cuadro.
   if (codigoAplicado) {
     box.style.display = 'none';

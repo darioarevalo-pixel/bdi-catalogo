@@ -737,6 +737,13 @@
         </div>
         <button class="toggle" id="toggle-hide-no-stock" onclick="toggleSetting('hideNoStock')"></button>
       </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label">Mostrar cupones en el catálogo</div>
+          <div class="setting-desc">Muestra el campo "Validación de cupón" en el carrito. Apagalo cuando no tengas promos activas para que los clientes no pregunten.</div>
+        </div>
+        <button class="toggle" id="toggle-mostrar-cupones" onclick="toggleSetting('mostrarCupones')"></button>
+      </div>
       <div class="setting-row" style="flex-wrap:wrap;gap:8px">
         <div class="setting-info">
           <div class="setting-label">Compra mínima</div>
@@ -780,7 +787,7 @@
 <script>
 let allAdminProducts = [];
 const ALL_KEY = '__todas__';
-let config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, variantPrices: {}, banners: [], newProducts: [], cupones: [], ofertaMargen: 0, descuentoBase: 15, excepciones: {}, apagados: [], codigosAcceso: [] };
+let config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, mostrarCupones: false, minPurchase: 0, referencePrices: {}, variantPrices: {}, banners: [], newProducts: [], cupones: [], ofertaMargen: 0, descuentoBase: 15, excepciones: {}, apagados: [], codigosAcceso: [] };
 let isDistribuidor = false; // catálogo unificado: siempre mayorista
 let tnImageMap = {}; // imágenes de TiendaNube (para mostrar la foto en el listado del admin)
 let tnImageMapKeys = []; // claves del mapa, cacheadas (evita recalcularlas en cada cruce)
@@ -811,7 +818,7 @@ async function verificarYEntrar(pwd) {
   if (r.status === 401) return false;
   const loaded = await r.json();
   configBaseUpdatedAt = loaded.updatedAt || '';
-  config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, minPurchase: 0, referencePrices: {}, variantPrices: {}, banners: [], newProducts: [], cupones: [], ofertaMargen: 0, descuentoBase: 15, excepciones: {}, apagados: [], codigosAcceso: [], ...loaded };
+  config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, mostrarCupones: false, minPurchase: 0, referencePrices: {}, variantPrices: {}, banners: [], newProducts: [], cupones: [], ofertaMargen: 0, descuentoBase: 15, excepciones: {}, apagados: [], codigosAcceso: [], ...loaded };
   if (!config.referencePrices) config.referencePrices = {};
   if (!config.variantPrices) config.variantPrices = {};
   if (!Array.isArray(config.banners)) config.banners = [];
@@ -3085,6 +3092,8 @@ function setRefPrice(productId, value) {
 function renderSettings() {
   const tog = $('toggle-hide-no-stock');
   if (tog) tog.classList.toggle('on', !!(config.hideNoStock));
+  const togCup = $('toggle-mostrar-cupones');
+  if (togCup) togCup.classList.toggle('on', !!(config.mostrarCupones));
   const minInput = $('input-min-purchase');
   if (minInput) minInput.value = config.minPurchase || 0;
   const descInput = $('input-descuento-base');
