@@ -670,7 +670,8 @@
       <div id="fotos-acciones" class="fotos-acciones" style="display:none">
         <button class="btn-save" id="fotos-btn-copiar" onclick="fotosCopiar()">📋 Copiar foto</button>
         <button class="btn-save fotos-btn-2" onclick="fotosDescargar()">⬇️ Descargar</button>
-        <button class="btn-save fotos-btn-2" onclick="fotosCopiarInfo()">📝 Copiar info</button>
+        <button class="btn-save fotos-btn-2" onclick="fotosCopiarInfo('cliente')">📝 Info para cliente</button>
+        <button class="btn-save fotos-btn-2" onclick="fotosCopiarInfo('estado')">📱 Info para estado</button>
         <span id="fotos-msg" class="gen-copiado"></span>
       </div>
     </div>
@@ -2924,9 +2925,12 @@ function fotosRender() {
   const conFoto = fotosUrls().length;
   $('fotos-btn-copiar').textContent = conFoto > 1 ? '🖼️ Combinar y copiar (' + conFoto + ')' : '📋 Copiar foto';
 }
-// Texto de info de un producto para pegar en WhatsApp/estados: nombre, precio y
-// modelos disponibles (con stock y visibles). Mismo criterio que "Copiar modelos".
-function fotosInfoTexto(p) {
+// Texto de info de un producto: nombre, precio y modelos disponibles (con stock y
+// visibles). Dos formatos:
+//  - 'cliente': multilínea prolija, para pegar en un chat.
+//  - 'estado' : compacto (modelos en una línea con · ) porque el Estado de
+//    WhatsApp suele aplastar los saltos de línea al pegar.
+function fotosInfoTexto(p, modo) {
   if (!p) return '';
   const id = p.id || p.product_id;
   const nombre = p.name || p.nombre || 'Sin nombre';
@@ -2936,20 +2940,27 @@ function fotosInfoTexto(p) {
     .map(v => v.size)
     .filter(Boolean);
   const precio = precioBaseAdmin(p);
+  const precioTxt = precio > 0 ? fmtAR(precio) : '';
+  if (modo === 'estado') {
+    const lineas = ['*' + nombre + '*' + (precioTxt ? ' · ' + precioTxt : '')];
+    if (modelos.length) lineas.push('📱 ' + modelos.join(' · '));
+    return lineas.join('\n');
+  }
   const lineas = ['*' + nombre + '*'];
-  if (precio > 0) lineas.push('💵 *Precio:* ' + fmtAR(precio));
+  if (precioTxt) lineas.push('💵 *Precio:* ' + precioTxt);
   if (modelos.length) lineas.push('📱 *Modelos disponibles:*', ...modelos);
   return lineas.join('\n');
 }
-// Copia la info (nombre + precio + modelos) de los productos seleccionados.
-function fotosCopiarInfo() {
+// Copia la info de los productos seleccionados en el formato elegido.
+function fotosCopiarInfo(modo) {
   if (!fotosSel.length) { fotosMsg('Agregá al menos un producto.', true); return; }
   const bloques = fotosSel
-    .map(id => fotosInfoTexto(allAdminProducts.find(x => (x.id || x.product_id) == id)))
+    .map(id => fotosInfoTexto(allAdminProducts.find(x => (x.id || x.product_id) == id), modo))
     .filter(Boolean);
   if (!bloques.length) { fotosMsg('No hay info para copiar.', true); return; }
   const texto = bloques.join('\n\n');
-  const ok = () => fotosMsg('Info copiada · ' + bloques.length + (bloques.length === 1 ? ' producto' : ' productos'));
+  const que = modo === 'estado' ? 'estado' : 'cliente';
+  const ok = () => fotosMsg('Info para ' + que + ' copiada · ' + bloques.length + (bloques.length === 1 ? ' producto' : ' productos'));
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(texto).then(ok).catch(() => fallbackCopiar(texto, ok));
   } else {
