@@ -970,15 +970,28 @@ function toggleNew(id) {
 
 // Copia al portapapeles un mensaje para WhatsApp con los modelos disponibles
 // (con stock y no ocultos) de la funda. Nombre en negrita (*...*), un modelo por linea.
+// Modelos de celular disponibles (con stock, visibles), SIN repetir por color:
+// "iPhone 13 - ROSA" y "iPhone 13 - VERDE" cuentan como un solo "iPhone 13" (el
+// color se ve en la foto). En productos de un color la variante ya es solo el
+// celular ("iPhone 13") y queda igual.
+function modelosDisponibles(p) {
+  if (!p) return [];
+  const id = p.id || p.product_id;
+  const out = [], seen = new Set();
+  (p.variantes || []).forEach(v => {
+    if (isVariantHidden(id, v.size_id)) return;
+    const st = getStockVarianteAdmin(v);
+    if (!(st === null || st > 0)) return;
+    const modelo = String(v.size || '').split(' - ')[0].trim();
+    if (modelo && !seen.has(modelo)) { seen.add(modelo); out.push(modelo); }
+  });
+  return out;
+}
 function copiarModelosWA(id) {
   const p = allAdminProducts.find(x => (x.id || x.product_id) == id);
   if (!p) return;
   const nombre = p.name || p.nombre || '';
-  const modelos = (p.variantes || [])
-    .filter(v => !isVariantHidden(id, v.size_id))
-    .filter(v => { const st = getStockVarianteAdmin(v); return st === null || st > 0; })
-    .map(v => v.size)
-    .filter(Boolean);
+  const modelos = modelosDisponibles(p);
   if (!modelos.length) { showToast('Este producto no tiene modelos con stock', 'error'); return; }
   const precio = precioBaseAdmin(p);
   const lineas = ['*' + nombre + '*', '', '📱 *Modelos disponibles:*', ...modelos, ''];
@@ -2932,13 +2945,8 @@ function fotosRender() {
 //    WhatsApp suele aplastar los saltos de línea al pegar.
 function fotosInfoTexto(p, modo) {
   if (!p) return '';
-  const id = p.id || p.product_id;
   const nombre = p.name || p.nombre || 'Sin nombre';
-  const modelos = (p.variantes || [])
-    .filter(v => !isVariantHidden(id, v.size_id))
-    .filter(v => { const st = getStockVarianteAdmin(v); return st === null || st > 0; })
-    .map(v => v.size)
-    .filter(Boolean);
+  const modelos = modelosDisponibles(p);
   const precio = precioBaseAdmin(p);
   const precioTxt = precio > 0 ? fmtAR(precio) : '';
   if (modo === 'estado') {
