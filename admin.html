@@ -2561,8 +2561,8 @@ function pmSelectProducto() {
   matriz.style.display = 'block';
   const precio = getCurrentPrice(p);
   $('pm-precio').value = precio > 0 ? Math.round(precio) : '';
-  // Grilla de variantes (un campo de cantidad por color/modelo).
-  const variantes = p.variantes || [];
+  // Grilla de variantes (un campo de cantidad por color/modelo), ordenada por modelo y color.
+  const variantes = (p.variantes || []).slice().sort(cmpVariantePedido);
   const cont = $('pm-variantes');
   if (variantes.length) {
     cont.innerHTML = variantes.map(v => {
@@ -2576,6 +2576,19 @@ function pmSelectProducto() {
     cont.innerHTML = '<div class="pm-var-cell"><div class="pm-var-name">Cantidad</div><input type="number" min="0" value="0" class="pm-var-qty" data-sizeid="" data-sizename="" /></div>';
   }
   pmActualizarGanancias();
+}
+function cmpVariantePedido(a, b) {
+  const na = (a.size || ''), nb = (b.size || '');
+  // Número de iPhone (13, 14, 15, 16, 17...)
+  const numA = parseInt((na.match(/iphone\s*(\d+)/i) || [])[1] || '0', 10);
+  const numB = parseInt((nb.match(/iphone\s*(\d+)/i) || [])[1] || '0', 10);
+  if (numA !== numB) return numA - numB;
+  // Gama: base(0) < Pro(1) < Pro Max(2)
+  const gama = s => /pro\s*max/i.test(s) ? 2 : (/pro/i.test(s) ? 1 : 0);
+  const gA = gama(na), gB = gama(nb);
+  if (gA !== gB) return gA - gB;
+  // Color/resto (alfabético, español)
+  return na.localeCompare(nb, 'es');
 }
 function pmActualizarGanancias() {
   const p = pmProdSel();
