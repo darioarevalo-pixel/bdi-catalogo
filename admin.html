@@ -988,6 +988,16 @@ function modelosDisponibles(p) {
     const modelo = String(v.size || '').split(' - ')[0].trim();
     if (modelo && !seen.has(modelo)) { seen.add(modelo); out.push(modelo); }
   });
+  // Ordenar del más nuevo al más viejo: iPhone 17 Pro Max → ... → 13
+  out.sort((a, b) => {
+    const numA = parseInt((a.match(/iphone\s*(\d+)/i) || [])[1] || '0', 10);
+    const numB = parseInt((b.match(/iphone\s*(\d+)/i) || [])[1] || '0', 10);
+    if (numA !== numB) return numB - numA;
+    const gama = s => /pro\s*max/i.test(s) ? 2 : (/pro/i.test(s) ? 1 : 0);
+    const g = gama(b) - gama(a);
+    if (g !== 0) return g;
+    return b.localeCompare(a, 'es');
+  });
   return out;
 }
 function copiarModelosWA(id) {
