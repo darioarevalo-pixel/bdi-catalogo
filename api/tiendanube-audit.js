@@ -16,9 +16,9 @@ const STORES = {
     gnToken: process.env.GESTIONNUBE_TOKEN_ZATTIA || process.env.GN_TOKEN_ZATTIA,   // GN Zattia (acepta ambos nombres)
     cacheKey:'tiendanube-audit-zattia',
   },
-  // STUNNED: tienda TN propia (app 30031). Comparte el GN de ZATTIA. Store ID fijo con fallback a env.
+  // STUNNED: tienda TN propia (app 30031, store 7516263). Comparte el GN de ZATTIA. Store ID fijo con fallback a env.
   stunned: {
-    storeId: process.env.TIENDANUBE_STORE_ID_STUNNED || '7808324',
+    storeId: process.env.TIENDANUBE_STORE_ID_STUNNED || '7516263',
     token:   process.env.TIENDANUBE_TOKEN_STUNNED,
     gnToken: process.env.GESTIONNUBE_TOKEN_ZATTIA || process.env.GN_TOKEN_ZATTIA,   // STUNNED vive en el GN de ZATTIA
     cacheKey:'tiendanube-audit-stunned',
