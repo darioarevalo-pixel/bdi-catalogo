@@ -1,3 +1,9 @@
 # Local Netlify folder
 .netlify
 .vercel
+
+# Variables de entorno / secretos — NUNCA commitear (tokens de TiendaNube, GN, etc.)
+.env
+.env.local
+.env.*.local
+node_modules
