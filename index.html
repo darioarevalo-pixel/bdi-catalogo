@@ -42,6 +42,8 @@
   /* Barra flotante de resumen */
   .summary-bar { position: fixed; bottom: 0; left: 232px; right: 0; background: var(--accent); color: white; display: none; align-items: center; justify-content: space-between; padding: 14px 20px; z-index: 90; box-shadow: 0 -2px 12px rgba(0,0,0,0.18); }
   .summary-bar.visible { display: flex; }
+  /* Cuando la barra flotante está visible, reservar espacio abajo para que no tape la última fila de productos. */
+  body.has-summary-bar .main { padding-bottom: 92px; }
   .summary-bar-left { display: flex; flex-direction: column; gap: 2px; }
   .summary-bar-units { font-size: 12px; opacity: 0.75; }
   .summary-bar-total { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
@@ -2021,8 +2023,10 @@ function updateCartUI() {
       if ($('summary-units')) $('summary-units').textContent = totalUnits + (totalUnits === 1 ? ' producto' : ' productos');
       if ($('summary-total')) $('summary-total').textContent = formatPrecio(total);
       bar.classList.add('visible');
+      document.body.classList.add('has-summary-bar');
     } else {
       bar.classList.remove('visible');
+      document.body.classList.remove('has-summary-bar');
     }
   }
   // Solo reconstruir el drawer si está abierto
