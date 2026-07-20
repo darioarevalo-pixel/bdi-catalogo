@@ -224,6 +224,22 @@ module.exports = async (req, res) => {
     } catch (e) { return res.status(500).json({ error: e.message }); }
   }
 
+  // --- Ocultar (despublicar) productos en TiendaNube --- espejo de 'publicar', reversible.
+  if (req.method === 'POST' && req.body && req.body.accion === 'ocultar') {
+    try {
+      const ids = Array.isArray(req.body.ids) ? req.body.ids : [];
+      if (!ids.length) return res.status(400).json({ error: 'Faltan ids de productos.' });
+      let ocultados = 0; const errores = [];
+      for (const id of ids) {
+        const r = await fetch(`https://api.tiendanube.com/v1/${cfg.storeId}/products/${id}`, {
+          method: 'PUT', headers: tnHeaders(cfg.token), body: JSON.stringify({ published: false }),
+        });
+        if (r.ok) ocultados++; else { const t = await r.text(); errores.push({ id, status: r.status, msg: t.slice(0, 120) }); }
+      }
+      return res.status(200).json({ ok: true, ocultados, errores });
+    } catch (e) { return res.status(500).json({ error: e.message }); }
+  }
+
   // --- Asignación masiva de categoría ---
   if (req.method === 'POST' && req.body && req.body.accion === 'asignar') {
     try {
