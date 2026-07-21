@@ -52,7 +52,26 @@ async function asignarColor(cfg, product_id, imageId, color) {
   }
   return { objetivo: objetivo.length, asignadas, errores };
 }
+// Desvincula (quita) la imagen de todas las variantes de un color: PUT image_id null.
+// image_id null = "sin foto propia" en el modelo de TN (ver tiendanube-audit.js). Espejo de asignarColor.
+async function desasignarColor(cfg, product_id, color) {
+  const vr = await tnGet(cfg.storeId, cfg.token, `products/${product_id}/variants?fields=id,values`);
+  if (!Array.isArray(vr.data)) return { objetivo: 0, desasignadas: 0, errores: ['no se pudieron leer variantes'] };
+  const objetivo = vr.data.filter(v => coloresDeVariante(v).some(c => c.toLowerCase() === String(color).toLowerCase()));
+  let desasignadas = 0; const errores = [];
+  for (const v of objetivo) {
+    const pr = await tnReq(`https://api.tiendanube.com/v1/${cfg.storeId}/products/${product_id}/variants/${v.id}`, {
+      method: 'PUT', headers: tnH(cfg.token), body: JSON.stringify({ image_id: null }),
+    });
+    if (pr.ok) desasignadas++; else errores.push(`v${v.id}:${pr.status}`);
+    await sleep(300); // no saturar el rate limit de TN
+  }
+  return { objetivo: objetivo.length, desasignadas, errores };
+}
 
+// OJO seguridad: este endpoint NO tiene auth (CORS '*', sin credencial) — cualquiera con la
+// URL puede subir/vincular/DESVINCULAR imágenes de la tienda. La acción 'unlink' hereda esa
+// exposición. Deuda conocida y deliberada por ahora; el fix (patrón _auth del monitor) es otro trabajo.
 module.exports = async (req, res) => {
   Object.entries(CORS).forEach(([k, v]) => res.setHeader(k, v));
   res.setHeader('Cache-Control', 'no-store');
@@ -91,6 +110,13 @@ module.exports = async (req, res) => {
         if (!image_id || !color) return res.status(400).json({ error: 'Faltan image_id o color' });
         const r = await asignarColor(cfg, product_id, image_id, color);
         return res.status(200).json({ ok: true, image_id, color, variantesObjetivo: r.objetivo, variantesAsignadas: r.asignadas, linkErrores: r.errores });
+      }
+
+      // Acción "unlink": QUITAR la foto de las variantes de un color (PUT image_id null). No borra la imagen del producto.
+      if (action === 'unlink') {
+        if (!color) return res.status(400).json({ error: 'Falta color' });
+        const r = await desasignarColor(cfg, product_id, color);
+        return res.status(200).json({ ok: true, color, variantesObjetivo: r.objetivo, variantesDesasignadas: r.desasignadas, linkErrores: r.errores });
       }
 
       if (!image) return res.status(400).json({ error: 'Falta image' });
