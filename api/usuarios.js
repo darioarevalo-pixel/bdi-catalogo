@@ -29,7 +29,7 @@ async function leerCfg() {
   const raw = await kvCmd(['GET', KEY]);
   return raw ? JSON.parse(raw) : null;
 }
-const perfilDe = u => ({ name: u.name, admin: !!u.admin, cuenta: u.cuenta || null, acceso: u.acceso || { bdi: {}, zattia: {} } });
+const perfilDe = u => ({ name: u.name, admin: !!u.admin, cuenta: u.cuenta || null, acceso: u.acceso || { bdi: {}, zattia: {} }, funcion: Array.isArray(u.funcion) ? u.funcion : [] });
 function esAdminValido(cfg, user, pass) {
   if (cfg && Array.isArray(cfg.users)) return cfg.users.some(u => u.admin && u.name === user && u.pass === pass);
   return BOOTSTRAP[user] && BOOTSTRAP[user] === pass;
