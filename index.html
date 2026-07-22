@@ -102,6 +102,42 @@
   .search-wrap input:focus { border-color: var(--accent); }
   .search-icon { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--text-hint); font-size: 15px; pointer-events: none; }
   .sort-select { padding: 9px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; background: var(--surface); color: var(--text); outline: none; cursor: pointer; }
+  .btn-por-modelo { flex-shrink: 0; padding: 9px 14px; border: 1.5px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; font-weight: 600; background: var(--surface); color: var(--text); cursor: pointer; white-space: nowrap; transition: all 0.15s; }
+  .btn-por-modelo:hover { border-color: var(--accent); }
+  .btn-por-modelo.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  /* Vista "Ver por modelo" ------------------------------------------------- */
+  .pm-wrap { grid-column: 1 / -1; }
+  .pm-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 1rem; }
+  .pm-title { font-size: 18px; font-weight: 700; }
+  .pm-sub { font-size: 13px; color: var(--text-muted); }
+  .pm-back { padding: 7px 12px; border: 1.5px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .pm-back:hover { border-color: var(--accent); }
+  /* Selector de modelos */
+  .pm-modelos { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .pm-modelo-btn { display: flex; flex-direction: column; gap: 4px; padding: 16px 14px; border: 1.5px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); color: var(--text); font-family: inherit; cursor: pointer; text-align: left; transition: all 0.15s; }
+  .pm-modelo-btn:hover { border-color: var(--accent); box-shadow: var(--shadow); }
+  .pm-modelo-nombre { font-size: 15px; font-weight: 700; }
+  .pm-modelo-count { font-size: 12px; color: var(--text-muted); }
+  /* Filas tipo Excel */
+  .pm-tabla { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--surface); }
+  .pm-fila { display: flex; align-items: center; gap: 12px; padding: 6px 12px; border-bottom: 1px solid var(--border); min-height: 56px; }
+  .pm-fila:last-child { border-bottom: none; }
+  .pm-fila:nth-child(even) { background: var(--bg); }
+  .pm-foto { width: 48px; height: 48px; flex-shrink: 0; border-radius: var(--radius-sm); overflow: hidden; background: var(--bg); cursor: zoom-in; display: flex; align-items: center; justify-content: center; }
+  .pm-foto img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .pm-foto .no-img { font-size: 9px; color: var(--text-hint); text-align: center; }
+  .pm-info { flex: 1; min-width: 0; }
+  .pm-nombre { font-size: 14px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pm-variante { font-size: 12px; color: var(--text-muted); }
+  .pm-precio-dif { font-size: 12px; font-weight: 600; color: var(--precio-dif); flex-shrink: 0; }
+  .pm-qty { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+  .pm-poca { color: var(--warning); font-weight: 600; }
+  @media (max-width: 640px) {
+    .pm-fila { gap: 8px; padding: 6px 8px; }
+    .pm-foto { width: 42px; height: 42px; }
+    .pm-nombre { font-size: 13px; }
+  }
   .view-label-wrap { display: flex; flex-direction: column; gap: 3px; flex-shrink: 0; }
   .view-label { font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; text-align: center; }
   .vcard-colors { display: flex; flex-wrap: wrap; gap: 5px; padding: 6px 10px 2px; }
@@ -443,6 +479,7 @@
           <span class="search-icon">⌕</span>
           <input type="text" id="search-input" placeholder="Buscar productos..." oninput="renderProductos()" />
         </div>
+        <button type="button" id="btn-por-modelo" class="btn-por-modelo" onclick="toggleModeloView()" title="Ver fundas agrupadas por modelo de iPhone">📱 Ver por modelo</button>
         <select class="sort-select" id="sort-select" onchange="renderProductos()" style="display:none">
           <option value="custom">Orden personalizado</option>
           <option value="stock-desc">Stock: mayor a menor</option>
@@ -631,6 +668,8 @@ let cart = loadCart();
 let filtro = 'todos';
 let categoria = 'todas';
 let viewMode = 'variants';
+let prevViewMode = 'variants'; // modo al que volver al salir de "por modelo"
+let modeloSel = null;          // modelo de iPhone elegido en la vista "por modelo" (null = mostrar selector)
 let references = null;
 let adminConfig = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, mostrarCupones: false, minPurchase: 0, referencePrices: {}, variantPrices: {}, newProducts: [], cupones: [], ofertaMargen: 0, descuentoBase: 15, excepciones: {}, apagados: [], codigosAcceso: [] };
 let cuponAplicado = null; // cupón aplicado en el carrito (objeto) o null
@@ -882,6 +921,78 @@ function parseVariantDimensions(variantes) {
 function detectDimLabel(values) {
   const lower = values.map(v => v.toLowerCase());
   return lower.some(v => COLOR_WORDS.some(c => v.includes(c))) ? 'Color' : 'Modelo';
+}
+
+// --- Vista "Ver por modelo" -------------------------------------------------
+// Canonicaliza el texto del modelo para agrupar el mismo iPhone de distintos
+// diseños bajo una sola clave. Usa variantSortKey (distingue 11 / 11 Pro /
+// 11 Pro Max) como clave numérica de grupo y arma un label limpio "iPhone 11 ...".
+function modeloClave(str) {
+  const key = variantSortKey(str);
+  if (!key) return { key: 'x-' + (str || '').toLowerCase().trim(), label: modeloLabelLimpio(str) };
+  return { key: 'k-' + key, label: modeloLabelLimpio(str) };
+}
+function modeloLabelLimpio(str) {
+  const n = String(str || '').trim();
+  const m = n.match(/iphone\s*(\d+)\s*(pro\s*max|pro|plus|mini)?/i);
+  if (m) return 'iPhone ' + m[1] + (m[2] ? ' ' + m[2].replace(/\s+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '');
+  const mx = n.match(/iphone\s*(xs\s*max|xs|xr|x|se)/i);
+  if (mx) return 'iPhone ' + mx[1].toUpperCase().replace(/\s+/g, ' ');
+  return n;
+}
+
+// Recorre las FUNDAS y arma el índice modelo -> filas (una fila por variante).
+// Devuelve { modelos: [{key,label,count}], filasPorModelo: { key: [{p,v,color,modelLabel}] } }.
+function construirIndiceModelos() {
+  const fundas = allProducts.filter(p => (p.category || '') === 'FUNDAS');
+  const filasPorModelo = {};
+  const labelDeKey = {};
+
+  for (const p of fundas) {
+    const id = p.id || p.product_id;
+    const hiddenVars = (adminConfig.hiddenVariants || {})[String(id)] || [];
+    // Mismo filtro por-variante que renderVariantesGrid: sin ocultas y con stock.
+    const variantes = (p.variantes || []).filter(v => {
+      if (hiddenVars.some(hid => hid == v.size_id)) return false;
+      const vs = getStockVariante(v);
+      return vs === null || vs > 0;
+    });
+    if (!variantes.length) continue;
+
+    const dims = parseVariantDimensions(variantes);
+    const filas = dims
+      ? dims.map(d => ({ v: d, modelStr: d.dim2, color: d.dim1 }))
+      : variantes.map(v => ({ v, modelStr: v.size, color: null }));
+
+    for (const f of filas) {
+      const { key, label } = modeloClave(f.modelStr);
+      labelDeKey[key] = label;
+      (filasPorModelo[key] = filasPorModelo[key] || []).push({
+        p, v: f.v, color: f.color, modelLabel: label
+      });
+    }
+  }
+
+  const modelos = Object.keys(filasPorModelo)
+    .map(key => ({
+      key,
+      label: labelDeKey[key],
+      count: new Set(filasPorModelo[key].map(f => f.p.id || f.p.product_id)).size, // diseños distintos
+      filas: filasPorModelo[key].length                                            // filas (colores incluidos)
+    }))
+    .sort((a, b) => {
+      const ka = variantSortKey(a.label), kb = variantSortKey(b.label);
+      if (ka !== kb) return kb - ka;                 // más nuevo primero
+      return a.label.localeCompare(b.label);
+    });
+
+  // Ordenar las filas de cada modelo por nombre de diseño.
+  for (const key of Object.keys(filasPorModelo)) {
+    filasPorModelo[key].sort((a, b) =>
+      (a.p.name || '').localeCompare(b.p.name || '', 'es', { sensitivity: 'base' }));
+  }
+
+  return { modelos, filasPorModelo };
 }
 
 function renderVariantRowsHTML(productId, dims, selectedDim1, nomEsc, precio, imgEsc) {
@@ -1501,6 +1612,11 @@ function renderProductos() {
   else if (sort === 'name') prods.sort((a,b) => (a.name||'').localeCompare(b.name||''));
 
   const grid = $('products-grid');
+  if (viewMode === 'modelo') {
+    grid.classList.remove('variants-grid');
+    grid.innerHTML = renderPorModelo();
+    return;
+  }
   grid.classList.toggle('variants-grid', viewMode === 'variants');
   if (!prods.length) {
     grid.innerHTML = '<div class="state-msg"><div class="icon">⊘</div><h3>Sin resultados</h3><p>Probá con otro filtro o término de búsqueda.</p></div>';
@@ -1545,6 +1661,115 @@ function setViewMode(mode) {
   const sel = $('view-select');
   if (sel) sel.value = mode;
   renderProductos();
+}
+
+// --- Navegación de la vista "Ver por modelo" --------------------------------
+function toggleModeloView() {
+  const btn = $('btn-por-modelo');
+  if (viewMode !== 'modelo') {
+    prevViewMode = viewMode;      // recordar a dónde volver
+    viewMode = 'modelo';
+    modeloSel = null;
+    if (btn) btn.classList.add('active');
+  } else {
+    viewMode = prevViewMode || 'variants';
+    modeloSel = null;
+    if (btn) btn.classList.remove('active');
+  }
+  window.scrollTo(0, 0);
+  renderProductos();
+}
+
+function setModeloSel(key) {
+  modeloSel = key;
+  window.scrollTo(0, 0);
+  renderProductos();
+}
+
+// Abre el visor de foto grande reutilizando el lightbox del catálogo.
+function abrirFotoModelo(id) {
+  const p = allProducts.find(x => (x.id || x.product_id) == id);
+  if (!p) return;
+  modalGallery = getImagenes(p);
+  if (!modalGallery.length) return;
+  openLightbox(0);
+}
+
+function renderPorModelo() {
+  const { modelos, filasPorModelo } = construirIndiceModelos();
+
+  if (!modelos.length) {
+    return '<div class="pm-wrap"><div class="state-msg"><div class="icon">⊘</div>' +
+      '<h3>Sin fundas disponibles</h3><p>No hay fundas con stock para mostrar por modelo.</p></div></div>';
+  }
+
+  // Estado 1: selector de modelos.
+  if (!modeloSel || !filasPorModelo[modeloSel]) {
+    const btns = modelos.map(m =>
+      '<button class="pm-modelo-btn" onclick="setModeloSel(\'' + m.key.replace(/'/g, "\\'") + '\')">' +
+        '<span class="pm-modelo-nombre">' + m.label + '</span>' +
+        '<span class="pm-modelo-count">' + m.count + (m.count === 1 ? ' diseño' : ' diseños') + '</span>' +
+      '</button>'
+    ).join('');
+    return '<div class="pm-wrap">' +
+      '<div class="pm-head"><div class="pm-title">Elegí un modelo</div>' +
+      '<div class="pm-sub">Tocá un modelo para ver todas las fundas disponibles</div></div>' +
+      '<div class="pm-modelos">' + btns + '</div>' +
+    '</div>';
+  }
+
+  // Estado 2: filas tipo Excel para el modelo elegido.
+  const modelo = modelos.find(m => m.key === modeloSel);
+  const filas = filasPorModelo[modeloSel];
+  const filasHTML = filas.map(f => {
+    const p = f.p;
+    const v = f.v;
+    const id = p.id || p.product_id;
+    const nombre = p.name || p.nombre || p.product_name || 'Sin nombre';
+    const nomEsc = nombre.replace(/'/g, "\\'");
+    const imgs = getImagenes(p);
+    const img = imgs[0] || null;
+    const imgEsc = (img || '').replace(/'/g, "\\'");
+    const precio = getPrecio(p);
+    // Etiqueta de variante: modelo + color (si hay dimensión de color).
+    const varLabel = f.color ? (f.modelLabel + ' · ' + f.color) : (f.modelLabel || v.size);
+    // Cantidad: mismo carrito y misma clave que el resto del catálogo.
+    const cartKey = id + '-' + v.size_id;
+    const currentQty = cart[cartKey]?.qty || 0;
+    const vs = getStockVariante(v);
+    const maxAttr = vs !== null ? ' max="' + vs + '"' : '';
+    const atMax = vs !== null && currentQty >= vs;
+    const pocas = vs !== null && vs <= 2;
+    const fullVnEsc = v.size.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    const vPrecio = getPrecioVariante(id, v.size_id, precio);
+    const chArgs = '\'' + cartKey + '\',' + id + ',\'' + nomEsc + '\',' + vPrecio + ',' + v.size_id + ',\'' + fullVnEsc + '\',\'' + imgEsc + '\'';
+    const fotoHTML = img
+      ? '<img src="' + img + '" alt="' + nombre.replace(/"/g, '&quot;') + '" loading="lazy" onerror="this.parentNode.innerHTML=\'<div class=\\\'no-img\\\'>Sin<br>foto</div>\'">'
+      : '<div class="no-img">Sin<br>foto</div>';
+    return '<div class="pm-fila">' +
+      '<div class="pm-foto" onclick="abrirFotoModelo(' + id + ')">' + fotoHTML + '</div>' +
+      '<div class="pm-info">' +
+        '<div class="pm-nombre">' + nombre + '</div>' +
+        '<div class="pm-variante">' + varLabel + (pocas ? ' · <span class="pm-poca">Últimas ' + vs + '</span>' : '') + '</div>' +
+      '</div>' +
+      (vPrecio !== precio ? '<div class="pm-precio-dif">' + formatPrecio(vPrecio) + '</div>' : '') +
+      '<div class="pm-qty">' +
+        '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1)">−</button>' +
+        '<input class="modal-vqty-num" type="number" id="q-m-' + cartKey + '" value="' + currentQty + '" min="0"' + maxAttr + ' />' +
+        '<button class="modal-vqty-btn plus"' + (atMax ? ' disabled' : '') + ' onclick="chQty(' + chArgs + ',1)">+</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  return '<div class="pm-wrap">' +
+    '<div class="pm-head">' +
+      '<button class="pm-back" onclick="setModeloSel(null)">← Modelos</button>' +
+      '<div class="pm-title">' + (modelo ? modelo.label : '') + '</div>' +
+      '<div class="pm-sub">' + (modelo ? modelo.count : filas.length) + (modelo && modelo.count === 1 ? ' diseño' : ' diseños') +
+        (modelo && modelo.filas !== modelo.count ? ' · ' + modelo.filas + ' opciones' : '') + '</div>' +
+    '</div>' +
+    '<div class="pm-tabla">' + filasHTML + '</div>' +
+  '</div>';
 }
 
 function renderCardVariantRows(id, dims, selectedColor, nomEsc, precio, imgEsc) {
@@ -1789,7 +2014,9 @@ function lbGo(dir) {
 function closeLightbox(e) {
   if (e && e.target !== $('lightbox') && e.target !== $('lb-img')) return;
   $('lightbox').classList.remove('open');
-  document.body.style.overflow = 'hidden'; // el modal sigue abierto
+  // Si el modal de producto sigue abierto detrás, mantener el scroll bloqueado;
+  // si el lightbox se abrió desde la vista "por modelo" (sin modal), restaurarlo.
+  document.body.style.overflow = $('modal-overlay')?.classList.contains('open') ? 'hidden' : '';
 }
 
 function abrirModal(id) {
