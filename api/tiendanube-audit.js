@@ -185,37 +185,35 @@ async function tnFetchCanceladas(cfg, from, to) {
 }
 // ── Leer una orden de TN por número, con sus líneas (para Cambios/Devoluciones del Monitor) ──
 // Reusa el mismo token/scope que ya lee órdenes (View Orders). Devuelve la orden con products[].
-async function tnFetchOrden(cfg, numero, debug, perPage) {
+async function tnFetchOrden(cfg, numero, perPage) {
   const base = `https://api.tiendanube.com/v1/${cfg.storeId}/orders`;
   const target = String(numero);
   const objetivo = Number(numero);
-  const pp = Math.min(Math.max(Number(perPage) || 50, 10), 200); // TN es lento con per_page grande; 50 por defecto
-  const t0 = Date.now();
-  let orderId = null, pageFound = 0, primeros = null;
-  for (let page = 1; page <= 60; page++) {
+  // TN es LENTO con per_page grande (~70ms por orden). Se pagina liviano (id,number, descendente) para hallar
+  // el id interno, con corte temprano cuando la página baja del número. Las órdenes recientes están en pág 1.
+  const pp = Math.min(Math.max(Number(perPage) || 50, 10), 200);
+  let orderId = null;
+  for (let page = 1; page <= 30; page++) {
     const r = await fetch(`${base}?per_page=${pp}&page=${page}&fields=id,number`, { headers: tnHeaders(cfg.token) });
     if (r.status === 404) break; // no hay más páginas
     if (!r.ok) return { error: `TN ${r.status}: ${(await r.text()).slice(0, 200)}` };
     const arr = await r.json();
     if (!Array.isArray(arr) || !arr.length) break;
-    if (page === 1 && debug) primeros = arr.slice(0, 5).map(x => x.number);
     const o = arr.find(x => String(x.number) === target);
-    if (o) { orderId = o.id; pageFound = page; break; }
+    if (o) { orderId = o.id; break; }
     const nums = arr.map(x => Number(x.number)).filter(n => !isNaN(n));
-    if (nums.length && Math.min(...nums) < objetivo) break; // ya pasamos el número buscado
-    if (arr.length < 200) break;
+    if (nums.length && Math.min(...nums) < objetivo) break; // ya pasamos el número buscado (orden descendente)
+    if (arr.length < pp) break;
   }
-  const t1 = Date.now();
-  const dbg = debug ? { step1_ms: t1 - t0, pageFound, primeros_pag1: primeros } : null;
-  if (!orderId) return { orden: null, _dbg: dbg };
+  if (!orderId) return { orden: null };
+  // La orden completa por id (acá sí vienen los products). Sin ?fields (con fields el GET por id da 404).
   const rd = await fetch(`${base}/${orderId}`, { headers: tnHeaders(cfg.token) });
-  if (dbg) dbg.step2_ms = Date.now() - t1;
-  if (!rd.ok) return { error: `TN ${rd.status} en GET /orders/${orderId}: ${(await rd.text()).slice(0, 150)}`, _dbg: dbg };
+  if (!rd.ok) return { error: `TN ${rd.status} en GET /orders/${orderId}: ${(await rd.text()).slice(0, 150)}` };
   const o = await rd.json();
-  return { _dbg: dbg, orden: {
+  return { orden: {
     id: o.id, number: o.number,
     cliente: o.contact_name || (o.customer && o.customer.name) || null,
-    total: o.total, envio: o.shipping_option || null,
+    total: o.total, envio: o.shipping_option || null, fecha: o.created_at || null,
     products: (o.products || []).map(p => ({ product_id: p.product_id, variant_id: p.variant_id, name: p.name, sku: p.sku, quantity: p.quantity, price: p.price })),
   } };
 }
@@ -344,9 +342,9 @@ module.exports = async (req, res) => {
   // ── Leer una orden de TN por número (Cambios/Devoluciones del Monitor) ──
   if (req.query?.orden) {
     try {
-      const r = await tnFetchOrden(cfg, String(req.query.orden), req.query?.debug === "1", req.query?.pp);
+      const r = await tnFetchOrden(cfg, String(req.query.orden), req.query?.pp);
       if (r.error) return res.status(502).json({ error: r.error });
-      return res.status(200).json({ ok: true, store: storeKey, orden: r.orden, _dbg: r._dbg });
+      return res.status(200).json({ ok: true, store: storeKey, orden: r.orden });
     } catch (e) {
       return res.status(500).json({ error: e.message });
     }
