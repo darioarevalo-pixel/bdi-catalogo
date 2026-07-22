@@ -151,12 +151,14 @@ function mapProduct(p, catMap, incluirVariantes) {
       const vals = (v.values || []).map(val => val?.es || val?.pt || (val && Object.values(val)[0])).filter(Boolean);
       const pr = parseFloat(v.promotional_price) > 0 ? parseFloat(v.promotional_price) : (parseFloat(v.price) || null);
       return {
+        id: v.id != null ? String(v.id) : null,                         // id de variante en TN (para el mapeo SKU y escribir stock)
         sku: v.sku || null,
         barcode: v.barcode || null,
         valores: vals,                                                  // ej. ["iPhone 16 - Azul"] o ["Azul"]
         color: _colorDeVariante(v),                                     // color para agrupar/vincular
         image_url: v.image_id != null ? (imgById[v.image_id] || null) : null,  // foto PROPIA de la variante
         price: pr,
+        stock: v.stock != null ? v.stock : null,                        // stock en TN (null = infinito/no gestionado)
       };
     });
   }
@@ -270,7 +272,7 @@ module.exports = async (req, res) => {
   const forceRefresh = req.query?.refresh === '1';
   const incluirVariantes = req.query?.variantes === '1';
   // Clave de caché separada para la versión con variantes (no pisa la que usa Monitor).
-  const ckey = incluirVariantes ? cfg.cacheKey + ':var2' : cfg.cacheKey; // :var2 = incluye imagenes[id,src] + color por variante
+  const ckey = incluirVariantes ? cfg.cacheKey + ':var3' : cfg.cacheKey; // :var3 = variante con id+stock (además de imagenes[id,src] + color)
 
   if (!forceRefresh) {
     const cached = await kvGet(ckey);
