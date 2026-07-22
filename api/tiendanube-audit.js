@@ -302,15 +302,6 @@ module.exports = async (req, res) => {
   // Modo catálogo: productos GN + fotos TN cruzados (admin interno por marca).
   if (req.query?.catalogo === '1') return _catHandle(cfg, res);
 
-  // TEMP: pista enmascarada de los tokens de GN (para identificar cuál configurar).
-  if (req.query?.tokenhint === '1') {
-    const mask = t => t ? { inicio: t.slice(0, 6), fin: t.slice(-3), largo: t.length } : null;
-    return res.status(200).json({
-      gn_zattia: mask(process.env.GESTIONNUBE_TOKEN_ZATTIA || process.env.GN_TOKEN_ZATTIA),
-      gn_bdi: mask(process.env.GESTIONNUBE_TOKEN),
-    });
-  }
-
   // Diagnóstico: qué variables de entorno relevantes ve la función (solo presencia, sin valores)
   if (req.query?.envcheck === '1') {
     const has = n => !!process.env[n];
