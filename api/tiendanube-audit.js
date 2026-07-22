@@ -187,30 +187,36 @@ async function tnFetchCanceladas(cfg, from, to) {
 // Reusa el mismo token/scope que ya lee órdenes (View Orders). Devuelve la orden con products[].
 async function tnFetchOrden(cfg, numero) {
   const base = `https://api.tiendanube.com/v1/${cfg.storeId}/orders`;
-  const fields = 'id,number,contact_name,customer,products,shipping_address,shipping_option,shipping_cost_customer,status,total,created_at';
   const target = String(numero);
   const objetivo = Number(numero);
-  // TN NO busca por número de orden con ?q= (devuelve 404). Las órdenes vienen DESCENDENTES (más nueva
-  // primero), así que se pagina y se filtra por `number`, con corte temprano cuando la página ya bajó
-  // del número buscado. Cap de páginas para acotar (cubre las órdenes recientes, que son el caso de cambios).
-  for (let page = 1; page <= 20; page++) {
-    const r = await fetch(`${base}?per_page=200&page=${page}&fields=${fields}`, { headers: tnHeaders(cfg.token) });
+  // TN NO busca por número de orden con ?q= (devuelve 404). Y si se piden campos "pesados" (products…) en
+  // la LISTA, TN no devuelve `number`. Por eso: (1) paginar LIVIANO (id,number) para hallar el id interno —
+  // las órdenes vienen descendentes, con corte temprano cuando la página baja del número; (2) traer la orden
+  // completa por id. Cap de páginas para acotar (cubre las órdenes recientes, que son el caso de cambios).
+  let orderId = null;
+  for (let page = 1; page <= 25; page++) {
+    const r = await fetch(`${base}?per_page=200&page=${page}&fields=id,number`, { headers: tnHeaders(cfg.token) });
     if (r.status === 404) break; // no hay más páginas
     if (!r.ok) return { error: `TN ${r.status}: ${(await r.text()).slice(0, 200)}` };
     const arr = await r.json();
     if (!Array.isArray(arr) || !arr.length) break;
     const o = arr.find(x => String(x.number) === target);
-    if (o) return { orden: {
-      id: o.id, number: o.number,
-      cliente: o.contact_name || (o.customer && o.customer.name) || null,
-      total: o.total, envio: o.shipping_option || null,
-      products: (o.products || []).map(p => ({ product_id: p.product_id, variant_id: p.variant_id, name: p.name, sku: p.sku, quantity: p.quantity, price: p.price })),
-    } };
+    if (o) { orderId = o.id; break; }
     const nums = arr.map(x => Number(x.number)).filter(n => !isNaN(n));
     if (nums.length && Math.min(...nums) < objetivo) break; // ya pasamos el número buscado
     if (arr.length < 200) break;
   }
-  return { orden: null };
+  if (!orderId) return { orden: null };
+  // Traer la orden completa por id (acá sí vienen los products).
+  const rd = await fetch(`${base}/${orderId}?fields=id,number,contact_name,customer,products,shipping_option,total`, { headers: tnHeaders(cfg.token) });
+  if (!rd.ok) return { error: `TN ${rd.status}: ${(await rd.text()).slice(0, 200)}` };
+  const o = await rd.json();
+  return { orden: {
+    id: o.id, number: o.number,
+    cliente: o.contact_name || (o.customer && o.customer.name) || null,
+    total: o.total, envio: o.shipping_option || null,
+    products: (o.products || []).map(p => ({ product_id: p.product_id, variant_id: p.variant_id, name: p.name, sku: p.sku, quantity: p.quantity, price: p.price })),
+  } };
 }
 async function gnFetchVentas(gnToken, from, to) {
   const out = [];
