@@ -258,13 +258,26 @@ function _catImgsDe(p, tnMap, tnIndex) {
   for (const e of tnIndex) { const tw = e.words; if (tw.length && tw.length <= gn.length && tw.length > bestLen && tw.every((w, i) => w === gn[i])) { best = e.key; bestLen = tw.length; } }
   return best ? tnMap[best] : [];
 }
-async function _catHandle(cfg, res) {
+async function _catHandle(cfg, res, dbg) {
   if (!cfg.gnToken) return res.status(500).json({ error: 'Falta el token de Gestión Nube para esta tienda' });
   try {
+    let tnErr = null;
     const [productos, tnMap] = await Promise.all([
       _catGNProductos(cfg.gnToken),
-      _catTNImageMap(cfg.storeId, cfg.token).catch(() => ({})),
+      _catTNImageMap(cfg.storeId, cfg.token).catch((e) => { tnErr = e.message; return {}; }),
     ]);
+    if (dbg) {
+      const raw = productos[0] || {};
+      return res.status(500).json({
+        _debug: true,
+        gn_total: productos.length,
+        tn_map_size: Object.keys(tnMap).length,
+        tn_error: tnErr,
+        tn_sample_keys: Object.keys(tnMap).slice(0, 5),
+        gn_raw_keys: Object.keys(raw),
+        gn_raw_sample: Object.fromEntries(Object.entries(raw).filter(([k]) => /cost|price|precio|costo|mayor/i.test(k))),
+      });
+    }
     const tnIndex = Object.keys(tnMap).map(k => ({ key: k, words: _catNormWords(k) }));
     const out = productos.map(p => ({
       id: p.id || p.product_id,
@@ -297,7 +310,7 @@ module.exports = async (req, res) => {
   if (!cfg.storeId || !cfg.token) return res.status(500).json({ error: `Tienda Nube no configurado para ${storeKey}` });
 
   // Modo catálogo: productos GN + fotos TN cruzados (admin interno por marca).
-  if (req.query?.catalogo === '1') return _catHandle(cfg, res);
+  if (req.query?.catalogo === '1') return _catHandle(cfg, res, req.query?.dbg === '1');
 
   // Diagnóstico: qué variables de entorno relevantes ve la función (solo presencia, sin valores)
   if (req.query?.envcheck === '1') {
