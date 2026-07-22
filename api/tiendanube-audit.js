@@ -207,9 +207,9 @@ async function tnFetchOrden(cfg, numero) {
     if (arr.length < 200) break;
   }
   if (!orderId) return { orden: null };
-  // Traer la orden completa por id (acá sí vienen los products).
-  const rd = await fetch(`${base}/${orderId}?fields=id,number,contact_name,customer,products,shipping_option,total`, { headers: tnHeaders(cfg.token) });
-  if (!rd.ok) return { error: `TN ${rd.status}: ${(await rd.text()).slice(0, 200)}` };
+  // Traer la orden completa por id (acá sí vienen los products). Sin ?fields (evita rarezas del GET por id).
+  const rd = await fetch(`${base}/${orderId}`, { headers: tnHeaders(cfg.token) });
+  if (!rd.ok) return { error: `TN ${rd.status} en GET /orders/${orderId}: ${(await rd.text()).slice(0, 150)}` };
   const o = await rd.json();
   return { orden: {
     id: o.id, number: o.number,
