@@ -189,6 +189,7 @@ async function tnFetchOrden(cfg, numero) {
   const base = `https://api.tiendanube.com/v1/${cfg.storeId}/orders`;
   const fields = 'id,number,contact_name,customer,products,shipping_address,shipping_option,shipping_cost_customer,status,total,created_at';
   const r = await fetch(`${base}?q=${encodeURIComponent(numero)}&per_page=50&fields=${fields}`, { headers: tnHeaders(cfg.token) });
+  if (r.status === 404) return { orden: null }; // TN 404 (sin resultados) = orden no encontrada, no es error
   if (!r.ok) return { error: `TN ${r.status}: ${(await r.text()).slice(0, 200)}` };
   const data = await r.json();
   const arr = Array.isArray(data) ? data : [];
