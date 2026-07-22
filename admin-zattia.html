@@ -124,6 +124,7 @@
     <div id="fotos-sel" class="fotos-sel"></div>
     <div id="fotos-acciones" class="fotos-acciones" style="display:none">
       <button class="btn-save" id="fotos-btn-copiar" onclick="fotosCopiar()">📋 Copiar foto</button>
+      <button class="btn-save" onclick="fotosCopiarConTexto()">🖼️📝 Foto + texto</button>
       <button class="btn-save fotos-btn-2" onclick="fotosDescargar()">⬇️ Descargar</button>
       <button class="btn-save fotos-btn-2" onclick="fotosCopiarInfo('cliente')">📝 Info para cliente</button>
       <button class="btn-save fotos-btn-2" onclick="fotosCopiarInfo('estado')">📱 Info para estado</button>
@@ -354,6 +355,28 @@ function fotosCopiar(){
     const item=new ClipboardItem({'image/png':fotosCollageBlob(urls)});
     navigator.clipboard.write([item]).then(()=>fotosMsg('¡Copiado! Pegalo en el chat (Cmd+V).')).catch(()=>fotosMsg('Tu navegador no dejó copiar la imagen — usá "Descargar".',true));
   }catch(e){fotosMsg('Tu navegador no soporta copiar imágenes — usá "Descargar".',true)}
+}
+// Texto de epígrafe: nombre del producto + variantes disponibles (sin precio).
+function fotosCaptionTexto(){
+  return fotosSel.map(id=>{
+    const p=allAdminProducts.find(x=>x.id==id); if(!p) return '';
+    const disp=modelosDisponibles(p);
+    return '*'+(p.name||'Sin nombre')+'*'+(disp.length?'\n'+disp.join(' · '):'');
+  }).filter(Boolean).join('\n\n');
+}
+// Copia la foto CON el texto (nombre + variantes) como epígrafe: al pegar la
+// foto en WhatsApp, el texto aparece en el pie del mensaje.
+function fotosCopiarConTexto(){
+  const urls=fotosUrls(); if(!urls.length){fotosMsg('Ninguno de los productos tiene foto.',true);return}
+  fotosMsg('Preparando…');
+  const caption=fotosCaptionTexto();
+  try{
+    const item=new ClipboardItem({
+      'image/png':fotosCollageBlob(urls),
+      'text/plain':Promise.resolve(new Blob([caption],{type:'text/plain'})),
+    });
+    navigator.clipboard.write([item]).then(()=>fotosMsg('¡Copiado! Pegá en WhatsApp: la foto va con el nombre y las variantes de epígrafe.')).catch(()=>fotosMsg('Tu navegador no dejó copiar — usá "Descargar" + "Info".',true));
+  }catch(e){fotosMsg('Tu navegador no soporta esto — usá "Copiar foto" + "Info para estado".',true)}
 }
 async function fotosDescargar(){
   const urls=fotosUrls(); if(!urls.length){fotosMsg('Ninguno de los productos tiene foto.',true);return}
