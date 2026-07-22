@@ -185,32 +185,32 @@ async function tnFetchCanceladas(cfg, from, to) {
 }
 // ── Leer una orden de TN por número, con sus líneas (para Cambios/Devoluciones del Monitor) ──
 // Reusa el mismo token/scope que ya lee órdenes (View Orders). Devuelve la orden con products[].
-async function tnFetchOrden(cfg, numero, debug) {
+async function tnFetchOrden(cfg, numero) {
   const base = `https://api.tiendanube.com/v1/${cfg.storeId}/orders`;
   const fields = 'id,number,contact_name,customer,products,shipping_address,shipping_option,shipping_cost_customer,status,total,created_at';
-  const r = await fetch(`${base}?q=${encodeURIComponent(numero)}&per_page=50&fields=${fields}`, { headers: tnHeaders(cfg.token) });
-  const dbg = debug ? { status: r.status } : null;
-  if (dbg) {
-    // Para diagnóstico: ¿qué números de orden recientes tiene la tienda? (sin q, últimas 10)
-    try {
-      const rl = await fetch(`${base}?per_page=10&fields=id,number,contact_name`, { headers: tnHeaders(cfg.token) });
-      dbg.recientes_status = rl.status;
-      if (rl.ok) { const d = await rl.json(); dbg.recientes = (Array.isArray(d) ? d : []).map(x => x.number); }
-    } catch (e) { dbg.recientes_err = e.message; }
+  const target = String(numero);
+  const objetivo = Number(numero);
+  // TN NO busca por número de orden con ?q= (devuelve 404). Las órdenes vienen DESCENDENTES (más nueva
+  // primero), así que se pagina y se filtra por `number`, con corte temprano cuando la página ya bajó
+  // del número buscado. Cap de páginas para acotar (cubre las órdenes recientes, que son el caso de cambios).
+  for (let page = 1; page <= 20; page++) {
+    const r = await fetch(`${base}?per_page=200&page=${page}&fields=${fields}`, { headers: tnHeaders(cfg.token) });
+    if (r.status === 404) break; // no hay más páginas
+    if (!r.ok) return { error: `TN ${r.status}: ${(await r.text()).slice(0, 200)}` };
+    const arr = await r.json();
+    if (!Array.isArray(arr) || !arr.length) break;
+    const o = arr.find(x => String(x.number) === target);
+    if (o) return { orden: {
+      id: o.id, number: o.number,
+      cliente: o.contact_name || (o.customer && o.customer.name) || null,
+      total: o.total, envio: o.shipping_option || null,
+      products: (o.products || []).map(p => ({ product_id: p.product_id, variant_id: p.variant_id, name: p.name, sku: p.sku, quantity: p.quantity, price: p.price })),
+    } };
+    const nums = arr.map(x => Number(x.number)).filter(n => !isNaN(n));
+    if (nums.length && Math.min(...nums) < objetivo) break; // ya pasamos el número buscado
+    if (arr.length < 200) break;
   }
-  if (r.status === 404) return { orden: null, _dbg: dbg && { ...dbg, note: '404 empty' } };
-  if (!r.ok) return { error: `TN ${r.status}: ${(await r.text()).slice(0, 200)}` };
-  const data = await r.json();
-  const arr = Array.isArray(data) ? data : [];
-  if (dbg) { dbg.count = arr.length; dbg.numbers = arr.slice(0, 10).map(x => x.number); }
-  const o = arr.find(x => String(x.number) === String(numero)) || arr[0];
-  if (!o) return { orden: null, _dbg: dbg };
-  return { _dbg: dbg, orden: {
-    id: o.id, number: o.number,
-    cliente: o.contact_name || (o.customer && o.customer.name) || null,
-    total: o.total, envio: o.shipping_option || null,
-    products: (o.products || []).map(p => ({ product_id: p.product_id, variant_id: p.variant_id, name: p.name, sku: p.sku, quantity: p.quantity, price: p.price })),
-  } };
+  return { orden: null };
 }
 async function gnFetchVentas(gnToken, from, to) {
   const out = [];
@@ -337,9 +337,9 @@ module.exports = async (req, res) => {
   // ── Leer una orden de TN por número (Cambios/Devoluciones del Monitor) ──
   if (req.query?.orden) {
     try {
-      const r = await tnFetchOrden(cfg, String(req.query.orden), req.query?.debug === '1');
+      const r = await tnFetchOrden(cfg, String(req.query.orden));
       if (r.error) return res.status(502).json({ error: r.error });
-      return res.status(200).json({ ok: true, store: storeKey, orden: r.orden, _dbg: r._dbg });
+      return res.status(200).json({ ok: true, store: storeKey, orden: r.orden });
     } catch (e) {
       return res.status(500).json({ error: e.message });
     }
