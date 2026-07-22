@@ -190,6 +190,14 @@ async function tnFetchOrden(cfg, numero, debug) {
   const fields = 'id,number,contact_name,customer,products,shipping_address,shipping_option,shipping_cost_customer,status,total,created_at';
   const r = await fetch(`${base}?q=${encodeURIComponent(numero)}&per_page=50&fields=${fields}`, { headers: tnHeaders(cfg.token) });
   const dbg = debug ? { status: r.status } : null;
+  if (dbg) {
+    // Para diagnóstico: ¿qué números de orden recientes tiene la tienda? (sin q, últimas 10)
+    try {
+      const rl = await fetch(`${base}?per_page=10&fields=id,number,contact_name`, { headers: tnHeaders(cfg.token) });
+      dbg.recientes_status = rl.status;
+      if (rl.ok) { const d = await rl.json(); dbg.recientes = (Array.isArray(d) ? d : []).map(x => x.number); }
+    } catch (e) { dbg.recientes_err = e.message; }
+  }
   if (r.status === 404) return { orden: null, _dbg: dbg && { ...dbg, note: '404 empty' } };
   if (!r.ok) return { error: `TN ${r.status}: ${(await r.text()).slice(0, 200)}` };
   const data = await r.json();
