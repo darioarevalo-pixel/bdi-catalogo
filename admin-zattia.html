@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>ZATTIA — Admin interno</title>
+<style>
+  :root{
+    --bg:#F5F3F0; --surface:#FFFFFF; --border:#E7E3DD; --border-strong:#D6D0C7;
+    --text:#1C1917; --text-muted:#78716C; --text-hint:#A8A29E;
+    --accent:#7C3AED; --accent-dark:#6D28D9; --danger:#DC2626; --success:#16A34A;
+    --radius:10px; --radius-sm:6px; --shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.05);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);font-size:15px;line-height:1.5;min-height:100vh}
+  /* Login */
+  #login-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1.5rem}
+  .login-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:2rem;width:100%;max-width:380px}
+  .login-box h1{font-size:22px;margin-bottom:4px}
+  .login-box .sub{color:var(--text-muted);font-size:13px;margin-bottom:1.25rem}
+  .login-box input[type=password]{width:100%;padding:11px 12px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font-size:15px;outline:none}
+  .login-box input[type=password]:focus{border-color:var(--accent)}
+  .login-remember{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--text-muted);margin:12px 0}
+  .btn-primary{background:var(--accent);color:#fff;border:none;border-radius:var(--radius-sm);padding:11px 16px;font-size:15px;font-weight:600;cursor:pointer;width:100%}
+  .btn-primary:hover{background:var(--accent-dark)}
+  .btn-primary:disabled{opacity:.6;cursor:default}
+  .login-err{color:var(--danger);font-size:13px;margin-top:10px;display:none}
+  /* Panel */
+  #admin-panel{display:none;max-width:1100px;margin:0 auto;padding:1.25rem}
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:1rem}
+  .brand{display:flex;align-items:center;gap:10px}
+  .brand .badge{background:var(--accent);color:#fff;font-weight:700;font-size:13px;letter-spacing:.5px;padding:5px 10px;border-radius:var(--radius-sm)}
+  .brand .t{font-size:15px;font-weight:600}
+  .brand .s{font-size:12px;color:var(--text-muted)}
+  .link-btn{background:none;border:1px solid var(--border-strong);border-radius:var(--radius-sm);padding:7px 12px;font-size:13px;color:var(--text);cursor:pointer}
+  .tabs{display:flex;gap:6px;border-bottom:1px solid var(--border);margin-bottom:1rem;flex-wrap:wrap}
+  .tab-btn{background:none;border:none;padding:10px 14px;font-size:14px;font-weight:600;color:var(--text-muted);cursor:pointer;border-bottom:2px solid transparent;font-family:inherit}
+  .tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
+  .section-note{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;font-size:13px;color:var(--text-muted);margin-bottom:14px}
+  .section-note strong{color:var(--text)}
+  .admin-search{width:100%;max-width:480px;padding:10px 12px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font-size:14px;outline:none;font-family:inherit}
+  .admin-search:focus{border-color:var(--accent)}
+  .admin-select{padding:10px 12px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font-size:14px;background:var(--surface);font-family:inherit}
+  .btn-save{background:var(--accent);color:#fff;border:none;border-radius:var(--radius-sm);padding:9px 14px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}
+  .btn-save:hover{background:var(--accent-dark)}
+  .btn-save.fotos-btn-2{background:var(--surface);color:var(--text);border:1px solid var(--border-strong)}
+  .loading-state{color:var(--text-muted);padding:1.5rem;text-align:center}
+  /* Fotos */
+  .fotos-resultados{margin:10px 0}
+  .fotos-add-todos{margin-bottom:8px}
+  .fotos-res-list{display:flex;flex-wrap:wrap;gap:6px}
+  .fotos-res-item{background:var(--surface);border:1px solid var(--border-strong);border-radius:20px;padding:6px 12px;font-size:13px;cursor:pointer;font-family:inherit}
+  .fotos-res-item:hover{border-color:var(--accent);color:var(--accent)}
+  .fotos-res-vacio{color:var(--text-muted);font-size:13px;padding:6px 0}
+  .fotos-sel{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin:12px 0}
+  .fotos-card{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px}
+  .fotos-x{position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:50%;border:none;background:rgba(0,0,0,.55);color:#fff;font-size:15px;cursor:pointer;line-height:1}
+  .fotos-card-name{font-size:13px;font-weight:600;margin-bottom:8px;padding-right:26px}
+  .fotos-count{font-weight:500;color:var(--text-muted);font-size:11px}
+  .fotos-thumbs{display:flex;flex-wrap:wrap;gap:6px}
+  .fotos-thumb{width:60px;height:60px;object-fit:cover;border-radius:var(--radius-sm);border:2px solid var(--accent);cursor:pointer}
+  .fotos-thumb.off{border-color:var(--border);opacity:.35}
+  .fotos-noimg{font-size:12px;color:var(--text-hint)}
+  .fotos-acciones{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
+  .gen-copiado{font-size:13px;color:var(--success)}
+  /* Generador */
+  .gen-prod-label{display:block;font-size:13px;color:var(--text-muted);margin-bottom:12px}
+  .gen-costo{margin:12px 0;font-size:14px}
+  .gen-costo-hint{font-size:12px;color:var(--text-hint)}
+  .gen-tiers{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:12px}
+  .gen-tier-head,.gen-tier{display:grid;grid-template-columns:1fr 1fr 1.3fr 1.1fr;gap:8px;align-items:center}
+  .gen-tier-head{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px;margin-bottom:8px}
+  .gen-tier{margin-bottom:8px}
+  .gen-tier input{width:100%;padding:8px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font-size:14px;font-family:inherit}
+  .gen-tier input[readonly]{background:var(--bg);color:var(--text-muted)}
+  .gen-precio-wrap{display:flex;align-items:center;gap:4px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);padding-left:8px}
+  .gen-precio-wrap span{color:var(--text-muted);font-size:14px}
+  .gen-precio-wrap input{border:none!important;padding-left:2px!important}
+  .gen-gan{font-size:14px;font-weight:600;color:var(--success)}
+  .gen-gan.loss{color:var(--danger)}
+  .gen-actions{display:flex;gap:10px;align-items:center;margin-bottom:12px}
+  .gen-preview-wrap{background:var(--surface);border:1px dashed var(--border-strong);border-radius:var(--radius);padding:12px}
+  .gen-preview-lbl{font-size:12px;color:var(--text-muted);margin-bottom:6px}
+  .gen-preview{font-family:ui-monospace,Menlo,monospace;font-size:13px;white-space:pre-wrap;color:var(--text)}
+  #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--text);color:#fff;padding:11px 18px;border-radius:var(--radius-sm);font-size:14px;opacity:0;transition:all .25s;z-index:200}
+  #toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+  #toast.error{background:var(--danger)}
+  #toast.success{background:var(--success)}
+</style>
+</head>
+<body>
+
+<div id="login-screen">
+  <div class="login-box">
+    <h1>ZATTIA · Admin</h1>
+    <div class="sub">Herramienta interna. Ingresá tu contraseña.</div>
+    <input type="password" id="pwd-input" placeholder="Contraseña" autocomplete="current-password" />
+    <label class="login-remember"><input type="checkbox" id="remember-login" /> Recordar en este dispositivo</label>
+    <button class="btn-primary" id="login-btn" onclick="login()">Ingresar</button>
+    <div class="login-err" id="login-err">Contraseña incorrecta.</div>
+  </div>
+</div>
+
+<div id="admin-panel">
+  <div class="topbar">
+    <div class="brand">
+      <span class="badge">ZATTIA</span>
+      <div><div class="t">Admin interno</div><div class="s" id="prod-count">Cargando productos…</div></div>
+    </div>
+    <button class="link-btn" onclick="cerrarSesion()">Cerrar sesión</button>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" id="tabbtn-fotos" onclick="setTab('fotos')">Fotos</button>
+    <button class="tab-btn" id="tabbtn-generador" onclick="setTab('generador')">Generador de precios</button>
+  </div>
+
+  <!-- FOTOS -->
+  <div id="tab-fotos">
+    <p class="section-note">Agregá productos y elegí <strong>foto por foto</strong> cuál copiar: cada producto muestra <strong>todas sus fotos</strong>; hacé <strong>clic en una para sacarla</strong>. <strong>Copiar foto</strong> las pega (Cmd+V) en el chat sin descargar (si hay varias, las combina en una imagen). <strong>Info</strong> copia nombre, precio y talles/variantes disponibles.</p>
+    <input class="admin-search" type="text" id="fotos-buscar" placeholder="Buscar producto (ej. baby tee)" oninput="fotosBuscar()" />
+    <div id="fotos-resultados" class="fotos-resultados"></div>
+    <div id="fotos-sel" class="fotos-sel"></div>
+    <div id="fotos-acciones" class="fotos-acciones" style="display:none">
+      <button class="btn-save" id="fotos-btn-copiar" onclick="fotosCopiar()">📋 Copiar foto</button>
+      <button class="btn-save fotos-btn-2" onclick="fotosDescargar()">⬇️ Descargar</button>
+      <button class="btn-save fotos-btn-2" onclick="fotosCopiarInfo('cliente')">📝 Info para cliente</button>
+      <button class="btn-save fotos-btn-2" onclick="fotosCopiarInfo('estado')">📱 Info para estado</button>
+      <span id="fotos-msg" class="gen-copiado"></span>
+    </div>
+  </div>
+
+  <!-- GENERADOR -->
+  <div id="tab-generador" style="display:none">
+    <p class="section-note">Armá una <strong>lista de precios por cantidad</strong> para un cliente. Elegís un producto, te traemos el <strong>costo</strong> (solo lo ves vos), generás los precios por escala —a mano o con un <strong>% de markup</strong> sobre el costo— y copiás el texto <strong>sin el costo</strong>. La fila <strong>x1</strong> queda fija al <strong>precio mayorista</strong>.</p>
+    <label class="gen-prod-label">Producto
+      <select id="gen-producto" class="admin-select" onchange="genSeleccionar()" style="width:100%;max-width:480px"><option value="">— Elegí un producto —</option></select>
+    </label>
+    <div id="gen-detalle" style="display:none">
+      <div class="gen-costo">Costo: <strong id="gen-costo-val">—</strong> <span class="gen-costo-hint">(solo para vos — no se copia)</span></div>
+      <div class="gen-tiers">
+        <div class="gen-tier-head"><span>Cantidad</span><span>Markup %</span><span>Precio c/u</span><span>Ganancia c/u</span></div>
+        <div class="gen-tier">
+          <input type="number" id="gen-qty-0" value="1" min="1" oninput="genPreview()" />
+          <input type="number" id="gen-markup-0" min="0" placeholder="%" oninput="genDesdeMarkup(0)" />
+          <div class="gen-precio-wrap"><span>$</span><input type="number" id="gen-precio-0" min="0" placeholder="0" oninput="genDesdePrecio(0)" /></div>
+          <span class="gen-gan" id="gen-gan-0">—</span>
+        </div>
+        <div class="gen-tier">
+          <input type="number" id="gen-qty-1" value="25" min="1" oninput="genPreview()" />
+          <input type="number" id="gen-markup-1" min="0" placeholder="%" oninput="genDesdeMarkup(1)" />
+          <div class="gen-precio-wrap"><span>$</span><input type="number" id="gen-precio-1" min="0" placeholder="0" oninput="genDesdePrecio(1)" /></div>
+          <span class="gen-gan" id="gen-gan-1">—</span>
+        </div>
+        <div class="gen-tier">
+          <input type="number" id="gen-qty-2" value="50" min="1" oninput="genPreview()" />
+          <input type="number" id="gen-markup-2" min="0" placeholder="%" oninput="genDesdeMarkup(2)" />
+          <div class="gen-precio-wrap"><span>$</span><input type="number" id="gen-precio-2" min="0" placeholder="0" oninput="genDesdePrecio(2)" /></div>
+          <span class="gen-gan" id="gen-gan-2">—</span>
+        </div>
+      </div>
+      <div class="gen-actions">
+        <button class="btn-save" onclick="copiarCotizacion()">📋 Copiar lista de precios</button>
+        <span id="gen-copiado" class="gen-copiado"></span>
+      </div>
+      <div class="gen-preview-wrap"><div class="gen-preview-lbl">Esto se copia (sin el costo):</div><pre class="gen-preview" id="gen-preview"></pre></div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+function $(id){return document.getElementById(id)}
+let allAdminProducts = [];
+let adminPassword = '';
+const REMEMBER_KEY = 'zattia_admin_pwd';
+
+function showToast(msg,type='',dur=2800){const t=$('toast');t.textContent=msg;t.className='toast show '+type;setTimeout(()=>t.className='toast',dur)}
+function fmtAR(n){return '$'+Math.round(n).toLocaleString('es-AR')}
+
+// ---- Auth (misma contraseña del admin, verificada en el servidor) ----
+$('pwd-input').addEventListener('keydown',e=>{if(e.key==='Enter')login()});
+async function verificarYEntrar(pwd){
+  const r = await fetch('/api/config?verify=1',{headers:{'x-admin-password':pwd}});
+  if(r.status===401) return false;
+  if(!r.ok) throw new Error('verify '+r.status);
+  await r.json().catch(()=>({}));
+  adminPassword = pwd;
+  $('login-screen').style.display='none';
+  $('admin-panel').style.display='block';
+  await cargarProductos();
+  return true;
+}
+async function login(){
+  const pwd=$('pwd-input').value.trim(); if(!pwd) return;
+  const btn=$('login-btn'); btn.disabled=true; btn.textContent='Verificando…'; $('login-err').style.display='none';
+  try{
+    const ok=await verificarYEntrar(pwd);
+    if(!ok){$('login-err').style.display='block';btn.disabled=false;btn.textContent='Ingresar';return}
+    try{ if($('remember-login').checked) localStorage.setItem(REMEMBER_KEY,btoa(unescape(encodeURIComponent(pwd)))); else localStorage.removeItem(REMEMBER_KEY);}catch(e){}
+  }catch(e){showToast('Error de conexión','error');btn.disabled=false;btn.textContent='Ingresar'}
+}
+async function autoLogin(){
+  let pwd=''; try{const v=localStorage.getItem(REMEMBER_KEY); if(v) pwd=decodeURIComponent(escape(atob(v)));}catch(e){}
+  if(!pwd) return;
+  try{ const ok=await verificarYEntrar(pwd); if(!ok){try{localStorage.removeItem(REMEMBER_KEY)}catch(e){}} }catch(e){}
+}
+function cerrarSesion(){try{localStorage.removeItem(REMEMBER_KEY)}catch(e){}location.reload()}
+if(document.readyState==='loading') window.addEventListener('DOMContentLoaded',autoLogin); else autoLogin();
+
+// ---- Productos de Zattia (GN + fotos de TN, ya resueltas por el endpoint) ----
+async function cargarProductos(){
+  $('prod-count').textContent='Cargando productos…';
+  try{
+    const r = await fetch('/api/zattia-catalogo');
+    const d = await r.json();
+    if(!r.ok || !d.ok) throw new Error(d.error||('HTTP '+r.status));
+    allAdminProducts = (d.productos||[]).map(p=>({...p, _imgs:(p.imgs||[]).filter(Boolean), _img:(p.imgs&&p.imgs[0])||null}));
+    $('prod-count').textContent = allAdminProducts.length+' productos';
+  }catch(e){
+    $('prod-count').textContent='Error al cargar';
+    showToast('No se pudieron cargar los productos: '+e.message,'error',6000);
+    return;
+  }
+  populateGenerador();
+  if($('tab-fotos').style.display!=='none') fotosBuscar();
+}
+
+// ---- Tabs ----
+function setTab(t){
+  ['fotos','generador'].forEach(x=>{
+    $('tab-'+x).style.display = x===t?'block':'none';
+    $('tabbtn-'+x).classList.toggle('active', x===t);
+  });
+  if(t==='fotos') fotosBuscar();
+  if(t==='generador') populateGenerador();
+}
+
+// ---- Helpers de producto ----
+function getCurrentPrice(p){return parseFloat(p.wholesaler_price||0)}
+function precioBaseAdmin(p){return getCurrentPrice(p)}
+function getStockVarianteAdmin(v){
+  if(!v.stock_por_tienda||!v.stock_por_tienda.length) return null;
+  const t=v.stock_por_tienda.find(x=>x.store_name==='Deposito Minorista');
+  if(t) return t.stock_disponible||0;
+  return v.stock_por_tienda.reduce((s,x)=>s+(x.stock_disponible||0),0);
+}
+// Talles/variantes disponibles (con stock), sin repetir. Para indumentaria son
+// talles/colores; se listan tal cual (sin el orden por modelo de iPhone).
+function modelosDisponibles(p){
+  if(!p) return [];
+  const out=[], seen=new Set();
+  (p.variantes||[]).forEach(v=>{
+    const st=getStockVarianteAdmin(v);
+    if(!(st===null||st>0)) return;
+    const et=String(v.size||'').trim();
+    if(et && !seen.has(et)){seen.add(et);out.push(et)}
+  });
+  return out;
+}
+function fallbackCopiar(texto,ok){
+  const ta=document.createElement('textarea');ta.value=texto;ta.style.position='fixed';ta.style.opacity='0';
+  document.body.appendChild(ta);ta.focus();ta.select();
+  try{document.execCommand('copy');ok()}catch(e){showToast('No se pudo copiar','error')}
+  document.body.removeChild(ta);
+}
+
+// ===== FOTOS =====
+let fotosSel=[]; let fotosImgSel={};
+function fotosCoincidencias(){
+  const q=($('fotos-buscar')?.value||'').trim().toLowerCase(); if(!q) return [];
+  return allAdminProducts.filter(p=>{
+    const id=p.id; if(fotosSel.some(x=>x==id)) return false;
+    const name=(p.name||'').toLowerCase(), code=(p.code||'').toLowerCase();
+    return name.includes(q)||code.includes(q);
+  });
+}
+function fotosBuscar(){
+  const cont=$('fotos-resultados'); if(!cont) return;
+  const q=($('fotos-buscar')?.value||'').trim();
+  if(!q){cont.innerHTML='';return}
+  const matches=fotosCoincidencias();
+  if(!matches.length){cont.innerHTML='<div class="fotos-res-vacio">Sin coincidencias para "'+q.replace(/</g,'&lt;')+'".</div>';return}
+  const lista=matches.slice(0,40);
+  cont.innerHTML='<button class="btn-save fotos-add-todos" onclick="fotosAgregarTodos()">+ Agregar todos ('+matches.length+')</button>'+
+    '<div class="fotos-res-list">'+lista.map(p=>'<button class="fotos-res-item" onclick="fotosAgregarId(\''+p.id+'\')">+ '+(p.name||'Sin nombre').replace(/</g,'&lt;')+'</button>').join('')+'</div>'+
+    (matches.length>lista.length?'<div class="fotos-res-vacio">…y '+(matches.length-lista.length)+' más. Afiná la búsqueda o usá "Agregar todos".</div>':'');
+}
+function fotosAgregarId(id){if(!fotosSel.some(x=>x==id))fotosSel.push(id);fotosBuscar();fotosRender()}
+function fotosAgregarTodos(){fotosCoincidencias().forEach(p=>{if(!fotosSel.some(x=>x==p.id))fotosSel.push(p.id)});fotosBuscar();fotosRender()}
+function fotosQuitar(idx){const id=fotosSel[idx];fotosSel.splice(idx,1);if(id!=null)delete fotosImgSel[id];fotosRender()}
+function fotosImgsDe(p){return (p&&p._imgs&&p._imgs.length)?p._imgs:(p&&p._img?[p._img]:[])}
+function fotosMarcadas(id,total){if(!(id in fotosImgSel))fotosImgSel[id]=Array.from({length:total},(_,i)=>i);return fotosImgSel[id]}
+function fotosToggleImg(id,i){
+  const p=allAdminProducts.find(x=>x.id==id); const total=fotosImgsDe(p).length;
+  const sel=fotosMarcadas(id,total); const pos=sel.indexOf(i);
+  if(pos>=0)sel.splice(pos,1); else sel.push(i); fotosRender();
+}
+function fotosDeProducto(p){
+  if(!p) return []; const id=p.id; const imgs=fotosImgsDe(p);
+  if(!imgs.length) return []; const sel=fotosMarcadas(id,imgs.length);
+  return imgs.filter((u,i)=>sel.indexOf(i)>=0);
+}
+function fotosUrls(){const urls=[];fotosSel.forEach(id=>{const p=allAdminProducts.find(x=>x.id==id);fotosDeProducto(p).forEach(u=>{if(u)urls.push(u)})});return urls}
+function fotosRender(){
+  const cont=$('fotos-sel'); if(!cont) return;
+  if(!fotosSel.length){cont.innerHTML='<div class="loading-state">Agregá productos para copiar sus fotos o su info.</div>';if($('fotos-acciones'))$('fotos-acciones').style.display='none';return}
+  cont.innerHTML=fotosSel.map((id,idx)=>{
+    const p=allAdminProducts.find(x=>x.id==id); const nombre=p?(p.name||'Sin nombre'):'—';
+    const imgs=fotosImgsDe(p); const sel=imgs.length?fotosMarcadas(id,imgs.length):[];
+    const thumbs=imgs.length?'<div class="fotos-thumbs">'+imgs.map((u,i)=>{const on=sel.indexOf(i)>=0;return '<img class="fotos-thumb'+(on?'':' off')+'" src="'+u.replace(/"/g,'&quot;')+'" loading="lazy" title="'+(on?'Sacar esta foto':'Incluir esta foto')+'" onclick="fotosToggleImg(\''+id+'\','+i+')" onerror="this.style.visibility=\'hidden\'">'}).join('')+'</div>':'<div class="fotos-noimg">Sin foto</div>';
+    const cnt=imgs.length?' <span class="fotos-count">'+fotosDeProducto(p).length+'/'+imgs.length+' fotos</span>':'';
+    return '<div class="fotos-card"><button class="fotos-x" onclick="fotosQuitar('+idx+')" title="Quitar producto">×</button><div class="fotos-card-name">'+nombre.replace(/</g,'&lt;')+cnt+'</div>'+thumbs+'</div>';
+  }).join('');
+  const acc=$('fotos-acciones'); acc.style.display='flex';
+  const conFoto=fotosUrls().length;
+  $('fotos-btn-copiar').textContent=conFoto>1?'🖼️ Combinar y copiar ('+conFoto+')':'📋 Copiar foto';
+}
+function fotosInfoTexto(p,modo){
+  if(!p) return '';
+  const nombre=p.name||'Sin nombre'; const disp=modelosDisponibles(p);
+  const precio=precioBaseAdmin(p); const precioTxt=precio>0?fmtAR(precio):'';
+  if(modo==='estado'){
+    const l=['*'+nombre+'*'+(precioTxt?' · '+precioTxt:'')]; if(disp.length)l.push('🧵 '+disp.join(' · ')); return l.join('\n');
+  }
+  const l=['*'+nombre+'*']; if(precioTxt)l.push('💵 *Precio:* '+precioTxt); if(disp.length)l.push('🧵 *Disponible:*',...disp); return l.join('\n');
+}
+function fotosMsg(txt,err){const m=$('fotos-msg');if(!m)return;m.textContent=txt;m.style.color=err?'var(--danger)':'var(--success)';if(!err)setTimeout(()=>{m.textContent=''},4000)}
+function fotosCopiarInfo(modo){
+  if(!fotosSel.length){fotosMsg('Agregá al menos un producto.',true);return}
+  const bloques=fotosSel.map(id=>fotosInfoTexto(allAdminProducts.find(x=>x.id==id),modo)).filter(Boolean);
+  if(!bloques.length){fotosMsg('No hay info para copiar.',true);return}
+  const texto=bloques.join('\n\n'); const que=modo==='estado'?'estado':'cliente';
+  const ok=()=>fotosMsg('Info para '+que+' copiada · '+bloques.length+(bloques.length===1?' producto':' productos'));
+  if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(texto).then(ok).catch(()=>fallbackCopiar(texto,ok));
+  else fallbackCopiar(texto,ok);
+}
+function fotosCargarImg(url){return new Promise((res,rej)=>{const im=new Image();im.crossOrigin='anonymous';im.onload=()=>res(im);im.onerror=()=>rej(new Error('img'));im.src=url})}
+async function fotosCollageBlob(urls){
+  const imgs=await Promise.all(urls.map(fotosCargarImg));
+  if(imgs.length===1){const im=imgs[0];const c=document.createElement('canvas');c.width=im.naturalWidth||im.width;c.height=im.naturalHeight||im.height;c.getContext('2d').drawImage(im,0,0);return await new Promise(r=>c.toBlob(r,'image/png'))}
+  const n=imgs.length; const cols=n===2?2:n<=4?2:3; const rows=Math.ceil(n/cols); const cell=600,pad=10;
+  const canvas=document.createElement('canvas'); canvas.width=cols*cell+(cols+1)*pad; canvas.height=rows*cell+(rows+1)*pad;
+  const ctx=canvas.getContext('2d'); ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,canvas.width,canvas.height);
+  imgs.forEach((im,i)=>{const c=i%cols,r=Math.floor(i/cols);const x0=pad+c*(cell+pad),y0=pad+r*(cell+pad);const scale=Math.min(cell/im.width,cell/im.height);const w=im.width*scale,h=im.height*scale;ctx.drawImage(im,x0+(cell-w)/2,y0+(cell-h)/2,w,h)});
+  return await new Promise(r=>canvas.toBlob(r,'image/png'));
+}
+function fotosCopiar(){
+  const urls=fotosUrls(); if(!urls.length){fotosMsg('Ninguno de los productos tiene foto.',true);return}
+  fotosMsg('Preparando…');
+  try{
+    const item=new ClipboardItem({'image/png':fotosCollageBlob(urls)});
+    navigator.clipboard.write([item]).then(()=>fotosMsg('¡Copiado! Pegalo en el chat (Cmd+V).')).catch(()=>fotosMsg('Tu navegador no dejó copiar la imagen — usá "Descargar".',true));
+  }catch(e){fotosMsg('Tu navegador no soporta copiar imágenes — usá "Descargar".',true)}
+}
+async function fotosDescargar(){
+  const urls=fotosUrls(); if(!urls.length){fotosMsg('Ninguno de los productos tiene foto.',true);return}
+  try{
+    const blob=await fotosCollageBlob(urls); const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download=(urls.length>1?'fotos-combinadas':'foto')+'.png'; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(a.href),2000); fotosMsg('Descargada.');
+  }catch(e){fotosMsg('No se pudo generar la imagen.',true)}
+}
+
+// ===== GENERADOR DE PRECIOS =====
+let genCosto=0;
+function populateGenerador(){
+  const sel=$('gen-producto'); if(!sel||sel.options.length>1) return;
+  [...allAdminProducts].sort((a,b)=>(a.name||'').localeCompare(b.name||'')).forEach(p=>{
+    const opt=document.createElement('option'); opt.value=p.id; opt.textContent=p.name||'Sin nombre'; sel.appendChild(opt);
+  });
+}
+function genProductoSel(){return allAdminProducts.find(x=>x.id==$('gen-producto').value)}
+function genSeleccionar(){
+  const p=genProductoSel(); if(!p){$('gen-detalle').style.display='none';return}
+  genCosto=parseFloat(p.unit_cost||0);
+  $('gen-costo-val').textContent=genCosto>0?fmtAR(genCosto):'sin costo cargado';
+  $('gen-detalle').style.display='block';
+  genFijarMayorista(p);
+  [1,2].forEach(i=>{$('gen-markup-'+i).value='';$('gen-precio-'+i).value='';genGanancia(i)});
+  genPreview();
+}
+function genFijarMayorista(p){
+  const pm=getCurrentPrice(p); const precioInput=$('gen-precio-0'); const markupInput=$('gen-markup-0');
+  if(pm>0){precioInput.value=Math.round(pm);precioInput.readOnly=true;markupInput.value=(genCosto>0)?Math.round((pm/genCosto-1)*100):'';markupInput.readOnly=true}
+  else{precioInput.value='';precioInput.readOnly=false;markupInput.value='';markupInput.readOnly=false}
+  genGanancia(0);
+}
+function genDesdeMarkup(i){if($('gen-markup-'+i).readOnly)return;const m=parseFloat($('gen-markup-'+i).value);if(!isNaN(m)&&genCosto>0)$('gen-precio-'+i).value=Math.round(genCosto*(1+m/100));genGanancia(i);genPreview()}
+function genDesdePrecio(i){if($('gen-precio-'+i).readOnly)return;const precio=parseFloat($('gen-precio-'+i).value);if(!isNaN(precio)&&precio>0&&genCosto>0)$('gen-markup-'+i).value=Math.round((precio/genCosto-1)*100);genGanancia(i);genPreview()}
+function genGanancia(i){
+  const precio=parseFloat($('gen-precio-'+i).value); const el=$('gen-gan-'+i);
+  if(isNaN(precio)||genCosto<=0){el.textContent='—';el.className='gen-gan';return}
+  const gan=precio-genCosto; el.textContent=(gan<0?'-':'')+fmtAR(Math.abs(gan)); el.className='gen-gan'+(gan<0?' loss':'');
+}
+function genTexto(){
+  const p=genProductoSel(); if(!p) return '';
+  const lines=['*'+(p.name||'').toUpperCase()+'*'];
+  [0,1,2].forEach(i=>{
+    const qty=parseInt($('gen-qty-'+i).value)||0; const precio=parseFloat($('gen-precio-'+i).value);
+    if(qty>0&&!isNaN(precio)&&precio>0) lines.push(qty+(qty===1?' unidad':' unidades')+': *'+fmtAR(precio)+'*'+(qty>1?' c/u':''));
+  });
+  return lines.join('\n');
+}
+function genPreview(){const el=$('gen-preview');if(el)el.textContent=genTexto()}
+function genCopiarFallback(txt){fallbackCopiar(txt,()=>{})}
+function copiarCotizacion(){
+  const txt=genTexto(); if(!txt) return;
+  const ok=()=>{const c=$('gen-copiado');if(c){c.textContent='¡Copiado! Pegalo en WhatsApp.';setTimeout(()=>{c.textContent=''},3000)}};
+  if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(ok).catch(()=>{genCopiarFallback(txt);ok()});
+  else{genCopiarFallback(txt);ok()}
+}
+</script>
+</body>
+</html>
