@@ -32,7 +32,14 @@ module.exports = async (req, res) => {
       page++;
     }
 
-    // Construir mapa nombre_normalizado -> { imgs, desc }
+    // Color de una variante = value que NO es modelo de iPhone ni talle.
+    const TALLES = new Set(['s', 'm', 'l', 'xl', 'xxl', 'xs', 'xxs', 'xxxl', 'xxxxl', 'u', 'unico', 'único']);
+    const esTalle = t => { const x = String(t || '').toLowerCase().trim(); return TALLES.has(x) || /^\d{1,3}$/.test(x) || x.startsWith('talle'); };
+    const valEs = v => v?.es || v?.pt || (v && Object.values(v)[0]) || '';
+    const colorDeVariante = v => ((v.values || []).map(valEs).filter(t => t && !/iphone/i.test(t) && !esTalle(t))[0]) || '';
+    const normColor = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+
+    // Construir mapa nombre_normalizado -> { imgs, desc, varImgByColor }
     const map = {};
     for (const p of all) {
       const imgs = (p.images || []).map(i => i.src).filter(Boolean);
@@ -40,7 +47,20 @@ module.exports = async (req, res) => {
       const rawDesc = p.description?.es || p.description?.pt || Object.values(p.description || {})[0] || '';
       // Limpiar HTML de la descripción
       const desc = rawDesc.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+      // Foto propia por color: image_id de la variante -> src de la imagen del producto.
+      const imgById = {};
+      (p.images || []).forEach(i => { if (i.id != null && i.src) imgById[i.id] = i.src; });
+      const varImgByColor = {};
+      if (Array.isArray(p.variants)) {
+        for (const v of p.variants) {
+          if (v.image_id == null) continue;
+          const src = imgById[v.image_id];
+          const c = normColor(colorDeVariante(v));
+          if (src && c && !varImgByColor[c]) varImgByColor[c] = src;
+        }
+      }
       const entry = { imgs, desc };
+      if (Object.keys(varImgByColor).length) entry.varImgByColor = varImgByColor;
       if (nombre) map[nombre] = entry;
       if (Array.isArray(p.variants)) {
         for (const v of p.variants) {

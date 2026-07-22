@@ -130,13 +130,20 @@
   .pm-info { flex: 1; min-width: 0; }
   .pm-nombre { font-size: 14px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pm-variante { font-size: 12px; color: var(--text-muted); }
-  .pm-precio-dif { font-size: 12px; font-weight: 600; color: var(--precio-dif); flex-shrink: 0; }
+  .pm-precio { font-size: 14px; font-weight: 700; color: var(--text); flex-shrink: 0; min-width: 78px; text-align: right; }
+  .pm-precio.dif { color: var(--precio-dif); }
+  .pm-precio.promo { color: var(--danger); }
+  .pm-precio-wrap { display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0; min-width: 78px; line-height: 1.15; }
+  .pm-precio-old { font-size: 11px; color: var(--text-hint); text-decoration: line-through; }
+  .pm-precio-wrap .pm-precio { min-width: 0; }
+  .pm-orden { margin-left: auto; padding: 7px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; background: var(--surface); color: var(--text); cursor: pointer; }
   .pm-qty { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
   .pm-poca { color: var(--warning); font-weight: 600; }
   @media (max-width: 640px) {
     .pm-fila { gap: 8px; padding: 6px 8px; }
     .pm-foto { width: 42px; height: 42px; }
     .pm-nombre { font-size: 13px; }
+    .pm-precio { font-size: 13px; min-width: 58px; }
   }
   .view-label-wrap { display: flex; flex-direction: column; gap: 3px; flex-shrink: 0; }
   .view-label { font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; text-align: center; }
@@ -670,6 +677,7 @@ let categoria = 'todas';
 let viewMode = 'variants';
 let prevViewMode = 'variants'; // modo al que volver al salir de "por modelo"
 let modeloSel = null;          // modelo de iPhone elegido en la vista "por modelo" (null = mostrar selector)
+let pmSort = 'nuevo';          // orden dentro de un modelo: 'nuevo' | 'viejo' | 'precio-asc' | 'precio-desc'
 let references = null;
 let adminConfig = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, mostrarCupones: false, minPurchase: 0, referencePrices: {}, variantPrices: {}, newProducts: [], cupones: [], ofertaMargen: 0, descuentoBase: 15, excepciones: {}, apagados: [], codigosAcceso: [] };
 let cuponAplicado = null; // cupón aplicado en el carrito (objeto) o null
@@ -862,6 +870,14 @@ const COLOR_WORDS = ['negro','blanco','rojo','azul','verde','amarillo','rosa','n
 function variantSortKey(name) {
   if (!name) return 0;
   const n = String(name).toLowerCase();
+  // iPhone Air (generación 17). Se ubica junto a la línea 17 (clave 170, justo
+  // debajo del 17 base). Va ANTES del match numérico para que "iPhone 17 Air"
+  // no se confunda con el 17 común.
+  if (/iphone\s*(?:17\s*)?air\b/.test(n)) return 170;
+  // iPhone "e" (línea económica: 16e, 15e, ...). Es un modelo DISTINTO del número
+  // base (otro cuerpo/cámara), va antes del match numérico para no caer en el 16.
+  const me = n.match(/iphone\s*(\d+)\s*e\b/);
+  if (me) return parseInt(me[1], 10) * 10 + 5; // tier 5 = "e"
   // iPhone numerado (11, 12, 13, ..., 16, etc.)
   const m = n.match(/iphone\s*(\d+)/);
   if (m) {
@@ -927,10 +943,26 @@ function detectDimLabel(values) {
 // Canonicaliza el texto del modelo para agrupar el mismo iPhone de distintos
 // diseños bajo una sola clave. Usa variantSortKey (distingue 11 / 11 Pro /
 // 11 Pro Max) como clave numérica de grupo y arma un label limpio "iPhone 11 ...".
+// Etiqueta canónica a partir de la clave numérica de variantSortKey (model*10+tier),
+// para que todo lo que cae en el mismo modelo muestre SIEMPRE el mismo nombre
+// (evita que un texto raro tipo "iPhone 12/ 12 Pro" pise el label del grupo).
+const PM_TIER = { 4: ' Pro Max', 3: ' Pro', 2: ' Plus', 1: '', 0: ' Mini' };
+function labelDeClaveNum(key) {
+  if (key === 170) return 'iPhone 17 Air';
+  if (key === 90) return 'iPhone SE';
+  if (key === 101) return 'iPhone X';
+  if (key === 102) return 'iPhone XR';
+  if (key === 103) return 'iPhone XS';
+  if (key === 105) return 'iPhone XS Max';
+  const model = Math.floor(key / 10), tier = key % 10;
+  if (tier === 5) return 'iPhone ' + model + 'e'; // línea económica (16e, 15e...)
+  return 'iPhone ' + model + (PM_TIER[tier] || '');
+}
 function modeloClave(str) {
   const key = variantSortKey(str);
-  if (!key) return { key: 'x-' + (str || '').toLowerCase().trim(), label: modeloLabelLimpio(str) };
-  return { key: 'k-' + key, label: modeloLabelLimpio(str) };
+  if (key) return { key: 'k-' + key, label: labelDeClaveNum(key) };
+  const label = modeloLabelLimpio(str); // no numerado (ej. "iPhone Air"): usa el texto normalizado
+  return { key: 'x-' + label.toLowerCase().trim(), label };
 }
 function modeloLabelLimpio(str) {
   const n = String(str || '').trim();
@@ -941,10 +973,36 @@ function modeloLabelLimpio(str) {
   return n;
 }
 
+// De una variante ("iPhone 11 - Negro", "Negro / iPhone 11", "iPhone 11",
+// "iPhone 12 - Black", ...) saca cuál parte es el MODELO de iPhone y cuál el
+// color. El modelo es la parte que variantSortKey reconoce como iPhone (no
+// depende del idioma del color). Devuelve null si ninguna parte es un iPhone
+// (así una variante que quedó solo con un color no crea un "modelo" falso).
+function esTextoDeModelo(s) { return /iphone/i.test(s); } // la parte que dice "iPhone" es el modelo
+function extraerModeloColor(size) {
+  const s = String(size || '').trim();
+  if (!s) return null;
+  for (const sep of [' / ', ' - ']) {
+    const idx = s.indexOf(sep);
+    if (idx !== -1) {
+      const a = s.substring(0, idx).trim();
+      const b = s.substring(idx + sep.length).trim();
+      const aM = esTextoDeModelo(a), bM = esTextoDeModelo(b);
+      if (aM && !bM) return { modelStr: a, color: b };
+      if (bM && !aM) return { modelStr: b, color: a };
+      if (aM && bM) return { modelStr: a, color: b }; // ambos con "iPhone": el primero es el modelo
+      return esTextoDeModelo(s) ? { modelStr: s, color: null } : null;
+    }
+  }
+  return esTextoDeModelo(s) ? { modelStr: s, color: null } : null;
+}
+
 // Recorre las FUNDAS y arma el índice modelo -> filas (una fila por variante).
 // Devuelve { modelos: [{key,label,count}], filasPorModelo: { key: [{p,v,color,modelLabel}] } }.
 function construirIndiceModelos() {
-  const fundas = allProducts.filter(p => (p.category || '') === 'FUNDAS');
+  // Cualquier categoría que sea de fundas (incluye variantes como "FUNDAS, NEW IN");
+  // los vidrios/cargadores/etc. quedan afuera porque no dicen "funda".
+  const fundas = allProducts.filter(p => /funda/i.test(p.category || ''));
   const filasPorModelo = {};
   const labelDeKey = {};
 
@@ -959,16 +1017,13 @@ function construirIndiceModelos() {
     });
     if (!variantes.length) continue;
 
-    const dims = parseVariantDimensions(variantes);
-    const filas = dims
-      ? dims.map(d => ({ v: d, modelStr: d.dim2, color: d.dim1 }))
-      : variantes.map(v => ({ v, modelStr: v.size, color: null }));
-
-    for (const f of filas) {
-      const { key, label } = modeloClave(f.modelStr);
+    for (const v of variantes) {
+      const mc = extraerModeloColor(v.size);
+      if (!mc) continue; // variante sin modelo de iPhone reconocible → se ignora
+      const { key, label } = modeloClave(mc.modelStr);
       labelDeKey[key] = label;
       (filasPorModelo[key] = filasPorModelo[key] || []).push({
-        p, v: f.v, color: f.color, modelLabel: label
+        p, v, color: mc.color, modelLabel: label
       });
     }
   }
@@ -1230,6 +1285,13 @@ function renderCatPills() {
 
 function setCategoria(c) {
   categoria = c;
+  // Elegir una categoría sale de la vista "por modelo" (si no, el cambio no se
+  // vería porque esa vista ignora la categoría).
+  if (viewMode === 'modelo') {
+    viewMode = prevViewMode || 'variants';
+    modeloSel = null;
+    $('btn-por-modelo')?.classList.remove('active');
+  }
   renderCatPills();
   renderProductos();
   cerrarCatNav();
@@ -1451,6 +1513,25 @@ function getImagenes(p) {
   if (entry?.imgs?.length) return entry.imgs;
   const single = getImagenGN(p);
   return single ? [single] : [];
+}
+
+// Normaliza un color para cruzar GN vs TiendaNube (minúsculas, sin acentos).
+function normColor(s) {
+  return String(s == null ? '' : s).toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+// Foto de una variante por su COLOR (la que TiendaNube tiene vinculada a ese
+// color). Si no hay, cae a la foto principal del producto. Solo se usa en la
+// vista "por modelo" para mostrar la funda del color exacto de la fila.
+function getImagenVariante(p, color) {
+  const entry = tnLookup(p);
+  if (color && entry?.varImgByColor) {
+    const src = entry.varImgByColor[normColor(color)];
+    if (src) return src;
+  }
+  return getImagenes(p)[0] || null;
 }
 
 function getDescripcionTN(p) {
@@ -1686,13 +1767,57 @@ function setModeloSel(key) {
   renderProductos();
 }
 
+function setPmSort(v) {
+  pmSort = v;
+  renderProductos();
+}
+
+// Índice de posición de un producto según el MISMO orden que la sección Productos
+// (orden personalizado del admin; si no hay, el orden por categoría). Para el
+// orden "más nuevo / más viejo" de la vista por modelo.
+function pmCatalogIndex() {
+  const po = adminConfig.productOrder || {};
+  const globalOrder = po['__todas__'] || [];
+  const orderMap = globalOrder.length ? globalOrder : (po['FUNDAS'] || []);
+  const pos = {};
+  orderMap.forEach((oid, i) => { pos[String(oid)] = i; });
+  return p => { const id = String(p.id || p.product_id); return pos[id] !== undefined ? pos[id] : 9999; };
+}
+
+// Ordena las filas de un modelo según pmSort. Precio = SIEMPRE el que paga el
+// cliente (getPrecioVariante). Array.sort es estable → a igual clave se mantiene
+// el orden de aparición (los colores de un mismo diseño quedan juntos).
+function pmOrdenarFilas(filas) {
+  const arr = filas.map(f => ({
+    f, precio: getPrecioVariante(f.p.id || f.p.product_id, f.v.size_id, getPrecio(f.p))
+  }));
+  if (pmSort === 'precio-asc') arr.sort((a, b) => a.precio - b.precio);
+  else if (pmSort === 'precio-desc') arr.sort((a, b) => b.precio - a.precio);
+  else {
+    const idx = pmCatalogIndex();
+    arr.sort((a, b) => {
+      const ia = idx(a.f.p), ib = idx(b.f.p);
+      return pmSort === 'viejo' ? ib - ia : ia - ib;
+    });
+  }
+  return arr.map(x => x.f);
+}
+
 // Abre el visor de foto grande reutilizando el lightbox del catálogo.
-function abrirFotoModelo(id) {
+function abrirFotoModelo(id, imgSrc) {
   const p = allProducts.find(x => (x.id || x.product_id) == id);
   if (!p) return;
-  modalGallery = getImagenes(p);
+  modalGallery = getImagenes(p).slice();
+  // Abrir directamente en la foto de la variante clickeada (si no está en la
+  // galería del producto, la anteponemos).
+  let idx = 0;
+  if (imgSrc) {
+    const i = modalGallery.indexOf(imgSrc);
+    if (i >= 0) idx = i;
+    else { modalGallery.unshift(imgSrc); idx = 0; }
+  }
   if (!modalGallery.length) return;
-  openLightbox(0);
+  openLightbox(idx);
 }
 
 function renderPorModelo() {
@@ -1720,15 +1845,15 @@ function renderPorModelo() {
 
   // Estado 2: filas tipo Excel para el modelo elegido.
   const modelo = modelos.find(m => m.key === modeloSel);
-  const filas = filasPorModelo[modeloSel];
+  const filas = pmOrdenarFilas(filasPorModelo[modeloSel]);
   const filasHTML = filas.map(f => {
     const p = f.p;
     const v = f.v;
     const id = p.id || p.product_id;
     const nombre = p.name || p.nombre || p.product_name || 'Sin nombre';
     const nomEsc = nombre.replace(/'/g, "\\'");
-    const imgs = getImagenes(p);
-    const img = imgs[0] || null;
+    // Foto del COLOR de la variante (TiendaNube); si no hay, la principal.
+    const img = getImagenVariante(p, f.color);
     const imgEsc = (img || '').replace(/'/g, "\\'");
     const precio = getPrecio(p);
     // Etiqueta de variante: modelo + color (si hay dimensión de color).
@@ -1742,17 +1867,28 @@ function renderPorModelo() {
     const pocas = vs !== null && vs <= 2;
     const fullVnEsc = v.size.replace(/'/g, "\\'").replace(/"/g, '&quot;');
     const vPrecio = getPrecioVariante(id, v.size_id, precio);
+    // Precio con promo (solo en esta vista): el "precio viejo" es el mayor entre el
+    // precio de referencia del producto y su precio normal. Si el cliente paga menos
+    // que eso —sea por promo del producto O por un descuento exclusivo de la variante—
+    // se muestra el viejo tachado + el que paga en rojo.
+    const precioAnt = getPrecioAnterior(p);
+    const precioViejo = Math.max(precioAnt || 0, precio || 0);
+    const pctOff = getDescuentoPct(vPrecio, precioViejo);
+    const precioHTML = pctOff > 0
+      ? '<div class="pm-precio-wrap"><span class="pm-precio-old">' + formatPrecio(precioViejo) + '</span>' +
+        '<span class="pm-precio promo">' + formatPrecio(vPrecio) + '</span></div>'
+      : '<div class="pm-precio">' + formatPrecio(vPrecio) + '</div>';
     const chArgs = '\'' + cartKey + '\',' + id + ',\'' + nomEsc + '\',' + vPrecio + ',' + v.size_id + ',\'' + fullVnEsc + '\',\'' + imgEsc + '\'';
     const fotoHTML = img
       ? '<img src="' + img + '" alt="' + nombre.replace(/"/g, '&quot;') + '" loading="lazy" onerror="this.parentNode.innerHTML=\'<div class=\\\'no-img\\\'>Sin<br>foto</div>\'">'
       : '<div class="no-img">Sin<br>foto</div>';
     return '<div class="pm-fila">' +
-      '<div class="pm-foto" onclick="abrirFotoModelo(' + id + ')">' + fotoHTML + '</div>' +
+      '<div class="pm-foto" onclick="abrirFotoModelo(' + id + ',\'' + imgEsc + '\')">' + fotoHTML + '</div>' +
       '<div class="pm-info">' +
         '<div class="pm-nombre">' + nombre + '</div>' +
         '<div class="pm-variante">' + varLabel + (pocas ? ' · <span class="pm-poca">Últimas ' + vs + '</span>' : '') + '</div>' +
       '</div>' +
-      (vPrecio !== precio ? '<div class="pm-precio-dif">' + formatPrecio(vPrecio) + '</div>' : '') +
+      precioHTML +
       '<div class="pm-qty">' +
         '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1)">−</button>' +
         '<input class="modal-vqty-num" type="number" id="q-m-' + cartKey + '" value="' + currentQty + '" min="0"' + maxAttr + ' />' +
@@ -1767,6 +1903,13 @@ function renderPorModelo() {
       '<div class="pm-title">' + (modelo ? modelo.label : '') + '</div>' +
       '<div class="pm-sub">' + (modelo ? modelo.count : filas.length) + (modelo && modelo.count === 1 ? ' diseño' : ' diseños') +
         (modelo && modelo.filas !== modelo.count ? ' · ' + modelo.filas + ' opciones' : '') + '</div>' +
+      '<select class="pm-orden" onchange="setPmSort(this.value)">' +
+        ['<option value="nuevo">Más nuevo</option>',
+         '<option value="viejo">Más viejo</option>',
+         '<option value="precio-asc">Precio: menor a mayor</option>',
+         '<option value="precio-desc">Precio: mayor a menor</option>']
+          .join('').replace('value="' + pmSort + '"', 'value="' + pmSort + '" selected') +
+      '</select>' +
     '</div>' +
     '<div class="pm-tabla">' + filasHTML + '</div>' +
   '</div>';
