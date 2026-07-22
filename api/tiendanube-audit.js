@@ -183,6 +183,24 @@ async function tnFetchCanceladas(cfg, from, to) {
   }
   return { out, debug };
 }
+// ── Leer una orden de TN por número, con sus líneas (para Cambios/Devoluciones del Monitor) ──
+// Reusa el mismo token/scope que ya lee órdenes (View Orders). Devuelve la orden con products[].
+async function tnFetchOrden(cfg, numero) {
+  const base = `https://api.tiendanube.com/v1/${cfg.storeId}/orders`;
+  const fields = 'id,number,contact_name,customer,products,shipping_address,shipping_option,shipping_cost_customer,status,total,created_at';
+  const r = await fetch(`${base}?q=${encodeURIComponent(numero)}&per_page=50&fields=${fields}`, { headers: tnHeaders(cfg.token) });
+  if (!r.ok) return { error: `TN ${r.status}: ${(await r.text()).slice(0, 200)}` };
+  const data = await r.json();
+  const arr = Array.isArray(data) ? data : [];
+  const o = arr.find(x => String(x.number) === String(numero)) || arr[0];
+  if (!o) return { orden: null };
+  return { orden: {
+    id: o.id, number: o.number,
+    cliente: o.contact_name || (o.customer && o.customer.name) || null,
+    total: o.total, envio: o.shipping_option || null,
+    products: (o.products || []).map(p => ({ product_id: p.product_id, variant_id: p.variant_id, name: p.name, sku: p.sku, quantity: p.quantity, price: p.price })),
+  } };
+}
 async function gnFetchVentas(gnToken, from, to) {
   const out = [];
   for (let page = 1; page <= 200; page++) {
@@ -211,6 +229,17 @@ module.exports = async (req, res) => {
   const cfg = STORES[storeKey];
   if (!cfg) return res.status(400).json({ error: 'Store desconocido. Usar ?store=bdi o ?store=zattia' });
   if (!cfg.storeId || !cfg.token) return res.status(500).json({ error: `Tienda Nube no configurado para ${storeKey}` });
+
+  // ── Leer una orden de TN por número (Cambios/Devoluciones del Monitor) ──
+  if (req.query?.orden) {
+    try {
+      const r = await tnFetchOrden(cfg, String(req.query.orden));
+      if (r.error) return res.status(502).json({ error: r.error });
+      return res.status(200).json({ ok: true, store: storeKey, orden: r.orden });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
 
   // Diagnóstico: qué variables de entorno relevantes ve la función (solo presencia, sin valores)
   if (req.query?.envcheck === '1') {
