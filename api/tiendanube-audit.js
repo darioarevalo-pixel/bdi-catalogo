@@ -229,23 +229,26 @@ async function _catGNProductos(token) {
   for (const raw of pages) for (const p of raw) { const id = p.id || p.product_id; if (seen.has(id) || p.active === 0) continue; seen.add(id); out.push(p); }
   return out;
 }
+// Reusa fetchPage (mismo User-Agent/headers que ya funciona para Zattia).
 async function _catTNImageMap(storeId, token) {
-  const map = {}; let page = 1;
-  while (true) {
-    const r = await fetch(`https://api.tiendanube.com/v1/${storeId}/products?per_page=200&page=${page}&fields=id,name,sku,variants,images`, {
-      headers: { Authentication: 'bearer ' + token, 'User-Agent': 'ZATTIA Admin (brunoarevalo@arebensrl.com)' },
-    });
-    if (!r.ok) break;
-    const data = await r.json();
-    if (!Array.isArray(data) || !data.length) break;
+  const map = {};
+  const first = await fetchPage(storeId, token, 1);
+  const total = first.total || first.data.length;
+  const totalPages = Math.min(10, Math.max(1, Math.ceil(total / 200)));
+  const pages = [first.data];
+  if (totalPages > 1) {
+    const rest = await Promise.all(
+      Array.from({ length: totalPages - 1 }, (_, i) => fetchPage(storeId, token, i + 2).then(r => r.data).catch(() => []))
+    );
+    pages.push(...rest);
+  }
+  for (const data of pages) {
     for (const p of data) {
       const imgs = (p.images || []).map(i => i.src).filter(Boolean);
       const nombre = (p.name?.es || p.name?.pt || Object.values(p.name || {})[0] || '').trim().toLowerCase();
       if (nombre) map[nombre] = imgs;
       if (Array.isArray(p.variants)) for (const v of p.variants) { if (v.sku) map[String(v.sku).trim().toLowerCase()] = imgs; }
     }
-    if (data.length < 200) break;
-    page++;
   }
   return map;
 }
@@ -258,26 +261,13 @@ function _catImgsDe(p, tnMap, tnIndex) {
   for (const e of tnIndex) { const tw = e.words; if (tw.length && tw.length <= gn.length && tw.length > bestLen && tw.every((w, i) => w === gn[i])) { best = e.key; bestLen = tw.length; } }
   return best ? tnMap[best] : [];
 }
-async function _catHandle(cfg, res, dbg) {
+async function _catHandle(cfg, res) {
   if (!cfg.gnToken) return res.status(500).json({ error: 'Falta el token de Gestión Nube para esta tienda' });
   try {
-    let tnErr = null;
     const [productos, tnMap] = await Promise.all([
       _catGNProductos(cfg.gnToken),
-      _catTNImageMap(cfg.storeId, cfg.token).catch((e) => { tnErr = e.message; return {}; }),
+      _catTNImageMap(cfg.storeId, cfg.token).catch(() => ({})),
     ]);
-    if (dbg) {
-      const raw = productos[0] || {};
-      return res.status(500).json({
-        _debug: true,
-        gn_total: productos.length,
-        tn_map_size: Object.keys(tnMap).length,
-        tn_error: tnErr,
-        tn_sample_keys: Object.keys(tnMap).slice(0, 5),
-        gn_raw_keys: Object.keys(raw),
-        gn_raw_sample: Object.fromEntries(Object.entries(raw).filter(([k]) => /cost|price|precio|costo|mayor/i.test(k))),
-      });
-    }
     const tnIndex = Object.keys(tnMap).map(k => ({ key: k, words: _catNormWords(k) }));
     const out = productos.map(p => ({
       id: p.id || p.product_id,
@@ -310,7 +300,7 @@ module.exports = async (req, res) => {
   if (!cfg.storeId || !cfg.token) return res.status(500).json({ error: `Tienda Nube no configurado para ${storeKey}` });
 
   // Modo catálogo: productos GN + fotos TN cruzados (admin interno por marca).
-  if (req.query?.catalogo === '1') return _catHandle(cfg, res, req.query?.dbg === '1');
+  if (req.query?.catalogo === '1') return _catHandle(cfg, res);
 
   // Diagnóstico: qué variables de entorno relevantes ve la función (solo presencia, sin valores)
   if (req.query?.envcheck === '1') {

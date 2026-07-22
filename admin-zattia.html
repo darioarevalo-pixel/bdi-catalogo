@@ -138,7 +138,7 @@
       <select id="gen-producto" class="admin-select" onchange="genSeleccionar()" style="width:100%;max-width:480px"><option value="">— Elegí un producto —</option></select>
     </label>
     <div id="gen-detalle" style="display:none">
-      <div class="gen-costo">Costo: <strong id="gen-costo-val">—</strong> <span class="gen-costo-hint">(solo para vos — no se copia)</span></div>
+      <div class="gen-costo">Costo: <span class="gen-precio-wrap" style="display:inline-flex;vertical-align:middle"><span>$</span><input type="number" id="gen-costo-input" min="0" placeholder="0" oninput="genSetCosto()" style="width:110px" /></span> <span class="gen-costo-hint">(solo para vos — no se copia. Zattia no lo trae de GN: cargalo a mano)</span></div>
       <div class="gen-tiers">
         <div class="gen-tier-head"><span>Cantidad</span><span>Markup %</span><span>Precio c/u</span><span>Ganancia c/u</span></div>
         <div class="gen-tier">
@@ -375,11 +375,21 @@ function populateGenerador(){
 function genProductoSel(){return allAdminProducts.find(x=>x.id==$('gen-producto').value)}
 function genSeleccionar(){
   const p=genProductoSel(); if(!p){$('gen-detalle').style.display='none';return}
-  genCosto=parseFloat(p.unit_cost||0);
-  $('gen-costo-val').textContent=genCosto>0?fmtAR(genCosto):'sin costo cargado';
+  genCosto=parseFloat(p.unit_cost||0)||0;
+  $('gen-costo-input').value=genCosto>0?Math.round(genCosto):'';
   $('gen-detalle').style.display='block';
   genFijarMayorista(p);
   [1,2].forEach(i=>{$('gen-markup-'+i).value='';$('gen-precio-'+i).value='';genGanancia(i)});
+  genPreview();
+}
+// Costo editable (Zattia no lo trae de GN): recalcula precios/ganancias.
+function genSetCosto(){
+  genCosto=parseFloat($('gen-costo-input').value)||0;
+  [0,1,2].forEach(i=>{
+    const mk=$('gen-markup-'+i);
+    if(!mk.readOnly && mk.value!=='' && genCosto>0) $('gen-precio-'+i).value=Math.round(genCosto*(1+parseFloat(mk.value)/100));
+    genGanancia(i);
+  });
   genPreview();
 }
 function genFijarMayorista(p){
