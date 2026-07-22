@@ -302,32 +302,6 @@ module.exports = async (req, res) => {
   // Modo catálogo: productos GN + fotos TN cruzados (admin interno por marca).
   if (req.query?.catalogo === '1') return _catHandle(cfg, res);
 
-  // TEMP: diagnóstico del costo en GN (dónde está / si falta un include).
-  if (req.query?.costdbg === '1') {
-    if (!cfg.gnToken) return res.status(500).json({ error: 'sin gnToken' });
-    try {
-      const tryFetch = async (qs) => {
-        const r = await fetch(`${GN_BASE}/productos/obtener?${qs}&page=1`, { headers: { Authorization: 'Bearer ' + cfg.gnToken, 'Content-Type': 'application/json' } });
-        const d = await r.json();
-        const arr = Array.isArray(d) ? d : (d.data || d.products || d.items || []);
-        return arr.find(p => parseFloat(p.retailer_price || 0) > 1) || arr[0] || {};
-      };
-      const base = await tryFetch('per_page=20&include_stock=1&include_variants=1');
-      const withCost = await tryFetch('per_page=20&include_stock=1&include_variants=1&include_cost=1');
-      const v0 = (base.variantes && base.variantes[0]) || {};
-      return res.status(200).json({
-        producto_keys: Object.keys(base),
-        producto_tiene_unit_cost: 'unit_cost' in base,
-        unit_cost_valor: base.unit_cost,
-        variante_keys: Object.keys(v0),
-        variante_costo: { cost: v0.cost, unit_cost: v0.unit_cost, costo: v0.costo, price: v0.price },
-        con_include_cost_tiene_unit_cost: 'unit_cost' in withCost,
-        con_include_cost_valor: withCost.unit_cost,
-        muestra: { name: base.name, retailer_price: base.retailer_price, wholesaler_price: base.wholesaler_price },
-      });
-    } catch (e) { return res.status(500).json({ error: e.message }); }
-  }
-
   // Diagnóstico: qué variables de entorno relevantes ve la función (solo presencia, sin valores)
   if (req.query?.envcheck === '1') {
     const has = n => !!process.env[n];
