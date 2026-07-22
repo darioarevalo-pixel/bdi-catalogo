@@ -242,12 +242,15 @@ async function _catTNImageMap(storeId, token) {
     );
     pages.push(...rest);
   }
+  // Prefiere fotos: una entrada VACÍA nunca pisa una que ya tiene fotos (evita que
+  // un duplicado tipo "... MAYORISTA" con 0 fotos borre las del producto bueno).
+  const setKey = (k, imgs) => { if (k && (!map[k] || (!map[k].length && imgs.length))) map[k] = imgs; };
   for (const data of pages) {
     for (const p of data) {
       const imgs = (p.images || []).map(i => i.src).filter(Boolean);
       const nombre = (p.name?.es || p.name?.pt || Object.values(p.name || {})[0] || '').trim().toLowerCase();
-      if (nombre) map[nombre] = imgs;
-      if (Array.isArray(p.variants)) for (const v of p.variants) { if (v.sku) map[String(v.sku).trim().toLowerCase()] = imgs; }
+      setKey(nombre, imgs);
+      if (Array.isArray(p.variants)) for (const v of p.variants) { if (v.sku) setKey(String(v.sku).trim().toLowerCase(), imgs); }
     }
   }
   return map;
