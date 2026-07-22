@@ -185,17 +185,19 @@ async function tnFetchCanceladas(cfg, from, to) {
 }
 // ── Leer una orden de TN por número, con sus líneas (para Cambios/Devoluciones del Monitor) ──
 // Reusa el mismo token/scope que ya lee órdenes (View Orders). Devuelve la orden con products[].
-async function tnFetchOrden(cfg, numero) {
+async function tnFetchOrden(cfg, numero, debug) {
   const base = `https://api.tiendanube.com/v1/${cfg.storeId}/orders`;
   const fields = 'id,number,contact_name,customer,products,shipping_address,shipping_option,shipping_cost_customer,status,total,created_at';
   const r = await fetch(`${base}?q=${encodeURIComponent(numero)}&per_page=50&fields=${fields}`, { headers: tnHeaders(cfg.token) });
-  if (r.status === 404) return { orden: null }; // TN 404 (sin resultados) = orden no encontrada, no es error
+  const dbg = debug ? { status: r.status } : null;
+  if (r.status === 404) return { orden: null, _dbg: dbg && { ...dbg, note: '404 empty' } };
   if (!r.ok) return { error: `TN ${r.status}: ${(await r.text()).slice(0, 200)}` };
   const data = await r.json();
   const arr = Array.isArray(data) ? data : [];
+  if (dbg) { dbg.count = arr.length; dbg.numbers = arr.slice(0, 10).map(x => x.number); }
   const o = arr.find(x => String(x.number) === String(numero)) || arr[0];
-  if (!o) return { orden: null };
-  return { orden: {
+  if (!o) return { orden: null, _dbg: dbg };
+  return { _dbg: dbg, orden: {
     id: o.id, number: o.number,
     cliente: o.contact_name || (o.customer && o.customer.name) || null,
     total: o.total, envio: o.shipping_option || null,
@@ -327,9 +329,9 @@ module.exports = async (req, res) => {
   // ── Leer una orden de TN por número (Cambios/Devoluciones del Monitor) ──
   if (req.query?.orden) {
     try {
-      const r = await tnFetchOrden(cfg, String(req.query.orden));
+      const r = await tnFetchOrden(cfg, String(req.query.orden), req.query?.debug === '1');
       if (r.error) return res.status(502).json({ error: r.error });
-      return res.status(200).json({ ok: true, store: storeKey, orden: r.orden });
+      return res.status(200).json({ ok: true, store: storeKey, orden: r.orden, _dbg: r._dbg });
     } catch (e) {
       return res.status(500).json({ error: e.message });
     }
