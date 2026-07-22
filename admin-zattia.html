@@ -214,7 +214,7 @@ if(document.readyState==='loading') window.addEventListener('DOMContentLoaded',a
 async function cargarProductos(){
   $('prod-count').textContent='Cargando productos…';
   try{
-    const r = await fetch('/api/zattia-catalogo');
+    const r = await fetch('/api/tiendanube-audit?store=zattia&catalogo=1');
     const d = await r.json();
     if(!r.ok || !d.ok) throw new Error(d.error||('HTTP '+r.status));
     allAdminProducts = (d.productos||[]).map(p=>({...p, _imgs:(p.imgs||[]).filter(Boolean), _img:(p.imgs&&p.imgs[0])||null}));
