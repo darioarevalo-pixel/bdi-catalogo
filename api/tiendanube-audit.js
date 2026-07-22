@@ -185,14 +185,15 @@ async function tnFetchCanceladas(cfg, from, to) {
 }
 // ── Leer una orden de TN por número, con sus líneas (para Cambios/Devoluciones del Monitor) ──
 // Reusa el mismo token/scope que ya lee órdenes (View Orders). Devuelve la orden con products[].
-async function tnFetchOrden(cfg, numero, debug) {
+async function tnFetchOrden(cfg, numero, debug, perPage) {
   const base = `https://api.tiendanube.com/v1/${cfg.storeId}/orders`;
   const target = String(numero);
   const objetivo = Number(numero);
+  const pp = Math.min(Math.max(Number(perPage) || 50, 10), 200); // TN es lento con per_page grande; 50 por defecto
   const t0 = Date.now();
   let orderId = null, pageFound = 0, primeros = null;
-  for (let page = 1; page <= 25; page++) {
-    const r = await fetch(`${base}?per_page=200&page=${page}&fields=id,number`, { headers: tnHeaders(cfg.token) });
+  for (let page = 1; page <= 60; page++) {
+    const r = await fetch(`${base}?per_page=${pp}&page=${page}&fields=id,number`, { headers: tnHeaders(cfg.token) });
     if (r.status === 404) break; // no hay más páginas
     if (!r.ok) return { error: `TN ${r.status}: ${(await r.text()).slice(0, 200)}` };
     const arr = await r.json();
@@ -343,7 +344,7 @@ module.exports = async (req, res) => {
   // ── Leer una orden de TN por número (Cambios/Devoluciones del Monitor) ──
   if (req.query?.orden) {
     try {
-      const r = await tnFetchOrden(cfg, String(req.query.orden), req.query?.debug === "1");
+      const r = await tnFetchOrden(cfg, String(req.query.orden), req.query?.debug === "1", req.query?.pp);
       if (r.error) return res.status(502).json({ error: r.error });
       return res.status(200).json({ ok: true, store: storeKey, orden: r.orden, _dbg: r._dbg });
     } catch (e) {
