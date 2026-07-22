@@ -7,8 +7,9 @@
 // Las categorías que no son de modelo no se tocan.
 
 const STORES = {
-  bdi:    { storeId: process.env.TIENDANUBE_STORE_ID,        token: process.env.TIENDANUBE_TOKEN },
-  zattia: { storeId: process.env.TIENDANUBE_STORE_ID_ZATTIA, token: process.env.TIENDANUBE_TOKEN_ZATTIA },
+  bdi:     { storeId: process.env.TIENDANUBE_STORE_ID,        token: process.env.TIENDANUBE_TOKEN },
+  zattia:  { storeId: process.env.TIENDANUBE_STORE_ID_ZATTIA, token: process.env.TIENDANUBE_TOKEN_ZATTIA },
+  stunned: { storeId: process.env.TIENDANUBE_STORE_ID_STUNNED || '7516263', token: process.env.TIENDANUBE_TOKEN_STUNNED },
 };
 const MODELO_PARENT = 36220324; // categoría padre "Modelo de iPhone" (BDI)
 // Alias: nombres de variante que en realidad refieren a una categoría con otro nombre (normalizado)
@@ -238,6 +239,30 @@ module.exports = async (req, res) => {
       }
       return res.status(200).json({ ok: true, ocultados, errores });
     } catch (e) { return res.status(500).json({ error: e.message }); }
+  }
+
+  // --- Escribir stock ABSOLUTO por variante (sync GN→TN de Stunned) ---
+  // POST { store, accion:'stock', updates:[{product_id, variant_id, stock}] }. Setea el stock de
+  // cada variante (PUT). El monitor decide qué escribir (dry-run + mapeo validado); acá solo se aplica.
+  if (req.method === 'POST' && req.body && req.body.accion === 'stock') {
+    const updates = Array.isArray(req.body.updates) ? req.body.updates : [];
+    if (!updates.length) return res.status(400).json({ error: 'Faltan updates [{product_id, variant_id, stock}].' });
+    if (updates.length > 500) return res.status(400).json({ error: 'Demasiados updates (máx 500).' });
+    let aplicados = 0; const errores = [];
+    for (const u of updates) {
+      const pid = u && u.product_id, vid = u && u.variant_id, stock = u && u.stock;
+      if (pid == null || vid == null || stock == null || !Number.isFinite(Number(stock))) {
+        errores.push({ product_id: pid, variant_id: vid, error: 'update inválido (falta product_id/variant_id/stock)' });
+        continue;
+      }
+      try {
+        const r = await fetch(`https://api.tiendanube.com/v1/${cfg.storeId}/products/${pid}/variants/${vid}`, {
+          method: 'PUT', headers: tnHeaders(cfg.token), body: JSON.stringify({ stock: Math.trunc(Number(stock)) }),
+        });
+        if (r.ok) aplicados++; else { const t = await r.text(); errores.push({ product_id: pid, variant_id: vid, status: r.status, msg: t.slice(0, 150) }); }
+      } catch (e) { errores.push({ product_id: pid, variant_id: vid, error: e.message }); }
+    }
+    return res.status(200).json({ ok: true, store: storeKey, total: updates.length, aplicados, errores });
   }
 
   // --- Asignación masiva de categoría ---
