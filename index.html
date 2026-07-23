@@ -1231,8 +1231,13 @@ async function conectar() {
     if (fnav) fnav.remove();
   }
   try {
-    // Config y referencias son rápidas y necesarias para filtrar/renderizar.
-    await Promise.all([cargarReferencias(), cargarConfig()]);
+    // La config del admin (productos/categorías ocultos, precios) SÍ hace falta
+    // antes de dibujar el catálogo → la esperamos.
+    // Las referencias (canales, monedas, etc.) solo se usan al CONFIRMAR la
+    // compra, no para mostrar productos: las cargamos por detrás para no frenar
+    // el primer dibujado. Cuando el cliente vaya a confirmar ya estarán listas.
+    cargarReferencias();
+    await cargarConfig();
 
     // Las imágenes de Tienda Nube son pesadas (~1MB) y NO deben bloquear:
     // cargan en paralelo y, cuando llegan, se re-renderiza para mostrarlas.
