@@ -206,7 +206,11 @@ module.exports = async (req, res) => {
     // al confirmar el pedido (POST /ventas, sin caché), así que una copia de
     // hasta 60s es segura: nunca deja pasar una venta sin stock.
     if (req.method === 'GET' && apiPath === '/productos/obtener' && r.status === 200) {
-      res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300, max-age=0');
+      // s-maxage=120: copia "fresca" 2 min. stale-while-revalidate=1200: durante
+      // los 20 min siguientes se sigue sirviendo al instante mientras se refresca
+      // por detrás. Un robot (/api/warm) la toca cada ~5 min → nunca se enfría del
+      // todo, así que el cliente casi nunca paga el viaje lento a Gestión Nube.
+      res.setHeader('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=1200, max-age=0');
     }
     res.status(r.status).setHeader('Content-Type', 'application/json').send(data);
   } catch (e) {
