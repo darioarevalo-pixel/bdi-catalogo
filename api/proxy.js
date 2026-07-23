@@ -126,7 +126,9 @@ async function verificarStockServer(items, token) {
             product_id: item.product_id,
             size_id: item.size_id,
             nombre: p.name,
-            variante: variante.size_name || null,
+            // El nombre de la variante en GN viene en `.size` (color/modelo);
+            // `size_name` no existe en esta API, por eso antes salía vacío.
+            variante: variante.size || variante.size_name || null,
             pedido: qty,
             disponible: stock,
           });

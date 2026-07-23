@@ -361,7 +361,9 @@
   .pm-linea { display: flex; align-items: center; gap: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 6px; background: white; }
   .pm-linea-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
   .pm-linea-info strong { font-size: 13px; color: var(--text); }
-  .pm-linea-meta { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+  .pm-linea-meta { font-size: 11px; color: var(--text-muted); margin-top: 3px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  .pm-linea-qty { width: 46px; padding: 3px 5px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 12px; text-align: right; outline: none; }
+  .pm-linea-qty:focus { border-color: var(--accent, var(--text)); }
   .pm-linea-sub { font-size: 14px; font-weight: 700; color: var(--text); white-space: nowrap; }
   .pm-linea .btn-del { background: transparent; border: none; color: var(--danger); font-size: 20px; line-height: 1; cursor: pointer; padding: 0 4px; }
   #pm-footer { margin-top: 14px; max-width: 480px; }
@@ -2632,6 +2634,12 @@ function pmAgregarMatriz() {
   pmRender();
 }
 function pmQuitar(idx) { pmLineas.splice(idx, 1); pmRender(); }
+function pmSetCant(idx, val) {
+  const n = parseInt(val) || 0;
+  if (n <= 0) { pmQuitar(idx); return; } // dejar en 0 = quitar la línea
+  pmLineas[idx].cant = n;
+  pmRender();
+}
 function pmRender() {
   const cont = $('pm-lineas');
   if (!cont) return;
@@ -2641,7 +2649,9 @@ function pmRender() {
     const gan = (l.precio - l.costo) * l.cant;
     return '<div class="pm-linea">' +
       '<div class="pm-linea-info"><strong>' + (l.nombre || '').replace(/</g, '&lt;') + (l.sizeName ? ' · ' + l.sizeName : '') + '</strong>' +
-        '<span class="pm-linea-meta">' + l.cant + ' u × ' + fmtAR(l.precio) + (l.costo > 0 ? ' · ganancia ' + fmtAR(gan) : '') + '</span></div>' +
+        '<span class="pm-linea-meta">' +
+          '<input type="number" min="1" value="' + l.cant + '" class="pm-linea-qty" onchange="pmSetCant(' + idx + ', this.value)" title="Editar cantidad" /> u × ' +
+          fmtAR(l.precio) + (l.costo > 0 ? ' · ganancia ' + fmtAR(gan) : '') + '</span></div>' +
       '<div class="pm-linea-sub">' + fmtAR(sub) + '</div>' +
       '<button class="btn-del" onclick="pmQuitar(' + idx + ')" title="Quitar">×</button>' +
     '</div>';
@@ -2676,8 +2686,21 @@ async function pmConfirmar() {
     const r = await fetch('/api/proxy?_path=/ventas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) {
-      const msg = data.problemas ? ('Stock insuficiente:\n' + (data.detalle || '')) : ('Error al crear la venta: ' + (data.error || r.status));
-      $('pm-resultado').innerHTML = '<span class="pm-error">⚠ ' + msg.replace(/\n/g, '<br>') + '</span>';
+      let msg;
+      if (data.problemas && data.problemas.length) {
+        // Armamos el detalle con el nombre de variante que YA tenemos en el
+        // pedido (l.sizeName), así siempre queda claro en qué modelo/color falta.
+        const lineas = data.problemas.map(pr => {
+          const local = pmLineas.find(l => String(l.id) === String(pr.product_id) && String(l.sizeId || '') === String(pr.size_id || ''));
+          const nombre = (local && local.nombre) || pr.nombre || 'Producto';
+          const variante = (local && local.sizeName) || pr.variante || '';
+          return '• ' + nombre + (variante ? ' · ' + variante : '') + ': pedías ' + pr.pedido + ', hay ' + pr.disponible;
+        });
+        msg = 'Stock insuficiente:\n' + lineas.join('\n');
+      } else {
+        msg = 'Error al crear la venta: ' + (data.error || r.status);
+      }
+      $('pm-resultado').innerHTML = '<span class="pm-error">⚠ ' + msg.replace(/</g, '&lt;').replace(/\n/g, '<br>') + '</span>';
       btn.disabled = false; btn.textContent = 'Confirmar pedido en Gestión Nube';
       return;
     }
