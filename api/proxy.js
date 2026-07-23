@@ -197,6 +197,17 @@ module.exports = async (req, res) => {
     }
     const r = await fetch(url, opts);
     const data = await r.text();
+    // Cacheo en el CDN de Vercel SOLO para la lista de productos (lectura pura,
+    // se usa para mostrar el catálogo). El navegador igual revalida (max-age=0),
+    // pero el CDN sirve una copia compartida hasta 60s → abrir el catálogo es
+    // casi instantáneo y no se golpea Gestión Nube en cada visita/recarga.
+    // stale-while-revalidate=300: si la copia venció, sirve la vieja al instante
+    // y refresca por detrás (nadie espera). El stock REAL se re-verifica aparte
+    // al confirmar el pedido (POST /ventas, sin caché), así que una copia de
+    // hasta 60s es segura: nunca deja pasar una venta sin stock.
+    if (req.method === 'GET' && apiPath === '/productos/obtener' && r.status === 200) {
+      res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300, max-age=0');
+    }
     res.status(r.status).setHeader('Content-Type', 'application/json').send(data);
   } catch (e) {
     res.status(500).json({ error: e.message });
