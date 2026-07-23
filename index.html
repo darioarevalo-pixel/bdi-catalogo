@@ -53,9 +53,11 @@
   /* Botón flotante de WhatsApp (abajo a la derecha). z-index 95: por encima de la
      barra del pedido (90) pero por debajo de los modales (200+), para no taparlos.
      Cuando aparece la barra del pedido, sube para no superponerse. */
-  .wa-fab { position: fixed; right: 20px; bottom: 20px; width: 56px; height: 56px; border-radius: 50%; background: #25D366; color: white; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 16px rgba(0,0,0,0.28); z-index: 95; text-decoration: none; transition: transform 0.15s, bottom 0.2s ease, box-shadow 0.15s; }
+  .wa-fab { position: fixed; right: 20px; bottom: 20px; width: 56px; height: 56px; border-radius: 50%; background: #25D366; color: white; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 16px rgba(0,0,0,0.28); z-index: 95; text-decoration: none; transition: transform 0.25s ease, bottom 0.2s ease, box-shadow 0.15s, opacity 0.25s ease; }
   .wa-fab:hover { transform: scale(1.06); box-shadow: 0 6px 20px rgba(0,0,0,0.34); }
   .wa-fab svg { width: 32px; height: 32px; }
+  /* Escondido: se desliza hacia abajo y se desvanece (al bajar en la lista). */
+  .wa-fab.wa-fab-hidden { transform: translateY(120px); opacity: 0; pointer-events: none; }
   body.has-summary-bar .wa-fab { bottom: 84px; }
   @media (max-width: 700px) {
     .wa-fab { width: 52px; height: 52px; right: 16px; bottom: 16px; }
@@ -1292,6 +1294,30 @@ document.addEventListener('keydown', function (e) {
   else if (abierto('faq-overlay')) cerrarFAQ();
   else return;
   e.preventDefault();
+});
+
+// El botón de WhatsApp se esconde al bajar en la lista (para no tapar el contenido,
+// ej. la cantidad en "Ver por modelo") y reaparece al subir o cerca del inicio.
+// Escucha tanto la ventana como el contenedor .main (según dónde ocurra el scroll).
+window.addEventListener('DOMContentLoaded', function () {
+  const fab = document.querySelector('.wa-fab');
+  if (!fab) return;
+  function attach(el, getY) {
+    let lastY = getY(), ticking = false;
+    function upd() {
+      const y = getY();
+      if (y <= 120) fab.classList.remove('wa-fab-hidden');       // cerca del inicio: visible
+      else if (y > lastY + 6) fab.classList.add('wa-fab-hidden'); // bajando: esconder
+      else if (y < lastY - 6) fab.classList.remove('wa-fab-hidden'); // subiendo: mostrar
+      lastY = y; ticking = false;
+    }
+    el.addEventListener('scroll', function () {
+      if (!ticking) { requestAnimationFrame(upd); ticking = true; }
+    }, { passive: true });
+  }
+  attach(window, () => window.scrollY || document.documentElement.scrollTop || 0);
+  const main = document.querySelector('.main');
+  if (main) attach(main, () => main.scrollTop || 0);
 });
 
 async function cargarReferencias() {
