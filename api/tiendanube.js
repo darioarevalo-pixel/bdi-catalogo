@@ -69,10 +69,13 @@ module.exports = async (req, res) => {
       }
     }
 
-    // Las imágenes/descripciones de Tienda Nube cambian rara vez. Cacheamos en el
-    // edge de Vercel: 5 min frescas + 10 min sirviendo viejas mientras se revalida.
-    // Así la 2da visita (y la de otros clientes) recibe este ~1MB casi instantáneo.
-    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=600');
+    // Las imágenes/descripciones de Tienda Nube cambian rara vez, y este mapa pesa
+    // ~2MB y es LENTO de regenerar (pagina toda la API de TN). Por eso lo cacheamos
+    // fuerte en el edge de Vercel: 1 h fresco + 24 h sirviendo al instante mientras
+    // se refresca por detrás. Así, mientras alguien entre al menos una vez por día,
+    // nunca se enfría del todo y las visitas lo reciben casi instantáneo.
+    // El navegador además lo guarda 5 min (max-age) para recargas normales.
+    res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400');
     res.json(map);
   } catch (e) {
     res.status(500).json({ error: e.message });
