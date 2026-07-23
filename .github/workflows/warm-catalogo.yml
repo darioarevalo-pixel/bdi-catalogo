@@ -1,0 +1,28 @@
+# Robot que mantiene "caliente" la copia del catálogo en el CDN.
+# Cada ~5 minutos llama a /api/warm, que toca todas las páginas del catálogo
+# para que la copia rápida nunca se enfríe. Así el cliente casi nunca paga el
+# viaje lento a Gestión Nube al abrir la página.
+#
+# GitHub a veces demora los cron unos minutos: no pasa nada, la copia sigue
+# servible hasta 20 min (stale-while-revalidate) mientras se refresca por detrás.
+# Se puede correr a mano desde la pestaña "Actions" (botón "Run workflow").
+
+name: Mantener catálogo caliente
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: warm-catalogo
+  cancel-in-progress: false
+
+jobs:
+  warm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Tocar el catálogo
+        run: |
+          curl -sS -m 60 "https://bdi-catalogo.vercel.app/api/warm" \
+            -w "\nHTTP %{http_code} · %{time_total}s\n"
