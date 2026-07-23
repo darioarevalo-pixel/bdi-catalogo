@@ -484,7 +484,7 @@
       <div class="toolbar">
         <div class="search-wrap">
           <span class="search-icon">⌕</span>
-          <input type="text" id="search-input" placeholder="Buscar productos..." oninput="renderProductos()" />
+          <input type="text" id="search-input" placeholder="Buscar productos..." oninput="renderProductosDebounced()" />
         </div>
         <button type="button" id="btn-por-modelo" class="btn-por-modelo" onclick="toggleModeloView()" title="Ver fundas agrupadas por modelo de iPhone">📱 Ver por modelo</button>
         <select class="sort-select" id="sort-select" onchange="renderProductos()" style="display:none">
@@ -1646,6 +1646,15 @@ function applyCustomProductOrder(prods, cat) {
   });
   indexed.sort((a, b) => a.pos - b.pos);
   return indexed.map(x => x.p);
+}
+
+// Buscar dibuja el catálogo entero (cientos de productos). Si lo hiciéramos en
+// cada tecla, tipear se sentiría trabado en celulares. Con debounce esperamos a
+// que el cliente frene ~220ms y recién ahí dibujamos una sola vez → tipeo fluido.
+let _renderProductosTimer = null;
+function renderProductosDebounced() {
+  clearTimeout(_renderProductosTimer);
+  _renderProductosTimer = setTimeout(renderProductos, 220);
 }
 
 function renderProductos() {
