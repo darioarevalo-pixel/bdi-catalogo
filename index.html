@@ -1260,6 +1260,23 @@ async function conectar() {
 
 window.addEventListener('DOMContentLoaded', conectar);
 
+// Escape cierra la capa de más arriba, una por vez: primero el zoom, después la
+// ficha del producto, y así hasta volver al catálogo. También cierra carrito,
+// menú de categorías y FAQ. Cada Escape cierra una sola capa.
+document.addEventListener('keydown', function (e) {
+  if (e.key !== 'Escape' && e.key !== 'Esc') return;
+  const abierto = id => document.getElementById(id)?.classList.contains('open');
+  if (abierto('lightbox')) closeLightbox();
+  else if (abierto('modal-overlay')) cerrarModal();
+  else if (abierto('stock-alert-overlay')) stockAlertCerrar();
+  else if (abierto('confirm-overlay')) cerrarConfirm();
+  else if (abierto('cart-drawer')) cerrarCarrito();
+  else if (abierto('cat-sidebar')) cerrarCatNav();
+  else if (abierto('faq-overlay')) cerrarFAQ();
+  else return;
+  e.preventDefault();
+});
+
 async function cargarReferencias() {
   try { references = await fetchProxy('/ventas/referencias'); } catch(e) { references = null; }
 }
