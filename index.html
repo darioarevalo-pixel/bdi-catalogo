@@ -1548,6 +1548,41 @@ function getImagen(p) {
   return imgs.length ? imgs[0] : null;
 }
 
+// --- Optimización de fotos de la grilla -------------------------------------
+// Las fotos de TiendaNube vienen en 1024px (~75KB) aunque en la grilla se ven
+// chiquitas. Las pasamos por un optimizador gratuito (images.weserv.nl) que las
+// achica al tamaño real y las sirve en WebP (~40× más livianas). SEGURO porque:
+//  - Solo rutea fotos de TiendaNube (mitiendanube.com), nada más.
+//  - Son imágenes: no ejecutan código, no exponen datos sensibles.
+//  - Si el optimizador falla, la foto cae sola a la original (ver imgFallback).
+// La foto grande del zoom/ficha NO pasa por acá: se muestra original y nítida.
+function thumbTN(src, w) {
+  if (!src || typeof src !== 'string') return src || '';
+  if (!/mitiendanube\.com/i.test(src)) return src; // solo fotos de TN
+  const sinProto = src.replace(/^https?:\/\//, '');
+  return 'https://images.weserv.nl/?url=' + encodeURIComponent(sinProto) +
+         '&w=' + w + '&output=webp&q=80';
+}
+
+// Respaldo de imagen: si la optimizada no carga, prueba la original (guardada en
+// data-orig); si tampoco, muestra "Sin imagen".
+function imgFallback(el, kind) {
+  const orig = el.dataset.orig;
+  if (orig && el.dataset.fb !== '1') { el.dataset.fb = '1'; el.src = orig; return; }
+  const html = kind === 'modelo' ? 'Sin<br>foto' : 'Sin imagen';
+  if (el.parentNode) el.parentNode.innerHTML = '<div class="no-img">' + html + '</div>';
+}
+
+// Arma el <img> de la grilla: optimizado + respaldo a la original.
+function gridImgTag(src, alt, kind, w) {
+  const noimg = kind === 'modelo' ? 'Sin<br>foto' : 'Sin imagen';
+  if (!src) return '<div class="no-img">' + noimg + '</div>';
+  const alt2 = String(alt || '').replace(/"/g, '&quot;');
+  const orig = String(src).replace(/"/g, '&quot;');
+  return '<img src="' + thumbTN(src, w || 400) + '" data-orig="' + orig + '" alt="' + alt2 +
+    '" loading="lazy" decoding="async" onerror="imgFallback(this,\'' + kind + '\')">';
+}
+
 // Cartelito "+N fotos" sobre la imagen, solo si hay más de una imagen.
 function imgsBadge(imgs) {
   if (!imgs || imgs.length <= 1) return '';
@@ -1736,7 +1771,7 @@ function renderProductos() {
       '<div class="product-img-wrap">' +
         (esOferta(p) ? '<div class="product-img-badge oferta">OFERTA</div>' : pctDisc > 0 ? '<div class="product-img-badge">-' + pctDisc + '%</div>' : '') +
         nuevoBadge(id) +
-        (img ? '<img src="' + img + '" alt="' + nombre + '" loading="lazy" onerror="this.parentNode.innerHTML=\'<div class=\\\'no-img\\\'>Sin imagen</div>\'">' : '<div class="no-img">Sin imagen</div>') +
+        gridImgTag(img, nombre, 'card', 400) +
         imgsBadge(imgs) +
       '</div>' +
       '<div class="product-body">' +
@@ -1893,9 +1928,7 @@ function renderPorModelo() {
         '<span class="pm-precio promo">' + formatPrecio(vPrecio) + '</span></div>'
       : '<div class="pm-precio">' + formatPrecio(vPrecio) + '</div>';
     const chArgs = '\'' + cartKey + '\',' + id + ',\'' + nomEsc + '\',' + vPrecio + ',' + v.size_id + ',\'' + fullVnEsc + '\',\'' + imgEsc + '\'';
-    const fotoHTML = img
-      ? '<img src="' + img + '" alt="' + nombre.replace(/"/g, '&quot;') + '" loading="lazy" onerror="this.parentNode.innerHTML=\'<div class=\\\'no-img\\\'>Sin<br>foto</div>\'">'
-      : '<div class="no-img">Sin<br>foto</div>';
+    const fotoHTML = gridImgTag(img, nombre, 'modelo', 400);
     return '<div class="pm-fila">' +
       '<div class="pm-foto" onclick="abrirFotoModelo(' + id + ',\'' + imgEsc + '\')">' + fotoHTML + '</div>' +
       '<div class="pm-info">' +
@@ -2059,7 +2092,7 @@ function renderVariantesGrid(prods) {
         '<div class="product-img-wrap" style="cursor:pointer" onclick="abrirDesdeCard(' + id + ')">' +
           (esOferta(p) ? '<div class="product-img-badge oferta">OFERTA</div>' : pctDisc > 0 ? '<div class="product-img-badge">-' + pctDisc + '%</div>' : '') +
           nuevoBadge(id) +
-          (img ? '<img src="' + img + '" alt="' + nombre + '" loading="lazy" onerror="this.parentNode.innerHTML=\'<div class=\\\'no-img\\\'>Sin imagen</div>\'">' : '<div class="no-img">Sin imagen</div>') +
+          gridImgTag(img, nombre, 'card', 400) +
           imgsBadge(imgs) +
         '</div>' +
         '<div class="product-body" style="cursor:pointer;flex:0 0 auto" onclick="abrirDesdeCard(' + id + ')">' +
@@ -2455,7 +2488,7 @@ function renderCartItems() {
 
     return '<div class="cart-item">' +
       '<div style="width:44px;height:44px;border-radius:6px;background:var(--bg);flex-shrink:0;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text-hint)">' +
-        (g.img ? '<img src="' + g.img + '" style="width:100%;height:100%;object-fit:contain">' : '—') +
+        (g.img ? '<img src="' + thumbTN(g.img, 160) + '" data-orig="' + String(g.img).replace(/"/g, '&quot;') + '" onerror="imgFallback(this,\'cart\')" style="width:100%;height:100%;object-fit:contain">' : '—') +
       '</div>' +
       '<div class="cart-item-info">' +
         '<div class="cart-item-name">' + g.nombre + '</div>' +
