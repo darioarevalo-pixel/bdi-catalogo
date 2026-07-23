@@ -24,5 +24,5 @@ jobs:
     steps:
       - name: Tocar el catálogo
         run: |
-          curl -sS -m 60 "https://bdi-catalogo.vercel.app/api/warm" \
+          curl -sS -m 60 "https://bdi-catalogo.vercel.app/api/proxy?warm=1" \
             -w "\nHTTP %{http_code} · %{time_total}s\n"

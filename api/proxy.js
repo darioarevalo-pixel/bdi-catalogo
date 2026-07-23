@@ -159,6 +159,38 @@ module.exports = async (req, res) => {
 
   if (req.method === 'OPTIONS') return res.status(204).end();
 
+  // Modo "calentar la copia" (lo llama un robot de GitHub Actions cada ~5 min).
+  // Toca todas las páginas del catálogo a través de la MISMA URL pública que usa
+  // el navegador, para que el CDN guarde/renueve esas copias y el cliente casi
+  // nunca pague el viaje lento a Gestión Nube al abrir. No necesita el token de
+  // GN: cada página que pide pasa por este mismo proxy, que sí lo usa.
+  if (req.query.warm !== undefined) {
+    const t0 = Date.now();
+    try {
+      const host = req.headers['x-forwarded-host'] || req.headers.host;
+      if (!host) return res.status(500).json({ ok: false, error: 'sin host' });
+      const proto = (req.headers['x-forwarded-proto'] || 'https').split(',')[0];
+      const base = `${proto}://${host}`;
+      // Debe coincidir EXACTO con cargarProductos() en index.html: la copia del
+      // CDN se identifica por la URL completa.
+      const baseQs = 'per_page=100&include_stock=1&include_images=1&include_variants=1';
+      const pathEnc = encodeURIComponent('/productos/obtener');
+      const urlPagina = (page) => `${base}/api/proxy?_path=${pathEnc}&${baseQs}&page=${page}`;
+      const r1 = await fetch(urlPagina(1));
+      const d1 = await r1.json().catch(() => ({}));
+      let lastPage = d1.meta ? (d1.meta.last_page || d1.meta.total_pages || 1) : 1;
+      if (lastPage > 20) lastPage = 20;
+      if (lastPage > 1) {
+        await Promise.all(
+          Array.from({ length: lastPage - 1 }, (_, i) => fetch(urlPagina(i + 2)).catch(() => null))
+        );
+      }
+      return res.status(200).json({ ok: true, pages: lastPage, ms: Date.now() - t0 });
+    } catch (e) {
+      return res.status(500).json({ ok: false, error: e.message, ms: Date.now() - t0 });
+    }
+  }
+
   const token = process.env.GESTIONNUBE_TOKEN;
   if (!token) return res.status(500).json({ error: 'Token no configurado en el servidor' });
 
