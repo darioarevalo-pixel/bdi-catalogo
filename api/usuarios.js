@@ -1,14 +1,18 @@
 // Configuración de usuarios y permisos del monitor (guardada en el KV compartido).
 // El login se valida ACÁ (server-side): las contraseñas nunca se descargan al navegador.
 //
-// GET                                  → config SIN contraseñas (para visibilidad/perfiles)
-// POST {action:'login', user, pass}    → valida y devuelve { ok, perfil:{name,admin,cuenta,acceso} } (sin pass)
-// POST {action:'config', adminUser, adminPass} → config COMPLETA (con pass) solo si es admin (pantalla de gestión)
-// POST {adminUser, adminPass, config}  → guarda la config (solo admin)
+// GET                                     → config SIN contraseñas (para visibilidad/perfiles)
+// POST {action:'login', user, pass}       → valida y devuelve { ok, perfil } (sin pass)
+// POST {action:'login-google', token}     → ídem, pero identificando por el JWT del proveedor
+// POST {action:'config', adminUser, adminPass | adminToken} → config COMPLETA (con pass), solo admin
+// POST {adminUser, adminPass | adminToken, config}          → guarda la config, solo admin
+//
+// Quién es admin y cómo se traduce un token del proveedor a un usuario vive en _admin.js,
+// compartido con ingresos.js y comisiones.js.
+const { esAdmin, emailDelToken, usuarioPorEmail, usuarioPorPass, BOOTSTRAP } = require('./_admin');
 const KV_URL   = process.env.KV_REST_API_URL   || process.env.STORAGE_KV_REST_API_URL;
 const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.STORAGE_KV_REST_API_TOKEN;
 const KEY = 'cfg:usuarios';
-const BOOTSTRAP = { 'Bruno Arevalo': 'BDI123456', 'Dario Arevalo': 'BDI123456' };
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -29,11 +33,10 @@ async function leerCfg() {
   const raw = await kvCmd(['GET', KEY]);
   return raw ? JSON.parse(raw) : null;
 }
-const perfilDe = u => ({ name: u.name, admin: !!u.admin, cuenta: u.cuenta || null, acceso: u.acceso || { bdi: {}, zattia: {} }, funcion: Array.isArray(u.funcion) ? u.funcion : [] });
-function esAdminValido(cfg, user, pass) {
-  if (cfg && Array.isArray(cfg.users)) return cfg.users.some(u => u.admin && u.name === user && u.pass === pass);
-  return BOOTSTRAP[user] && BOOTSTRAP[user] === pass;
-}
+// `email` entra en la lista: el perfil viaja al browser con una lista FIJA de campos,
+// así que un campo que no esté acá se guarda en el KV pero nunca llega al monitor.
+const perfilDe = u => ({ name: u.name, admin: !!u.admin, cuenta: u.cuenta || null, acceso: u.acceso || { bdi: {}, zattia: {} }, funcion: Array.isArray(u.funcion) ? u.funcion : [], email: u.email || null });
+
 
 module.exports = async (req, res) => {
   Object.entries(CORS).forEach(([k, v]) => res.setHeader(k, v));
@@ -57,25 +60,36 @@ module.exports = async (req, res) => {
       if (action === 'login') {
         const { user, pass } = body;
         const cfg = await leerCfg();
-        let u = null;
-        if (cfg && Array.isArray(cfg.users)) u = cfg.users.find(x => x.name === user && x.pass === pass);
+        let u = usuarioPorPass(cfg, user, pass);
         if (!u && BOOTSTRAP[user] && BOOTSTRAP[user] === pass) u = { name: user, admin: true };
         if (!u) return res.status(200).json({ ok: false });
+        return res.status(200).json({ ok: true, perfil: perfilDe(u) });
+      }
+
+      // Login con Google: la identidad la pone el proveedor, el acceso lo pone el KV.
+      // Autenticar bien pero no tener fila acá NO es un error: es "no tenés acceso a
+      // este sistema", y el monitor lo muestra como tal.
+      if (action === 'login-google') {
+        const email = await emailDelToken(body.token);
+        if (!email) return res.status(200).json({ ok: false, error: 'token' });
+        const cfg = await leerCfg();
+        const u = usuarioPorEmail(cfg, email);
+        if (!u) return res.status(200).json({ ok: false, error: 'sin-acceso', email });
         return res.status(200).json({ ok: true, perfil: perfilDe(u) });
       }
 
       // Config completa (con contraseñas) solo para administradores — pantalla de gestión
       if (action === 'config') {
         const cfg = await leerCfg();
-        if (!esAdminValido(cfg, body.adminUser, body.adminPass)) return res.status(403).json({ error: 'Necesitás ser administrador.' });
+        if (!(await esAdmin(body, cfg))) return res.status(403).json({ error: 'Necesitás ser administrador.' });
         return res.status(200).json({ ok: true, config: cfg });
       }
 
       // Guardar config (solo admin)
-      const { adminUser, adminPass, config } = body;
+      const { config } = body;
       if (!config || !Array.isArray(config.users)) return res.status(400).json({ error: 'config inválida' });
       const actual = await leerCfg();
-      if (!esAdminValido(actual, adminUser, adminPass)) return res.status(403).json({ error: 'Necesitás ser administrador para guardar.' });
+      if (!(await esAdmin(body, actual))) return res.status(403).json({ error: 'Necesitás ser administrador para guardar.' });
       if (!config.users.some(u => u.admin)) return res.status(400).json({ error: 'Tiene que quedar al menos un administrador.' });
       config.updatedAt = Date.now();
       await kvCmd(['SET', KEY, JSON.stringify(config)]);
