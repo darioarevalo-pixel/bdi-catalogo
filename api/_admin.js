@@ -17,6 +17,8 @@
 //                             por mail. Es el mismo token con el que se entra al monitor,
 //                             a producción y al dashboard.
 
+const crypto = require('crypto');
+
 const KV_URL   = process.env.KV_REST_API_URL   || process.env.STORAGE_KV_REST_API_URL;
 const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.STORAGE_KV_REST_API_TOKEN;
 const KEY = 'cfg:usuarios';
@@ -27,7 +29,43 @@ const KEY = 'cfg:usuarios';
 const IDP_URL = process.env.IDP_SUPABASE_URL || 'https://tysdjzbaskfankmpreqe.supabase.co';
 const IDP_KEY = process.env.IDP_SUPABASE_ANON_KEY || 'sb_publishable_He6-ikWyPxobbqg1AgrXng_Jw9bT5Iq';
 
-const BOOTSTRAP = { 'Bruno Arevalo': 'BDI123456', 'Dario Arevalo': 'BDI123456' };
+// Ya no hay usuarios de arranque hardcodeados. Había un `BOOTSTRAP` con
+// {'Bruno Arevalo': 'BDI123456', 'Dario Arevalo': 'BDI123456'}, copiado en tres endpoints,
+// que dejaba entrar como admin a cualquiera que abriera el repo. No hacía falta: las dos
+// cuentas existen en el KV con admin, y entraban por su fila. Si algún día el KV quedara
+// vacío, la salida es cargar un usuario a mano ahí, no una puerta en el código.
+
+// ── Contraseñas ──────────────────────────────────────────────────────────────
+// Se guardan hasheadas con scrypt (viene en Node, cero dependencias): salt propio por
+// usuario y comparación en tiempo constante. Un hash NO se puede volver a leer, así que
+// la pantalla de gestión dejó de mostrar contraseñas y pasó a "poner una nueva".
+//
+// `verificarPass` acepta además el formato viejo (texto plano) para no dejar afuera a
+// nadie durante la transición: quien entra con una contraseña sin hashear valida bien y
+// el login la re-guarda hasheada en el acto (ver `action:'login'` en usuarios.js). La
+// migración ocurre sola, usuario por usuario, sin script y sin ventana en la que nadie
+// pueda entrar. Cuando no quede ninguna en texto plano, este camino se puede borrar.
+const PREFIJO_HASH = 'scrypt$';
+
+function hashearPass(plano) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(String(plano), salt, 64).toString('hex');
+  return `${PREFIJO_HASH}${salt}$${hash}`;
+}
+
+function estaHasheada(guardada) {
+  return typeof guardada === 'string' && guardada.startsWith(PREFIJO_HASH);
+}
+
+function verificarPass(plano, guardada) {
+  if (!plano || !guardada) return false;
+  if (!estaHasheada(guardada)) return String(guardada) === String(plano); // formato viejo
+  const [, salt, hash] = String(guardada).split('$');
+  if (!salt || !hash) return false;
+  const esperado = Buffer.from(hash, 'hex');
+  const calculado = crypto.scryptSync(String(plano), salt, esperado.length);
+  return esperado.length === calculado.length && crypto.timingSafeEqual(esperado, calculado);
+}
 
 async function kvCmd(cmd) {
   const r = await fetch(KV_URL, {
@@ -75,10 +113,11 @@ function usuarioPorEmail(cfg, email) {
   return cfg.users.find(u => String(u.email || '').toLowerCase().trim() === email) || null;
 }
 
-/** El usuario del KV con ese nombre y esa contraseña. */
+/** El usuario del KV con ese nombre, si la contraseña verifica. */
 function usuarioPorPass(cfg, user, pass) {
   if (!user || !pass || !cfg || !Array.isArray(cfg.users)) return null;
-  return cfg.users.find(u => u.name === user && u.pass === pass) || null;
+  const u = cfg.users.find(x => x.name === user);
+  return u && verificarPass(pass, u.pass) ? u : null;
 }
 
 /**
@@ -90,16 +129,19 @@ function usuarioPorPass(cfg, user, pass) {
 async function esAdmin(body, cfg) {
   const b = body || {};
   const config = cfg !== undefined ? cfg : await leerCfgUsuarios();
-
-  if (b.adminToken) {
-    const u = usuarioPorEmail(config, await emailDelToken(b.adminToken));
-    return !!(u && u.admin);
-  }
-  if (config && Array.isArray(config.users)) {
-    const u = usuarioPorPass(config, b.adminUser, b.adminPass);
-    return !!(u && u.admin);
-  }
-  return !!(BOOTSTRAP[b.adminUser] && BOOTSTRAP[b.adminUser] === b.adminPass);
+  const u = b.adminToken
+    ? usuarioPorEmail(config, await emailDelToken(b.adminToken))
+    : usuarioPorPass(config, b.adminUser, b.adminPass);
+  return !!(u && u.admin);
 }
 
-module.exports = { esAdmin, emailDelToken, usuarioPorEmail, usuarioPorPass, leerCfgUsuarios, BOOTSTRAP };
+module.exports = {
+  esAdmin,
+  emailDelToken,
+  usuarioPorEmail,
+  usuarioPorPass,
+  leerCfgUsuarios,
+  hashearPass,
+  estaHasheada,
+  verificarPass,
+};

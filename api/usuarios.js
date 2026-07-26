@@ -4,12 +4,14 @@
 // GET (con credencial)                    → config SIN contraseñas (para visibilidad/perfiles)
 // POST {action:'login', user, pass}       → valida y devuelve { ok, perfil } (sin pass)
 // POST {action:'login-google', token}     → ídem, pero identificando por el JWT del proveedor
-// POST {action:'config', adminUser, adminPass | adminToken} → config COMPLETA (con pass), solo admin
-// POST {adminUser, adminPass | adminToken, config}          → guarda la config, solo admin
+// POST {action:'config', adminUser, adminPass | adminToken} → config sin contraseñas (con
+//                                                             `tienePass` por usuario), solo admin
+// POST {adminUser, adminPass | adminToken, config}          → guarda la config, solo admin.
+//        `pass` por usuario solo si se está poniendo una NUEVA; vacío = no tocarla.
 //
 // Quién es admin y cómo se traduce un token del proveedor a un usuario vive en _admin.js,
 // compartido con ingresos.js y comisiones.js.
-const { esAdmin, emailDelToken, usuarioPorEmail, usuarioPorPass, BOOTSTRAP } = require('./_admin');
+const { esAdmin, emailDelToken, estaHasheada, hashearPass, usuarioPorEmail, usuarioPorPass } = require('./_admin');
 const KV_URL   = process.env.KV_REST_API_URL   || process.env.STORAGE_KV_REST_API_URL;
 const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.STORAGE_KV_REST_API_TOKEN;
 const KEY = 'cfg:usuarios';
@@ -56,6 +58,27 @@ async function leerCfg() {
 const perfilDe = u => ({ name: u.name, admin: !!u.admin, cuenta: u.cuenta || null, acceso: u.acceso || { bdi: {}, zattia: {} }, funcion: Array.isArray(u.funcion) ? u.funcion : [], email: u.email || null });
 
 
+/**
+ * Resuelve la contraseña de cada usuario al guardar.
+ *
+ * La pantalla ya no conoce las contraseñas, así que manda `pass` solo cuando el admin
+ * escribió una nueva; vacío significa "no la toques". Este merge es el que evita que
+ * guardar un cambio de permisos borre la contraseña de todo el mundo.
+ *
+ * El registro previo se busca por `nameOriginal` (el nombre con el que la fila llegó al
+ * navegador) y no por `name`: si en la misma tanda se renombra a alguien sin tocarle la
+ * contraseña, buscar por el nombre nuevo no encontraría nada y la perdería.
+ */
+function fusionarPass(nuevos, previos) {
+  const porNombre = new Map(previos.map(u => [u.name, u]));
+  return nuevos.map(u => {
+    const { nameOriginal, tienePass, pass, ...resto } = u;
+    if (pass) return { ...resto, pass: hashearPass(pass) };
+    const previo = porNombre.get(nameOriginal || resto.name);
+    return previo && previo.pass ? { ...resto, pass: previo.pass } : resto;
+  });
+}
+
 module.exports = async (req, res) => {
   Object.entries(CORS).forEach(([k, v]) => res.setHeader(k, v));
   res.setHeader('Cache-Control', 'no-store');
@@ -88,9 +111,20 @@ module.exports = async (req, res) => {
       if (action === 'login') {
         const { user, pass } = body;
         const cfg = await leerCfg();
-        let u = usuarioPorPass(cfg, user, pass);
-        if (!u && BOOTSTRAP[user] && BOOTSTRAP[user] === pass) u = { name: user, admin: true };
+        const u = usuarioPorPass(cfg, user, pass);
         if (!u) return res.status(200).json({ ok: false });
+        // Migración silenciosa: si esta contraseña todavía estaba en texto plano, se
+        // guarda hasheada ahora que sabemos que es la correcta. Pasa una sola vez por
+        // usuario y no cambia nada de lo que ve quien entra. Si la escritura falla, el
+        // login sigue siendo bueno: se reintenta en el próximo.
+        if (!estaHasheada(u.pass)) {
+          try {
+            u.pass = hashearPass(pass);
+            await kvCmd(['SET', KEY, JSON.stringify(cfg)]);
+          } catch {
+            /* que no se caiga un login por esto */
+          }
+        }
         return res.status(200).json({ ok: true, perfil: perfilDe(u) });
       }
 
@@ -106,11 +140,16 @@ module.exports = async (req, res) => {
         return res.status(200).json({ ok: true, perfil: perfilDe(u) });
       }
 
-      // Config completa (con contraseñas) solo para administradores — pantalla de gestión
+      // Config para administradores — pantalla de gestión.
+      //
+      // Ya NO devuelve contraseñas: están hasheadas y un hash no se puede volver a leer.
+      // En su lugar va `tienePass`, que es lo único que la pantalla necesita saber
+      // (si esa cuenta puede entrar con contraseña o solo con Google).
       if (action === 'config') {
         const cfg = await leerCfg();
         if (!(await esAdmin(body, cfg))) return res.status(403).json({ error: 'Necesitás ser administrador.' });
-        return res.status(200).json({ ok: true, config: cfg });
+        const users = ((cfg && cfg.users) || []).map(({ pass, ...u }) => ({ ...u, tienePass: !!pass }));
+        return res.status(200).json({ ok: true, config: { ...(cfg || {}), users } });
       }
 
       // Guardar config (solo admin)
@@ -119,6 +158,7 @@ module.exports = async (req, res) => {
       const actual = await leerCfg();
       if (!(await esAdmin(body, actual))) return res.status(403).json({ error: 'Necesitás ser administrador para guardar.' });
       if (!config.users.some(u => u.admin)) return res.status(400).json({ error: 'Tiene que quedar al menos un administrador.' });
+      config.users = fusionarPass(config.users, (actual && actual.users) || []);
       config.updatedAt = Date.now();
       await kvCmd(['SET', KEY, JSON.stringify(config)]);
       return res.status(200).json({ ok: true });
