@@ -1,7 +1,7 @@
 // Configuración de usuarios y permisos del monitor (guardada en el KV compartido).
 // El login se valida ACÁ (server-side): las contraseñas nunca se descargan al navegador.
 //
-// GET                                     → config SIN contraseñas (para visibilidad/perfiles)
+// GET (con credencial)                    → config SIN contraseñas (para visibilidad/perfiles)
 // POST {action:'login', user, pass}       → valida y devuelve { ok, perfil } (sin pass)
 // POST {action:'login-google', token}     → ídem, pero identificando por el JWT del proveedor
 // POST {action:'config', adminUser, adminPass | adminToken} → config COMPLETA (con pass), solo admin
@@ -17,8 +17,26 @@ const KEY = 'cfg:usuarios';
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  // `x-monitor-auth` es el sobre con el que el Monitor manda su credencial. Sin esto en
+  // la lista, el preflight del GET falla y el navegador ni manda la request.
+  'Access-Control-Allow-Headers': 'Content-Type, x-monitor-auth',
 };
+
+/**
+ * La credencial que manda el Monitor en el header, para los pedidos sin body (el GET).
+ * Mismo sobre que usa `monitor-areben/api/_auth.js`: base64(JSON) con `{user, pass}` o
+ * `{token}` adentro. En base64 porque los valores de header son latin-1 y una contraseña
+ * con "ñ" reventaría el fetch del lado del cliente.
+ */
+function credencialDeHeader(req) {
+  const raw = (req.headers || {})['x-monitor-auth'];
+  if (!raw) return null;
+  try {
+    return JSON.parse(Buffer.from(String(raw), 'base64').toString('utf8'));
+  } catch {
+    return null;
+  }
+}
 
 async function kvCmd(cmd) {
   const r = await fetch(KV_URL, {
@@ -46,8 +64,18 @@ module.exports = async (req, res) => {
 
   try {
     if (req.method === 'GET') {
-      // Config SIN contraseñas (para construir la visibilidad de quien está logueado)
+      // Config SIN contraseñas (para construir la visibilidad de quien está logueado).
+      //
+      // Hasta acá esto respondía a cualquiera: con CORS '*' y sin credencial, la nómina
+      // completa del equipo —nombres, permisos por marca, quién es admin— se bajaba desde
+      // afuera con un curl. Ahora hay que estar logueado en el Monitor, de cualquiera de
+      // las dos formas. Sigue sin devolver contraseñas: eso es solo para admins, por POST.
       const cfg = await leerCfg();
+      const cred = credencialDeHeader(req) || {};
+      const yo = cred.token
+        ? usuarioPorEmail(cfg, await emailDelToken(cred.token))
+        : usuarioPorPass(cfg, cred.user, cred.pass);
+      if (!yo) return res.status(403).json({ error: 'Necesitás estar logueado en el Monitor.' });
       const safe = cfg ? { ...cfg, users: (cfg.users || []).map(({ pass, ...u }) => u) } : null;
       return res.status(200).json({ ok: true, config: safe });
     }
