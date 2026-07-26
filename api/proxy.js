@@ -1,8 +1,39 @@
 const API_BASE = 'https://www.gestionnube.com/api/v1';
 
+// ---------------------------------------------------------------------------
+// LISTA DE LO PERMITIDO
+//
+// Este proxy usa el token de Gestión Nube DE LA EMPRESA y está abierto al
+// público (tiene que estarlo: lo llama el navegador de cada cliente). Sin esta
+// lista, cualquiera podía pedirle CUALQUIER cosa de GN con nuestro token:
+// probado el 26-jul-2026, /ventas/obtener devolvía 27.420 ventas con nombre,
+// mail, teléfono y dirección de los clientes. Y como el método se reenviaba tal
+// cual, también aceptaba crear/modificar/borrar.
+//
+// Estas 3 rutas son las ÚNICAS que se usan de verdad. Censo hecho sobre todos
+// los repos, los workflows de n8n y el robot de warming:
+//   GET  /productos/obtener   → catálogo público, admin, admin-zattia y bdi-mercadolibre
+//   GET  /ventas/referencias  → formas de pago al armar el pedido (catálogo y admin)
+//   POST /ventas              → confirmar el pedido (único que escribe, ya valida stock)
+//
+// Si algún día hace falta una ruta nueva, se agrega ACÁ a propósito.
+// ---------------------------------------------------------------------------
+const PERMITIDO = {
+  GET:  new Set(['/productos/obtener', '/ventas/referencias']),
+  POST: new Set(['/ventas']),
+};
+
+// _path puede venir con su propia query adentro (bdi-mercadolibre manda
+// "/productos/obtener?per_page=200&page=1" codificado). Comparamos solo la ruta.
+function rutaLimpia(p) {
+  return String(p || '/').split('?')[0].split('#')[0].replace(/\/+$/, '') || '/';
+}
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+  // Solo lo que la lista PERMITIDO deja pasar de verdad. Antes anunciaba
+  // PUT/PATCH/DELETE, que ya no se aceptan.
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, x-api-token',
 };
 
@@ -195,6 +226,18 @@ module.exports = async (req, res) => {
   if (!token) return res.status(500).json({ error: 'Token no configurado en el servidor' });
 
   const apiPath = req.query._path || '/';
+
+  // --- Portero: solo pasa lo de la lista, y solo con el método que corresponde ---
+  const ruta = rutaLimpia(apiPath);
+  const permitidasDelMetodo = PERMITIDO[req.method];
+  if (!permitidasDelMetodo || !permitidasDelMetodo.has(ruta) || ruta.includes('..')) {
+    return res.status(403).json({
+      error: 'Esta consulta no está permitida.',
+      detalle: `${req.method} ${ruta} no está en la lista del proxy. ` +
+               'Si es una consulta nueva y legítima, hay que agregarla a PERMITIDO en api/proxy.js.',
+    });
+  }
+
   const qsObj = Object.fromEntries(Object.entries(req.query).filter(([k]) => k !== '_path'));
   const qs = new URLSearchParams(qsObj);
   const url = API_BASE + apiPath + (qs.toString() ? '?' + qs.toString() : '');
