@@ -210,10 +210,32 @@ async function tnFetchOrden(cfg, numero, perPage) {
   const rd = await fetch(`${base}/${orderId}`, { headers: tnHeaders(cfg.token) });
   if (!rd.ok) return { error: `TN ${rd.status} en GET /orders/${orderId}: ${(await rd.text()).slice(0, 150)}` };
   const o = await rd.json();
+  // Todo lo de acá abajo ya venía en la respuesta de TN (el GET por id trae la orden completa):
+  // esto solo lo mapea. Lo consume DEVOLUCIONES del Monitor para calcular cuánta plata hay que
+  // devolver, que no es el precio de lista: es lo que la persona PAGÓ.
+  //   - `pago_*`: por dónde se le devuelve (si pagó con MercadoPago, el reintegro va por ahí).
+  //   - los descuentos + `subtotal`: para prorratear. Sin esto, devolver un ítem de una orden
+  //     con cupón le devuelve de más al cliente — es el hueco que Cambios tiene hoy.
+  //   - `envio_costo_cliente`: lo que pagó de envío, por si corresponde devolvérselo.
+  const pago = o.payment_details || {};
+  const num = (v) => (v == null || v === '' ? null : Number(v));
   return { orden: {
     id: o.id, number: o.number,
     cliente: o.contact_name || (o.customer && o.customer.name) || null,
     total: o.total, envio: o.shipping_option || null, fecha: o.created_at || null,
+    // Forma de pago
+    pago_metodo: pago.method || null,          // 'credit_card' | 'bank_transfer' | ...
+    pago_gateway: o.gateway || null,           // 'mercadopago' | 'offline' | ...
+    pago_cuotas: pago.installments || null,
+    // Plata: lo que hace falta para prorratear los descuentos entre los ítems
+    subtotal: num(o.subtotal),
+    descuento_total: num(o.discount),                       // el total, sea cual sea su origen
+    descuento_cupon: num(o.promotional_discount),           // cupón / promoción
+    descuento_pago: num(o.discount_gateway),                // el % por medio de pago (ej. transferencia)
+    cupon: Array.isArray(o.coupon) ? (o.coupon[0] && o.coupon[0].code) || null : null,
+    envio_costo_cliente: num(o.shipping_cost_customer),     // lo que PAGÓ de envío
+    estado_pago: o.payment_status || null,                  // 'paid' | 'refunded' | ...
+    estado_orden: o.status || null,                         // 'open' | 'closed' | 'cancelled'
     products: (o.products || []).map(p => ({ product_id: p.product_id, variant_id: p.variant_id, name: p.name, sku: p.sku, quantity: p.quantity, price: p.price })),
   } };
 }
