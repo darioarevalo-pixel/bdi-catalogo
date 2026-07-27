@@ -8,10 +8,14 @@ const REPO = 'darioarevalo-pixel/monitor-areben';
 const WORKFLOWS = { inventario: 'sync-inventario.yml', ventas: 'sync-ventas-hoy.yml' };
 const resolverWorkflow = kind => WORKFLOWS[(kind || '').toLowerCase()] || WORKFLOWS.inventario;
 const TOKEN = process.env.GH_SYNC_TOKEN;
+const { exigirUsuario } = require('./_auth');
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  // `x-monitor-auth` es el sobre con la credencial del Monitor. Sin declararlo acá, el preflight
+  // del navegador lo rechaza y la llamada no llega nunca (son pedidos cross-origin).
+  'Access-Control-Allow-Headers': 'Content-Type, x-monitor-auth',
 };
 const ghHeaders = () => ({
   Authorization: `Bearer ${TOKEN}`,
@@ -26,6 +30,10 @@ module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (!TOKEN) return res.status(500).json({ error: 'Falta GH_SYNC_TOKEN en el entorno' });
+
+  // Portero: este endpoint dispara workflows de GitHub con un token de la empresa. No rompe
+  // datos, pero abierto se lo puede pedir a repetición hasta saturar.
+  if (!(await exigirUsuario(req, res, 'sync'))) return;
 
   // GET → estado del último run del workflow (para que el monitor sepa cuándo terminó).
   if (req.method === 'GET') {

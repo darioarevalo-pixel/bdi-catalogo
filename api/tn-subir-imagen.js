@@ -6,10 +6,14 @@ const STORES = {
   bdi:    { storeId: process.env.TIENDANUBE_STORE_ID,        token: process.env.TIENDANUBE_TOKEN },
   zattia: { storeId: process.env.TIENDANUBE_STORE_ID_ZATTIA, token: process.env.TIENDANUBE_TOKEN_ZATTIA },
 };
+const { exigirUsuario } = require('./_auth');
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  // `x-monitor-auth` es el sobre con la credencial del Monitor. Sin declararlo acá, el preflight
+  // del navegador lo rechaza y la llamada no llega nunca (son pedidos cross-origin).
+  'Access-Control-Allow-Headers': 'Content-Type, x-monitor-auth',
 };
 function tnH(token) { return { 'Authentication': `bearer ${token}`, 'User-Agent': 'Monitor Areben (brunoarevalo@arebensrl.com)', 'Content-Type': 'application/json' }; }
 const valEs = v => v?.es || (v && Object.values(v)[0]) || '';
@@ -69,13 +73,14 @@ async function desasignarColor(cfg, product_id, color) {
   return { objetivo: objetivo.length, desasignadas, errores };
 }
 
-// OJO seguridad: este endpoint NO tiene auth (CORS '*', sin credencial) — cualquiera con la
-// URL puede subir/vincular/DESVINCULAR imágenes de la tienda. La acción 'unlink' hereda esa
-// exposición. Deuda conocida y deliberada por ahora; el fix (patrón _auth del monitor) es otro trabajo.
+// La deuda que este comentario documentaba —"cualquiera con la URL puede subir, vincular y
+// DESVINCULAR imágenes de la tienda"— está saldada: ahora pide credencial del Monitor.
 module.exports = async (req, res) => {
   Object.entries(CORS).forEach(([k, v]) => res.setHeader(k, v));
   res.setHeader('Cache-Control', 'no-store');
   if (req.method === 'OPTIONS') return res.status(204).end();
+
+  if (!(await exigirUsuario(req, res, 'tn-subir-imagen'))) return;
 
   const store = (req.query?.store || 'bdi').toLowerCase();
   const cfg = STORES[store];

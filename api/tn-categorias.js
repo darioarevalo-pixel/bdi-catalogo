@@ -15,10 +15,14 @@ const MODELO_PARENT = 36220324; // categoría padre "Modelo de iPhone" (BDI)
 // Alias: nombres de variante que en realidad refieren a una categoría con otro nombre (normalizado)
 const MODEL_ALIAS = { 'iphone17air': 'iphoneair' };
 
+const { exigirUsuario } = require('./_auth');
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  // `x-monitor-auth` es el sobre con la credencial del Monitor. Sin declararlo acá, el preflight
+  // del navegador lo rechaza y la llamada no llega nunca (son pedidos cross-origin).
+  'Access-Control-Allow-Headers': 'Content-Type, x-monitor-auth',
 };
 function tnHeaders(token) {
   return { 'Authentication': `bearer ${token}`, 'User-Agent': 'Monitor Areben (brunoarevalo@arebensrl.com)', 'Content-Type': 'application/json' };
@@ -141,6 +145,12 @@ module.exports = async (req, res) => {
   Object.entries(CORS).forEach(([k, v]) => res.setHeader(k, v));
   res.setHeader('Cache-Control', 'no-store');
   if (req.method === 'OPTIONS') return res.status(204).end();
+
+  // Portero. Todo este endpoint escribe en la tienda en vivo: publica, despublica, pisa el
+  // stock de hasta 500 variantes y reescribe descripciones. Un POST sin body llega a
+  // recategorizar la tienda entera. Alcanza con estar en el padrón —no hace falta ser admin—
+  // porque estas pantallas las usa el equipo de marketing.
+  if (!(await exigirUsuario(req, res, 'tn-categorias'))) return;
 
   const storeKey = (req.query?.store || 'bdi').toLowerCase();
   const cfg = STORES[storeKey];

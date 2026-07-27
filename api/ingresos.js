@@ -11,12 +11,13 @@
 // También sirve los teléfonos del CRM (?kind=crmtel) y el seguimiento del CRM
 // (?kind=crmseg → mapa id_cliente -> { cadencia, ultimo_contacto, proximo_manual, notas }).
 const { esAdmin } = require('./_admin');
+const { exigirUsuario } = require('./_auth');
 const KV_URL   = process.env.KV_REST_API_URL   || process.env.STORAGE_KV_REST_API_URL;
 const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.STORAGE_KV_REST_API_TOKEN;
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Headers': 'Content-Type, x-monitor-auth',
 };
 async function kvCmd(cmd) {
   const r = await fetch(KV_URL, { method: 'POST', headers: { Authorization: `Bearer ${KV_TOKEN}`, 'Content-Type': 'application/json' }, body: JSON.stringify(cmd) });
@@ -33,6 +34,13 @@ module.exports = async (req, res) => {
 
   try {
     const store = (req.query?.store || req.body?.store || 'bdi').toLowerCase(); // POST manda store en el body
+
+    // Portero para TODAS las rutas `?kind=`. Acá adentro viven `crmtel`, `crmseg` y `crmleads`:
+    // los teléfonos y el seguimiento de los clientes. Estaban abiertos, y ya se bajaron 653
+    // teléfonos sin autenticarse. Alcanza con estar en el padrón (no hace falta ser admin): las
+    // usan las secciones normales del Monitor. La ruta por defecto —los ingresos proyectados—
+    // conserva su `esAdmin` para escribir, más abajo.
+    if (req.query?.kind && !(await exigirUsuario(req, res, `ingresos:${req.query.kind}`))) return;
 
     // --- Config de reposición (mínimos por categoría + apagados) — baja sensibilidad, sin contraseña ---
     if (req.query?.kind === 'reposicion') {
