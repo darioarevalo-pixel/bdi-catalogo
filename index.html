@@ -299,6 +299,7 @@
   .cart-item-info { flex: 1; min-width: 0; }
   .cart-item-name { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .cart-item-subtotal { font-size: 12px; font-weight: 600; color: var(--text); white-space: nowrap; margin-top: 4px; }
+  .cart-item-nota { font-size: 11px; line-height: 1.4; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 5px 7px; margin-top: 5px; white-space: normal; }
   .cart-variant-row { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
   .cart-variant-name { font-size: 12px; color: var(--text-muted); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .cart-variant-qty { font-size: 12px; color: var(--text); font-weight: 500; white-space: nowrap; }
@@ -698,7 +699,7 @@ let prevViewMode = 'variants'; // modo al que volver al salir de "por modelo"
 let modeloSel = null;          // modelo de iPhone elegido en la vista "por modelo" (null = mostrar selector)
 let pmSort = 'nuevo';          // orden dentro de un modelo: 'nuevo' | 'viejo' | 'precio-asc' | 'precio-desc'
 let references = null;
-let adminConfig = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, mostrarCupones: false, minPurchase: 0, referencePrices: {}, variantPrices: {}, newProducts: [], cupones: [], ofertaMargen: 0, descuentoBase: 15, excepciones: {}, apagados: [], codigosAcceso: [] };
+let adminConfig = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, mostrarCupones: false, minPurchase: 0, referencePrices: {}, variantPrices: {}, newProducts: [], cupones: [], ofertaMargen: 0, descuentoBase: 15, excepciones: {}, apagados: [], codigosAcceso: [], topes: {}, descuentoMax: {}, descuentoMaxNota: '', avisarDescuentoMax: false };
 let cuponAplicado = null; // cupón aplicado en el carrito (objeto) o null
 let codigoAplicado = null; // código de "lista mejor" aplicado: { codigo, cliente, descuentoBase, excepciones } o null
 const CODIGO_LS_KEY = 'bdi_codigo_lista_mejor';
@@ -834,7 +835,7 @@ async function aplicarCodigo() {
       if (m) { m.textContent = data.error || 'No se pudo validar el código'; m.style.color = '#dc2626'; }
       return;
     }
-    codigoAplicado = { codigo: code.toUpperCase(), cliente: data.cliente || '', descuentoBase: data.descuentoBase, excepciones: data.excepciones || {} };
+    codigoAplicado = { codigo: code.toUpperCase(), cliente: data.cliente || '', descuentoBase: data.descuentoBase, excepciones: data.excepciones || {}, descuentoMax: data.descuentoMax || {}, descuentoMaxNota: data.descuentoMaxNota || '' };
     cuponAplicado = null; // los cupones no se combinan con el código de precios especiales
     try { localStorage.setItem(CODIGO_LS_KEY, JSON.stringify(codigoAplicado)); } catch (e) {}
     renderCodigoBar();
@@ -863,7 +864,7 @@ async function restaurarCodigo() {
     const r = await fetch('/api/config?accion=codigo&codigo=' + encodeURIComponent(saved.codigo));
     const data = await r.json().catch(() => ({}));
     if (r.ok && data.ok) {
-      codigoAplicado = { codigo: saved.codigo, cliente: data.cliente || '', descuentoBase: data.descuentoBase, excepciones: data.excepciones || {} };
+      codigoAplicado = { codigo: saved.codigo, cliente: data.cliente || '', descuentoBase: data.descuentoBase, excepciones: data.excepciones || {}, descuentoMax: data.descuentoMax || {}, descuentoMaxNota: data.descuentoMaxNota || '' };
       cuponAplicado = null; // no se combinan cupones con el código
       try { localStorage.setItem(CODIGO_LS_KEY, JSON.stringify(codigoAplicado)); } catch (e) {}
     } else {
@@ -1413,6 +1414,10 @@ async function cargarProductos() {
       const id = p.id || p.product_id;
       if (seen.has(id) || p.active === 0 || getPrecio(p) <= 0) continue;
       seen.add(id);
+      // Sellamos cada variante con el id de su producto. El tope de stock se
+      // guarda por producto+variante (en GN el size_id es un talle compartido
+      // entre productos), y getStockVariante solo recibe la variante suelta.
+      (p.variantes || []).forEach(v => { v._pid = id; });
       all.push(p);
     }
   }
@@ -1443,11 +1448,30 @@ function getStock(p) {
   return v !== null ? parseInt(v) : null;
 }
 
+// Unidades reservadas de una variante (tope de protección de stock). El depósito
+// es uno solo: lo que se lleva el mayorista sale del mismo stock que abastece la
+// tienda online. El admin congela una cantidad FIJA por variante y el catálogo
+// hace de cuenta que no existe. Ojo: el tope se guarda por producto+variante
+// porque el size_id de GN es un talle compartido entre productos.
+function getTopeVariante(v) {
+  const topes = adminConfig.topes || {};
+  const t = topes[v._pid] || topes[String(v._pid)];
+  if (!t || !t.porVariante) return 0;
+  const n = parseInt(t.porVariante[v.size_id] ?? t.porVariante[String(v.size_id)], 10);
+  return isNaN(n) || n < 0 ? 0 : n;
+}
+
+// Único punto donde el catálogo lee stock de variante: de acá lo heredan la
+// grilla, la ficha, "Ver por modelo", el filtro de con-stock y el máximo de los
+// +/−. Devuelve SIEMPRE el stock ya descontado el tope, así el cliente ve
+// "Sin stock" a secas y nunca se entera de que hay mercadería reservada.
 function getStockVariante(v) {
   if (!v.stock_por_tienda || !v.stock_por_tienda.length) return null;
   const tienda = v.stock_por_tienda.find(t => t.store_name === 'Deposito Minorista');
-  if (tienda) return tienda.stock_disponible || 0;
-  return v.stock_por_tienda.reduce((s, t) => s + (t.stock_disponible || 0), 0);
+  const real = tienda
+    ? (tienda.stock_disponible || 0)
+    : v.stock_por_tienda.reduce((s, t) => s + (t.stock_disponible || 0), 0);
+  return Math.max(0, real - getTopeVariante(v));
 }
 
 function getStockTotal(p) {
@@ -1471,17 +1495,62 @@ function stockText(stock) {
   return stock + ' disp.';
 }
 
+// TOPE DE DESCUENTO POR PRODUCTO
+// Hay productos de margen chico donde el % de la lista mejor se come la
+// rentabilidad. El piso en el costo no alcanza: un producto que se vende con 8%
+// de markup igual queda al costo. Por eso cada producto puede llevar su propio
+// techo de descuento. Vacío = sin techo (se aplica el % del código).
+//
+// Devuelve qué descuento le corresponde REALMENTE a este producto y si hubo
+// recorte, que es lo que después se le explica al cliente en el carrito.
+// `ignorarTecho` sirve para calcular el precio "como si no hubiera techo" y así
+// saber si el techo cambió algo de verdad (ver `techoAfecta`).
+function descuentoDeProducto(pid, ignorarTecho) {
+  const pedido = (codigoAplicado && codigoAplicado.descuentoBase) || 0;
+  const maxs = (codigoAplicado && codigoAplicado.descuentoMax) || {};
+  const bruto = ignorarTecho ? undefined : (maxs[pid] ?? maxs[String(pid)]);
+  const tope = parseFloat(bruto);
+  if (bruto === undefined || bruto === null || bruto === '' || isNaN(tope) || tope < 0) {
+    return { pedido, efectivo: pedido, limitado: false };
+  }
+  const efectivo = Math.min(pedido, tope);
+  return { pedido, efectivo, limitado: efectivo < pedido };
+}
+
+// ¿El techo le SUBIÓ el precio a esta línea? No alcanza con comparar porcentajes:
+// hay dos casos donde el techo existe pero no cambia un peso, y avisarle al
+// cliente de un recorte que no ocurrió solo genera una pregunta al pedo.
+//   · El piso del costo ya frenaba el descuento (producto de margen finito).
+//   · El producto tiene excepción "al costo"/"precio fijo", que manda sobre todo.
+// Por eso se compara el precio real contra el precio sin techo.
+function techoAfecta(pid, sizeId) {
+  if (!codigoAplicado) return false;
+  if (!descuentoDeProducto(pid).limitado) return false;
+  const p = (allProducts || []).find(x => (x.id || x.product_id) == pid);
+  if (!p) return false;
+  const con = sizeId ? getPrecioVariante(pid, sizeId, getPrecio(p)) : getPrecio(p);
+  const sin = sizeId ? getPrecioVariante(pid, sizeId, getPrecio(p, true), true) : getPrecio(p, true);
+  return con > sin + 0.5;
+}
+
+// ¿A este producto se le recortó el descuento? (para mostrárselo al cliente)
+function descuentoLimitado(pid, sizeId) {
+  if (!techoAfecta(pid, sizeId)) return null;
+  return descuentoDeProducto(pid);
+}
+
 // Aplica la "lista mejor" a un precio público (mayorista) dado: si hay código,
-// resta el % del código pero nunca baja del costo ni sube por encima del público.
+// resta el % del código —recortado por el techo del producto, si tiene— pero
+// nunca baja del costo ni sube por encima del público.
 // Sirve tanto para el precio del producto como para precios por variante.
-function listaMejorDesde(publico, cost) {
+function listaMejorDesde(publico, cost, pid, ignorarTecho) {
   if (!codigoAplicado || !(publico > 0)) return publico;
   const piso = cost > 0 ? Math.min(cost, publico) : 0;
-  const base = publico * (1 - (codigoAplicado.descuentoBase || 0) / 100);
+  const base = publico * (1 - descuentoDeProducto(pid, ignorarTecho).efectivo / 100);
   return Math.max(piso, base);
 }
 
-function getPrecio(p) {
+function getPrecio(p, ignorarTecho) {
   // Precio mayorista de GN. Regla de negocio: si un producto no tiene precio
   // mayorista, NO se vende (devuelve 0 → cargarProductos lo oculta). No cae al retail.
   const may = parseFloat(p.wholesaler_price || p.precio_mayorista || 0);
@@ -1495,7 +1564,7 @@ function getPrecio(p) {
     if (exc.tipo === 'precio') return parseFloat(exc.valor) || 0;
     if (exc.tipo === 'costo') return may > 0 ? Math.min(cost, may) : cost;
   }
-  return listaMejorDesde(may, cost);
+  return listaMejorDesde(may, cost, id, ignorarTecho);
 }
 
 // Precio especial por variante (guardado en el admin, clave "productId-sizeId").
@@ -1504,14 +1573,14 @@ function precioVarianteOverride(id, sizeId) {
   const n = parseFloat(vp);
   return (vp !== undefined && vp !== null && vp !== '' && !isNaN(n) && n > 0) ? n : null;
 }
-function getPrecioVariante(id, sizeId, base) {
+function getPrecioVariante(id, sizeId, base, ignorarTecho) {
   const o = precioVarianteOverride(id, sizeId);
   if (o === null) return base; // sin precio especial: usa el del producto (ya con lista mejor)
   // Con precio especial de variante: si hay código, también recibe el descuento,
   // con piso en el costo del producto. Sin código, queda a su precio.
   const p = (allProducts || []).find(x => (x.id || x.product_id) == id);
   const cost = p ? parseFloat(p.unit_cost || 0) : 0;
-  return listaMejorDesde(o, cost);
+  return listaMejorDesde(o, cost, id, ignorarTecho);
 }
 function productoTienePrecioEspecial(p) {
   const id = p.id || p.product_id;
@@ -2510,6 +2579,36 @@ function updateCartUI() {
   if ($('cart-drawer')?.classList.contains('open')) renderCartItems();
 }
 
+// Texto que ve el cliente cuando a un producto se le recortó el descuento de su
+// lista. Se muestra en el carrito y viaja al detalle del pedido. La idea es que
+// no se entere del recorte cuando ya pagó: lo ve antes de confirmar.
+function notaDescuentoTexto(pid, sizeId) {
+  // Interruptor del admin. Apagado por defecto a propósito: el precio que el
+  // cliente ve YA es el que va a pagar, así que la nota no corrige nada — solo
+  // le señala que existe un tope, y eso invita a pedir que se lo saquen. Se
+  // prende si empiezan a preguntar por qué no les cierran las cuentas.
+  if (!adminConfig.avisarDescuentoMax) return '';
+  const d = descuentoLimitado(pid, sizeId);
+  if (!d) return '';
+  const motivo = (codigoAplicado && codigoAplicado.descuentoMaxNota) || '';
+  const base = d.efectivo > 0
+    ? 'Este producto tiene un descuento máximo del ' + d.efectivo + '% (tu lista es del ' + d.pedido + '%).'
+    : 'Este producto no lleva el descuento de tu lista.';
+  return motivo ? base + ' ' + motivo : base;
+}
+
+// En el carrito la nota va una sola vez por producto: alcanza con que el techo
+// le pegue a alguna de sus variantes (un mismo diseño puede tener una variante
+// con precio propio donde el techo muerde y otra donde no).
+function notaDescuentoHTML(grupo) {
+  let txt = '';
+  for (const v of grupo.variantes) {
+    txt = notaDescuentoTexto(grupo.id, v.sizeId);
+    if (txt) break;
+  }
+  return txt ? '<div class="cart-item-nota">ⓘ ' + txt.replace(/</g, '&lt;') + '</div>' : '';
+}
+
 function renderCartItems() {
   const items = Object.values(cart);
   const body = $('drawer-body');
@@ -2530,7 +2629,7 @@ function renderCartItems() {
   // Agrupar por producto (id numérico)
   const groups = {};
   for (const i of items) {
-    if (!groups[i.id]) groups[i.id] = { nombre: i.nombre, img: i.img, precio: i.precio, variantes: [] };
+    if (!groups[i.id]) groups[i.id] = { id: i.id, nombre: i.nombre, img: i.img, precio: i.precio, variantes: [] };
     groups[i.id].variantes.push(i);
   }
 
@@ -2552,6 +2651,7 @@ function renderCartItems() {
       '</div>' +
       '<div class="cart-item-info">' +
         '<div class="cart-item-name">' + g.nombre + '</div>' +
+        notaDescuentoHTML(g) +
         varRows +
         (g.variantes.length > 1 ? '<div class="cart-item-subtotal">' + formatPrecio(subtotal) + '</div>' : '') +
       '</div>' +
@@ -2715,7 +2815,10 @@ async function confirmarPedido() {
         subtotal: subtotal,
         cupon: cupon ? { codigo: cupon.codigo, tipo: cupon.tipo, valor: cupon.valor, detalle: cupon.detalle || '', descuento: descuento } : null,
         total: totalPedido,
-        items: items.map(i => ({ nombre: i.nombre, variante: i.varNombre || '', cantidad: i.qty, precio: i.precio, img: i.img || '' })),
+        // `nota` explica por qué a ese producto se le recortó el descuento de la
+        // lista. Se congela acá (no se recalcula al abrir el link) porque el
+        // pedido tiene que mostrar lo que valía en el momento de confirmarlo.
+        items: items.map(i => ({ nombre: i.nombre, variante: i.varNombre || '', cantidad: i.qty, precio: i.precio, img: i.img || '', nota: notaDescuentoTexto(i.id, i.sizeId) })),
       };
       try {
         await fetch('/api/pedido', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(pedidoDetalle) });

@@ -205,9 +205,47 @@
   .recargo-final { font-size: 14px; font-weight: 600; text-align: right; }
   .recargo-final .label { font-size: 10px; color: var(--text-hint); display: block; text-transform: uppercase; letter-spacing: 0.3px; font-weight: 500; }
   .recargo-final.with-recargo { color: var(--success); }
+  .recargo-techo { display: flex; align-items: center; gap: 3px; font-size: 12px; color: var(--text-muted); }
+  .recargo-techo .label { font-size: 10px; color: var(--text-hint); text-transform: uppercase; letter-spacing: 0.3px; margin-right: 2px; }
+  .recargo-techo input { width: 46px; padding: 6px 5px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; outline: none; text-align: right; }
+  .recargo-techo.activo input { border-color: #d97706; background: #fffbeb; font-weight: 600; color: #92400e; }
+  .recargo-techo.muerto input { border-style: dashed; color: var(--text-hint); }
+  .recargo-techo .label em { font-style: normal; color: #b45309; cursor: help; }
+  .nota-preview-title { font-size: 11px; color: var(--text-hint); text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 4px; }
+  .nota-preview-box { font-size: 12px; line-height: 1.45; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 7px 9px; }
+  .nota-preview-box.apagado { color: var(--text-muted); background: #f8fafc; border-color: var(--border); }
   @media (max-width: 700px) {
     .recargo-row { grid-template-columns: 1fr 1fr; gap: 8px; }
     .recargo-cost, .recargo-final { text-align: left; }
+  }
+  /* Tab Protección de stock (topes por variante) */
+  .tope-card { border: 1px solid var(--border); border-radius: var(--radius-sm); background: white; margin-bottom: 8px; padding: 12px 14px; }
+  .tope-card.alerta { border-left: 3px solid var(--danger); }
+  .tope-card-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .tope-card-name { font-size: 14px; font-weight: 600; flex: 1; min-width: 200px; }
+  .tope-card-meta { font-size: 11px; color: var(--text-muted); margin-top: 4px; line-height: 1.6; }
+  .tope-chip { display: inline-flex; align-items: center; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 999px; background: #f1f5f9; color: var(--text-muted); }
+  .tope-chip.reservado { background: #eff6ff; color: #1d4ed8; }
+  .tope-chip.alerta { background: #fef2f2; color: var(--danger); }
+  .tope-btn { padding: 6px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: #fff; color: var(--text); cursor: pointer; font-size: 12px; font-family: inherit; }
+  .tope-btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+  .tope-btn.peligro { color: var(--danger); border-color: #fecaca; }
+  .tope-editor { border: 1px solid var(--border); border-radius: var(--radius-sm); background: #fafafa; padding: 14px; margin-bottom: 14px; }
+  .tope-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; background: #fff; border: 1px solid var(--border); border-radius: var(--radius-sm); margin: 10px 0; font-size: 13px; }
+  .tope-modelo { display: grid; grid-template-columns: 24px 1fr 120px 120px 110px; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: #fff; margin-bottom: 5px; }
+  .tope-modelo.protegido { border-left: 3px solid var(--success); }
+  .tope-modelo.debajo { background: #fef2f2; }
+  .tope-modelo-name { font-size: 13px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tope-num { font-size: 13px; color: var(--text-muted); text-align: right; }
+  .tope-num .label { font-size: 10px; color: var(--text-hint); display: block; text-transform: uppercase; letter-spacing: 0.3px; }
+  .tope-input { width: 100%; padding: 7px 9px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; outline: none; text-align: right; }
+  .tope-input:focus { border-color: var(--accent); }
+  .tope-abrir { border: none; background: transparent; cursor: pointer; font-size: 13px; color: var(--text-muted); padding: 2px; }
+  .tope-colores { margin: -2px 0 8px 34px; padding-left: 10px; border-left: 2px solid var(--border); }
+  .tope-color { display: grid; grid-template-columns: 1fr 90px 110px; gap: 10px; align-items: center; padding: 5px 8px; font-size: 12px; }
+  @media (max-width: 700px) {
+    .tope-modelo { grid-template-columns: 24px 1fr 100px; }
+    .tope-num { text-align: left; }
   }
   /* Tab Banners */
   .banner-card { display: grid; grid-template-columns: 140px 1fr auto; gap: 16px; align-items: start; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: white; margin-bottom: 10px; }
@@ -449,6 +487,7 @@
       <button class="tab-btn active" onclick="setTab('products')">Productos</button>
       <button class="tab-btn" onclick="setTab('categories')">Categorías</button>
       <button class="tab-btn" onclick="setTab('fotos')">Fotos</button>
+      <button class="tab-btn" id="tab-btn-topes" onclick="setTab('topes')">🛡 Protección de stock</button>
     </div>
     <div class="tab-subs" data-group="precios">
       <button class="tab-btn" id="tab-btn-recargos" onclick="setTab('recargos')">🎯 Lista mejor</button>
@@ -705,6 +744,36 @@
       <div id="pendientes-list"><div class="loading-state">Cargando productos...</div></div>
     </div>
 
+    <div id="tab-topes" style="display:none">
+      <p class="section-note">Guardá unidades de un diseño <strong>para la tienda online</strong>. El depósito es uno solo: lo que se lleva un mayorista grande sale del mismo stock que vende TiendaNube. Acá elegís cuántas unidades de cada modelo <strong>el catálogo no puede vender</strong>. El cliente no ve ningún cartel: simplemente le figura menos stock, y "Sin stock" cuando solo queda lo reservado.<br>
+        Es una <strong>cantidad fija de unidades</strong>, no un porcentaje: si fuera un %, se achicaría junto con el stock y en tres pedidos no quedaría nada. El botón de sugerir un % es solo una calculadora para no tipear a mano; lo que se guarda son unidades. Acordate de tocar <strong>Guardar cambios</strong>.</p>
+
+      <div class="tope-editor">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <strong style="font-size:13px">Proteger un diseño:</strong>
+          <select id="topes-producto" class="admin-select" onchange="topesSeleccionar()" style="flex:1;min-width:260px;max-width:520px"><option value="">— Elegí un diseño —</option></select>
+        </div>
+        <div id="topes-matriz" style="display:none">
+          <div class="tope-tools">
+            <span>Sugerir reservar el</span>
+            <input type="number" id="topes-pct" min="0" max="90" step="1" value="15" style="width:64px;padding:6px 8px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font-family:inherit;font-size:13px;outline:none;text-align:right" />
+            <span>% del stock de cada modelo</span>
+            <button class="tope-btn primary" onclick="topesPrecargar()">⚡ Precargar</button>
+            <button class="tope-btn" onclick="topesVaciar()">Poner todo en 0</button>
+            <span id="topes-resumen" style="margin-left:auto;color:var(--text-muted)"></span>
+          </div>
+          <div id="topes-modelos"></div>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:12px">
+            <button class="tope-btn primary" onclick="topesAplicar()">Guardar la protección de este diseño</button>
+            <span style="font-size:12px;color:var(--text-muted)">Después tocá <strong>Guardar cambios</strong> arriba para que salga al catálogo.</span>
+          </div>
+        </div>
+      </div>
+
+      <h3 style="font-size:14px;margin:18px 0 8px">Diseños protegidos</h3>
+      <div id="topes-lista"><div class="loading-state">Todavía no hay ningún diseño protegido.</div></div>
+    </div>
+
     <div id="tab-recargos" style="display:none">
       <p class="section-note">Precios de la <strong>lista mejor</strong> (clientes con código). Por defecto cada producto sale al <strong>precio mayorista menos el % base</strong> (lo definís en Configuración), <strong>sin bajar del costo</strong>. Podés poner una <strong>excepción</strong> por producto: <em>al costo</em> o un <em>precio fijo</em> (para liquidar, puede quedar bajo costo). Y podés <strong>apagar</strong> un producto (reventa / que no va por mayor) para que no aparezca en el catálogo. Solo vos ves estos números.</p>
       <div class="admin-toolbar">
@@ -715,6 +784,7 @@
         <select class="admin-select" id="recargos-filter-state" onchange="renderRecargosList()">
           <option value="">Todos los productos</option>
           <option value="con-exc">Con excepción</option>
+          <option value="con-techo">Con descuento máximo</option>
           <option value="apagados">Apagados</option>
           <option value="bajo-costo">Quedan bajo costo</option>
           <option value="no-cost">Sin costo cargado en GN</option>
@@ -727,6 +797,16 @@
         <span style="font-size:13px;color:var(--text-muted)">%</span>
         <button onclick="aplicarAlCostoMasivo()" style="padding:7px 12px;border:none;border-radius:var(--radius-sm);background:var(--accent,#2563eb);color:#fff;cursor:pointer;font-size:13px;font-weight:600">⚡ Aplicar</button>
         <button onclick="limpiarExcepciones()" style="padding:7px 12px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:#fff;color:var(--text);cursor:pointer;font-size:13px">Limpiar excepciones</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;background:#fffbeb;border:1px solid #fde68a;border-radius:var(--radius-sm);margin-bottom:10px">
+        <strong style="font-size:13px">Descuento máximo:</strong>
+        <span style="font-size:13px;color:var(--text-muted)">poner un techo de</span>
+        <input type="number" id="techo-valor" min="0" max="100" step="1" value="5" style="width:64px;padding:6px 8px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font-family:inherit;font-size:14px;outline:none;text-align:right" />
+        <span style="font-size:13px;color:var(--text-muted)">% a los productos con markup menor a</span>
+        <input type="number" id="techo-umbral" min="0" max="500" step="1" value="30" style="width:64px;padding:6px 8px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font-family:inherit;font-size:14px;outline:none;text-align:right" />
+        <span style="font-size:13px;color:var(--text-muted)">%</span>
+        <button onclick="aplicarTechoMasivo()" style="padding:7px 12px;border:none;border-radius:var(--radius-sm);background:#d97706;color:#fff;cursor:pointer;font-size:13px;font-weight:600">⚡ Aplicar techo</button>
+        <button onclick="limpiarTechos()" style="padding:7px 12px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:#fff;color:var(--text);cursor:pointer;font-size:13px">Quitar todos los techos</button>
       </div>
       <div id="recargos-list"><div class="loading-state">Cargando productos...</div></div>
     </div>
@@ -766,6 +846,23 @@
           <span style="font-size:14px;color:var(--text-muted)">%</span>
         </div>
       </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label">Avisar al cliente cuando un producto tiene descuento máximo</div>
+          <div class="setting-desc">Con el código puesto, el cliente <strong>ya ve el precio final que va a pagar</strong> en todo el catálogo, así que este aviso no corrige nada: solo le explica por qué a ese producto le bajó menos. <strong>Conviene tenerlo apagado</strong>: le señala que existe un tope y eso invita a pedir que se lo saquen. Prendelo si te empiezan a preguntar por qué no les cierran las cuentas.</div>
+        </div>
+        <button class="toggle" id="toggle-avisar-descuento-max" onclick="toggleSetting('avisarDescuentoMax')"></button>
+      </div>
+      <div class="setting-row" style="flex-direction:column;align-items:stretch;gap:8px">
+        <div class="setting-info">
+          <div class="setting-label">Motivo del descuento máximo</div>
+          <div class="setting-desc">El texto que ve el cliente, solo si el aviso de arriba está prendido. Se agrega después del "Este producto tiene un descuento máximo del X%". Si lo dejás vacío, solo ve el porcentaje.</div>
+        </div>
+        <textarea id="input-descuento-max-nota" rows="2" placeholder="Ej: Es un producto de margen acotado, por eso lleva un descuento menor al de tu lista."
+          style="width:100%;padding:9px 11px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font-family:inherit;font-size:13px;outline:none;resize:vertical"
+          oninput="config.descuentoMaxNota=this.value"></textarea>
+        <div id="nota-preview" class="nota-preview"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -789,7 +886,7 @@
 <script>
 let allAdminProducts = [];
 const ALL_KEY = '__todas__';
-let config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, mostrarCupones: false, minPurchase: 0, referencePrices: {}, variantPrices: {}, banners: [], newProducts: [], cupones: [], ofertaMargen: 0, descuentoBase: 15, excepciones: {}, apagados: [], codigosAcceso: [] };
+let config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, mostrarCupones: false, minPurchase: 0, referencePrices: {}, variantPrices: {}, banners: [], newProducts: [], cupones: [], ofertaMargen: 0, descuentoBase: 15, excepciones: {}, apagados: [], codigosAcceso: [], topes: {}, descuentoMax: {}, descuentoMaxNota: '', avisarDescuentoMax: false };
 let isDistribuidor = false; // catálogo unificado: siempre mayorista
 let tnImageMap = {}; // imágenes de TiendaNube (para mostrar la foto en el listado del admin)
 let tnImageMapKeys = []; // claves del mapa, cacheadas (evita recalcularlas en cada cruce)
@@ -820,7 +917,7 @@ async function verificarYEntrar(pwd) {
   if (r.status === 401) return false;
   const loaded = await r.json();
   configBaseUpdatedAt = loaded.updatedAt || '';
-  config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, mostrarCupones: false, minPurchase: 0, referencePrices: {}, variantPrices: {}, banners: [], newProducts: [], cupones: [], ofertaMargen: 0, descuentoBase: 15, excepciones: {}, apagados: [], codigosAcceso: [], ...loaded };
+  config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, mostrarCupones: false, minPurchase: 0, referencePrices: {}, variantPrices: {}, banners: [], newProducts: [], cupones: [], ofertaMargen: 0, descuentoBase: 15, excepciones: {}, apagados: [], codigosAcceso: [], topes: {}, descuentoMax: {}, descuentoMaxNota: '', avisarDescuentoMax: false, ...loaded };
   if (!config.referencePrices) config.referencePrices = {};
   if (!config.variantPrices) config.variantPrices = {};
   if (!Array.isArray(config.banners)) config.banners = [];
@@ -829,6 +926,10 @@ async function verificarYEntrar(pwd) {
   if (!config.excepciones) config.excepciones = {};
   if (!Array.isArray(config.apagados)) config.apagados = [];
   if (!Array.isArray(config.codigosAcceso)) config.codigosAcceso = [];
+  if (!config.topes || typeof config.topes !== 'object') config.topes = {};
+  if (!config.descuentoMax || typeof config.descuentoMax !== 'object') config.descuentoMax = {};
+  if (typeof config.descuentoMaxNota !== 'string') config.descuentoMaxNota = '';
+  config.avisarDescuentoMax = !!config.avisarDescuentoMax;
   adminPassword = pwd;
   $('login-screen').style.display = 'none';
   $('admin-panel').style.display = 'block';
@@ -1554,7 +1655,7 @@ function prodDrop(e, cat, catIdx, toProdIdx) {
 
 // Agrupación de las pestañas en 5 grupos (navegación de 2 niveles).
 const TAB_GROUPS = {
-  catalogo: ['products', 'categories', 'fotos'],
+  catalogo: ['products', 'categories', 'fotos', 'topes'],
   precios: ['recargos', 'prices', 'margenes', 'pendientes', 'generador'],
   pedidos: ['pedidos', 'pedido', 'nota'],
   marketing: ['banners', 'cupones', 'codigos'],
@@ -1585,6 +1686,7 @@ function setTab(tab) {
   $('tab-pedido').style.display = tab === 'pedido' ? 'block' : 'none';
   $('tab-nota').style.display = tab === 'nota' ? 'block' : 'none';
   $('tab-fotos').style.display = tab === 'fotos' ? 'block' : 'none';
+  $('tab-topes').style.display = tab === 'topes' ? 'block' : 'none';
   $('tab-settings').style.display = tab === 'settings' ? 'block' : 'none';
   document.querySelectorAll('.tab-btn').forEach(btn => {
     const onclickStr = btn.getAttribute('onclick') || '';
@@ -1617,6 +1719,7 @@ function setTab(tab) {
   if (tab === 'pedido') populatePedidoManual();
   if (tab === 'nota') notaInit();
   if (tab === 'fotos') { fotosBuscar(); fotosRender(); }
+  if (tab === 'topes') topesInit();
   if (tab === 'products') renderProductList();
 
   // PERFORMANCE: las listas de productos (cientos de filas con fotos) son pesadas.
@@ -2010,9 +2113,36 @@ function excepcionDe(id) {
   return e[id] || e[String(id)] || null;
 }
 
+// Techo de descuento del producto (%). Vacío/ausente = sin techo.
+// El piso en el costo no alcanza para los productos de margen chico: uno que se
+// vende con 8% de markup igual termina al costo si el código da 15%. Este techo
+// limita el descuento automático (NO pisa las excepciones "al costo"/"precio
+// fijo": esos precios los fijás vos a mano).
+function descuentoMaxDe(id) {
+  const m = config.descuentoMax || {};
+  const v = m[id] ?? m[String(id)];
+  const n = parseFloat(v);
+  return (v === undefined || v === null || v === '' || isNaN(n) || n < 0) ? null : n;
+}
+
+function setDescuentoMax(id, valor) {
+  if (!config.descuentoMax) config.descuentoMax = {};
+  const n = parseFloat(valor);
+  if (valor === '' || isNaN(n) || n < 0) { delete config.descuentoMax[id]; delete config.descuentoMax[String(id)]; }
+  else { delete config.descuentoMax[String(id)]; config.descuentoMax[id] = Math.min(100, n); }
+  renderRecargosList();
+}
+
+// Descuento que realmente recibe este producto: el menor entre el % base y su techo.
+function descuentoEfectivo(id) {
+  const base = config.descuentoBase || 0;
+  const tope = descuentoMaxDe(id);
+  return tope === null ? base : Math.min(base, tope);
+}
+
 // Precio que verá el cliente con código (MISMO cálculo que usa el catálogo en Fase C):
 // excepción precio fijo → manda; al costo → costo; si no, mayorista − % base, pisado en costo.
-function precioListaMejor(p) {
+function precioListaMejor(p, ignorarTecho) {
   const id = p.id || p.product_id;
   const cost = parseFloat(p.unit_cost || 0);
   const may = parseFloat(p.wholesaler_price || p.precio_mayorista || 0);
@@ -2027,7 +2157,7 @@ function precioListaMejor(p) {
   // debajo del costo (liquidación consciente de fin de temporada), no lo subimos
   // al costo: lo dejamos a ese precio. Por eso el piso es min(costo, mayorista).
   const piso = cost > 0 ? Math.min(cost, may) : 0;
-  const base = may * (1 - (config.descuentoBase || 0) / 100);
+  const base = may * (1 - (ignorarTecho ? (config.descuentoBase || 0) : descuentoEfectivo(id)) / 100);
   return Math.max(piso, base);
 }
 
@@ -2048,6 +2178,7 @@ function renderRecargosList() {
     const exc = excepcionDe(id);
     const apg = apagados.some(a => a == id);
     if (state === 'con-exc' && !exc) return false;
+    if (state === 'con-techo' && descuentoMaxDe(id) === null) return false;
     if (state === 'apagados' && !apg) return false;
     if (state === 'no-cost' && cost > 0) return false;
     if (state === 'bajo-costo') {
@@ -2084,12 +2215,26 @@ function renderRecargosList() {
       : '';
     const lmTxt = apg ? '—' : ((cost > 0 || may > 0) ? fmtAR(lm) : '⚠ sin precio');
     const lmStyle = bajoCosto ? 'color:var(--danger);font-weight:700' : '';
+    const dMax = descuentoMaxDe(id);
+    // Un techo puede estar puesto y no cambiar un peso: porque es mayor al % base,
+    // porque el piso del costo ya frenaba el descuento, o porque el producto tiene
+    // una excepción manual que manda sobre todo. En esos casos lo marcamos "sin
+    // efecto" para que no quedes creyendo que estás protegiendo algo que no.
+    const techoActivo = dMax !== null && lm > precioListaMejor(p, true) + 0.5;
+    const techoMuerto = dMax !== null && !techoActivo;
+    const techoInput = '<div class="recargo-techo' + (techoActivo ? ' activo' : '') + (techoMuerto ? ' muerto' : '') + '">' +
+      '<span class="label">Desc. máx' + (techoMuerto ? ' <em title="Este techo no cambia el precio: el piso del costo o una excepción ya mandan">sin efecto</em>' : '') + '</span>' +
+      '<input type="number" min="0" max="100" step="1" value="' + (dMax === null ? '' : dMax) + '" placeholder="—" ' +
+        'title="Descuento máximo para este producto. Vacío = el % de la lista. Solo limita el descuento automático." ' +
+        'oninput="setDescuentoMax(' + id + ',this.value)" />%' +
+    '</div>';
 
-    return '<div class="recargo-row' + rowCls + '" data-pid="' + id + '" style="grid-template-columns:1fr 80px 95px 115px 235px">' +
+    return '<div class="recargo-row' + rowCls + '" data-pid="' + id + '" style="grid-template-columns:1fr 80px 95px 115px 110px 235px">' +
       '<div class="recargo-info"><div class="pname">' + apagadoBadge + '<span>' + name + '</span></div><div class="pmeta">' + (cod ? cod + ' · ' : '') + (p.category || '') + '</div></div>' +
       '<div class="recargo-cost"><span class="label">Costo</span>' + (cost > 0 ? fmtAR(cost) : '—') + '</div>' +
       '<div class="recargo-cost"><span class="label">Mayorista</span>' + (may > 0 ? fmtAR(may) : '—') + '</div>' +
       '<div class="recargo-final"><span class="label">Lista mejor</span><span style="' + lmStyle + '">' + lmTxt + (bajoCosto ? ' ⚠' : '') + '</span></div>' +
+      techoInput +
       '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
         '<select class="admin-select" style="padding:6px;font-size:13px" onchange="setExcTipo(' + id + ',this.value)">' +
           '<option value="base"' + (tipo === 'base' ? ' selected' : '') + '>Base</option>' +
@@ -2159,6 +2304,37 @@ function aplicarAlCostoMasivo() {
   showToast('✓ ' + n + ' producto(s) puestos al costo (markup < ' + umbral + '%). Tocá Guardar cambios.', '', 4500);
 }
 
+// Masivo: pone un techo de descuento a los productos de markup flaco. No toca los
+// apagados ni los que ya tienen una excepción manual (ahí el precio lo fijaste vos).
+function aplicarTechoMasivo() {
+  const techo = parseFloat($('techo-valor')?.value);
+  const umbral = parseFloat($('techo-umbral')?.value);
+  if (isNaN(techo) || techo < 0) { showToast('Poné un techo válido', 'error'); return; }
+  if (isNaN(umbral)) { showToast('Poné un % de markup válido', 'error'); return; }
+  const apagados = config.apagados || [];
+  if (!config.descuentoMax) config.descuentoMax = {};
+  let n = 0;
+  allAdminProducts.forEach(p => {
+    const id = p.id || p.product_id;
+    if (apagados.some(a => a == id)) return;
+    if (excepcionDe(id)) return;
+    const cost = parseFloat(p.unit_cost || 0);
+    const may = parseFloat(p.wholesaler_price || p.precio_mayorista || 0);
+    if (!(cost > 0 && may > 0)) return;
+    const markup = (may / cost - 1) * 100;
+    if (markup < umbral) { delete config.descuentoMax[String(id)]; config.descuentoMax[id] = techo; n++; }
+  });
+  renderRecargosList();
+  showToast('✓ ' + n + ' producto(s) con techo de ' + techo + '% (markup < ' + umbral + '%). Tocá Guardar cambios.', '', 4500);
+}
+
+function limpiarTechos() {
+  if (!confirm('¿Quitar TODOS los descuentos máximos? Los productos vuelven a recibir el % completo de la lista. (Se aplica al tocar Guardar cambios.)')) return;
+  config.descuentoMax = {};
+  renderRecargosList();
+  showToast('Techos quitados. Tocá Guardar cambios.', '', 3500);
+}
+
 function limpiarExcepciones() {
   if (!confirm('¿Quitar TODAS las excepciones? Los productos vuelven al descuento base. (Se aplica al tocar Guardar cambios.)')) return;
   config.excepciones = {};
@@ -2196,6 +2372,326 @@ function getStockVarianteAdmin(v) {
   const t = v.stock_por_tienda.find(x => x.store_name === 'Deposito Minorista');
   if (t) return t.stock_disponible || 0;
   return v.stock_por_tienda.reduce((s, x) => s + (x.stock_disponible || 0), 0);
+}
+
+// ===== Protección de stock (topes por variante) =============================
+//
+// El depósito es UNO SOLO: el catálogo mayorista y la tienda online se sirven del
+// mismo "Deposito Minorista". Un mayorista grande puede vaciarlo de un pedido. El
+// tope es una cantidad FIJA de unidades por variante que el catálogo no puede
+// vender (index.html se lo resta a lo que muestra, y api/proxy.js lo vuelve a
+// restar al confirmar, que es la tranca de verdad).
+//
+// Se guarda por producto+variante porque en GN el size_id es un talle compartido
+// entre productos (mismo criterio que variantPrices):
+//   config.topes[pid] = { porVariante: { sizeId: unidades }, creado, stockAlCrear }
+// `stockAlCrear` es la foto del stock del día que se puso la protección: sirve
+// para decirle a Bruno cuánto se vendió desde entonces sin pedirle ventas a GN
+// (el proxy no deja consultar /ventas, y está bien que no deje).
+
+let topesPid = null;        // producto que se está editando
+let topesBorrador = {};     // sizeId → unidades, todavía sin aplicar
+let topesAbiertos = {};     // modelos desplegados para ver los colores
+
+const TOPES_COLORES = ['negro','blanco','rojo','azul','verde','amarillo','rosa','naranja','violeta','gris','plateado','dorado','celeste','bordó','bordo','turquesa','beige','crema','lila','fucsia','marrón','marron','nude','transparente','humo'];
+
+// Separa "modelo de celular" y "color" del nombre de una variante. La mayoría de
+// los diseños tienen una sola dimensión ("iPhone 15 Pro"); los que tienen color
+// vienen como "Negro / iPhone 15" o "iPhone 15 - Negro", en cualquier orden.
+function topesPartes(variantes) {
+  const nombres = variantes.map(v => v.size || '');
+  let sep = null;
+  for (const s of [' / ', ' - ']) {
+    if (nombres.filter(n => n.includes(s)).length >= Math.ceil(nombres.length * 0.6)) { sep = s; break; }
+  }
+  const esColor = txt => TOPES_COLORES.some(c => txt.toLowerCase().includes(c));
+  return variantes.map(v => {
+    const n = v.size || '';
+    if (!sep || !n.includes(sep)) return { v, modelo: n || 'Único', color: '' };
+    const i = n.indexOf(sep);
+    const a = n.substring(0, i).trim(), b = n.substring(i + sep.length).trim();
+    // El que suena a color es el color; el otro, el modelo.
+    if (esColor(a) && !esColor(b)) return { v, modelo: b, color: a };
+    if (esColor(b) && !esColor(a)) return { v, modelo: a, color: b };
+    return { v, modelo: a, color: b };
+  });
+}
+
+// Agrupa las variantes de un producto por modelo de celular, ordenadas como en el
+// resto del admin (iPhone 13 → 14 → 15, base → Pro → Pro Max).
+function topesGrupos(p) {
+  const partes = topesPartes(p.variantes || []);
+  const mapa = new Map();
+  partes.forEach(x => {
+    if (!mapa.has(x.modelo)) mapa.set(x.modelo, []);
+    mapa.get(x.modelo).push(x);
+  });
+  return [...mapa.entries()]
+    .map(([modelo, items]) => ({
+      modelo,
+      items: items.sort((a, b) => (a.color || '').localeCompare(b.color || '', 'es')),
+      stock: items.reduce((s, x) => s + (getStockVarianteAdmin(x.v) || 0), 0),
+    }))
+    .sort((a, b) => cmpVariantePedido({ size: a.modelo }, { size: b.modelo }));
+}
+
+// Reparte un total de unidades entre los colores de un modelo, proporcional al
+// stock de cada uno y sin pasarse del stock de ninguno (método del resto mayor).
+function topesRepartir(total, stocks) {
+  const suma = stocks.reduce((a, b) => a + b, 0);
+  if (total <= 0 || suma <= 0) return stocks.map(() => 0);
+  const t = Math.min(total, suma);
+  const exacto = stocks.map(s => t * s / suma);
+  const base = exacto.map(x => Math.floor(x));
+  let resto = t - base.reduce((a, b) => a + b, 0);
+  exacto.map((x, i) => ({ i, frac: x - Math.floor(x) }))
+    .sort((a, b) => b.frac - a.frac)
+    .forEach(({ i }) => { if (resto > 0 && base[i] < stocks[i]) { base[i]++; resto--; } });
+  return base;
+}
+
+function topesInit() {
+  const sel = $('topes-producto');
+  if (sel && sel.options.length <= 1) {
+    [...allAdminProducts]
+      .filter(p => (p.variantes || []).length > 0)
+      .sort((a, b) => (a.name || a.nombre || '').localeCompare(b.name || b.nombre || ''))
+      .forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id || p.product_id;
+        opt.textContent = p.name || p.nombre || 'Sin nombre';
+        sel.appendChild(opt);
+      });
+  }
+  topesRenderLista();
+}
+
+function topesProdSel() {
+  return allAdminProducts.find(x => (x.id || x.product_id) == topesPid);
+}
+
+function topesSeleccionar() {
+  topesPid = $('topes-producto').value || null;
+  topesAbiertos = {};
+  const p = topesProdSel();
+  if (!p) { $('topes-matriz').style.display = 'none'; return; }
+  // Arranca con lo que ya esté guardado para ese diseño (si se está reeditando).
+  const guardado = (config.topes || {})[topesPid] || (config.topes || {})[String(topesPid)];
+  topesBorrador = {};
+  (p.variantes || []).forEach(v => {
+    const g = guardado && guardado.porVariante ? (guardado.porVariante[v.size_id] ?? guardado.porVariante[String(v.size_id)]) : 0;
+    topesBorrador[v.size_id] = parseInt(g, 10) || 0;
+  });
+  $('topes-matriz').style.display = 'block';
+  topesRenderMatriz();
+}
+
+function topesPrecargar() {
+  const p = topesProdSel();
+  if (!p) return;
+  const pct = parseFloat($('topes-pct').value);
+  if (isNaN(pct) || pct < 0) { showToast('Poné un % válido', 'error'); return; }
+  topesGrupos(p).forEach(g => {
+    const objetivo = Math.round(g.stock * pct / 100);
+    const stocks = g.items.map(x => getStockVarianteAdmin(x.v) || 0);
+    topesRepartir(objetivo, stocks).forEach((u, i) => { topesBorrador[g.items[i].v.size_id] = u; });
+  });
+  topesRenderMatriz();
+  showToast('Sugerencia cargada. Ajustá lo que quieras y guardá la protección.', '', 4000);
+}
+
+function topesVaciar() {
+  Object.keys(topesBorrador).forEach(k => { topesBorrador[k] = 0; });
+  topesRenderMatriz();
+}
+
+function topesModeloTotal(g) {
+  return g.items.reduce((s, x) => s + (parseInt(topesBorrador[x.v.size_id], 10) || 0), 0);
+}
+
+// Editar el total de un modelo con varios colores: se reparte proporcional al
+// stock de cada color (después se puede abrir y corregir color por color).
+function topesSetModelo(modeloIdx, valor) {
+  const p = topesProdSel();
+  if (!p) return;
+  const g = topesGrupos(p)[modeloIdx];
+  if (!g) return;
+  const n = Math.max(0, parseInt(valor, 10) || 0);
+  if (g.items.length === 1) {
+    topesBorrador[g.items[0].v.size_id] = n;
+  } else {
+    const stocks = g.items.map(x => getStockVarianteAdmin(x.v) || 0);
+    topesRepartir(n, stocks).forEach((u, i) => { topesBorrador[g.items[i].v.size_id] = u; });
+  }
+  topesRenderMatriz();
+}
+
+function topesSetColor(sizeId, valor) {
+  topesBorrador[sizeId] = Math.max(0, parseInt(valor, 10) || 0);
+  topesRenderMatriz();
+}
+
+function topesToggleColores(modelo) {
+  topesAbiertos[modelo] = !topesAbiertos[modelo];
+  topesRenderMatriz();
+}
+
+function topesRenderMatriz() {
+  const p = topesProdSel();
+  const cont = $('topes-modelos');
+  if (!p || !cont) return;
+  const grupos = topesGrupos(p);
+
+  cont.innerHTML = grupos.map((g, idx) => {
+    const tope = topesModeloTotal(g);
+    const libre = Math.max(0, g.stock - tope);
+    const debajo = tope > g.stock;
+    const abierto = !!topesAbiertos[g.modelo];
+    const varios = g.items.length > 1;
+
+    let html = '<div class="tope-modelo' + (tope > 0 ? ' protegido' : '') + (debajo ? ' debajo' : '') + '">' +
+      '<div>' + (varios
+        ? '<button class="tope-abrir" onclick="topesToggleColores(' + JSON.stringify(g.modelo).replace(/"/g, '&quot;') + ')" title="Ver colores">' + (abierto ? '▾' : '▸') + '</button>'
+        : '') + '</div>' +
+      '<div class="tope-modelo-name">' + (g.modelo || '—').replace(/</g, '&lt;') +
+        (varios ? ' <span style="font-weight:400;color:var(--text-hint);font-size:11px">' + g.items.length + ' colores</span>' : '') + '</div>' +
+      '<div class="tope-num"><span class="label">Stock hoy</span>' + g.stock + '</div>' +
+      '<div class="tope-num"><span class="label">Queda a la venta</span><strong style="' + (debajo ? 'color:var(--danger)' : '') + '">' + libre + '</strong></div>' +
+      '<div><input class="tope-input" type="number" min="0" step="1" value="' + tope + '" title="Unidades reservadas para la tienda online" onchange="topesSetModelo(' + idx + ',this.value)" /></div>' +
+    '</div>';
+
+    if (varios && abierto) {
+      html += '<div class="tope-colores">' + g.items.map(x => {
+        const st = getStockVarianteAdmin(x.v) || 0;
+        const t = parseInt(topesBorrador[x.v.size_id], 10) || 0;
+        return '<div class="tope-color">' +
+          '<div>' + ((x.color || x.v.size || '').replace(/</g, '&lt;')) + '</div>' +
+          '<div class="tope-num">stock ' + st + '</div>' +
+          '<div><input class="tope-input" type="number" min="0" step="1" value="' + t + '" onchange="topesSetColor(' + x.v.size_id + ',this.value)" /></div>' +
+        '</div>';
+      }).join('') + '</div>';
+    }
+    return html;
+  }).join('');
+
+  const totalTope = Object.values(topesBorrador).reduce((s, n) => s + (parseInt(n, 10) || 0), 0);
+  const totalStock = grupos.reduce((s, g) => s + g.stock, 0);
+  $('topes-resumen').textContent = 'Reservadas ' + totalTope + ' de ' + totalStock + ' u.';
+}
+
+function topesAplicar() {
+  const p = topesProdSel();
+  if (!p) return;
+  if (!config.topes) config.topes = {};
+  const pid = p.id || p.product_id;
+  const porVariante = {};
+  const stockAlCrear = {};
+  (p.variantes || []).forEach(v => {
+    const u = parseInt(topesBorrador[v.size_id], 10) || 0;
+    if (u > 0) {
+      porVariante[v.size_id] = u;
+      stockAlCrear[v.size_id] = getStockVarianteAdmin(v) || 0;
+    }
+  });
+  if (!Object.keys(porVariante).length) {
+    delete config.topes[pid];
+    delete config.topes[String(pid)];
+    showToast('Este diseño queda sin protección. Tocá Guardar cambios.', '', 4000);
+  } else {
+    const previo = config.topes[pid] || config.topes[String(pid)];
+    delete config.topes[String(pid)];
+    config.topes[pid] = {
+      porVariante,
+      // Si ya estaba protegido, conservamos la fecha original: la antigüedad es
+      // el dato con el que Bruno decide cuándo soltar el tope.
+      creado: (previo && previo.creado) || new Date().toISOString(),
+      stockAlCrear: (previo && previo.stockAlCrear) || stockAlCrear,
+    };
+    showToast('✓ Protección cargada. Tocá Guardar cambios para que salga al catálogo.', 'success', 4500);
+  }
+  topesRenderLista();
+}
+
+function topesLiberar(pid) {
+  const p = allAdminProducts.find(x => (x.id || x.product_id) == pid);
+  const nombre = (p && (p.name || p.nombre)) || 'este diseño';
+  if (!confirm('¿Liberar la protección de "' + nombre + '"? Las unidades reservadas vuelven a venderse por el catálogo. (Se aplica al tocar Guardar cambios.)')) return;
+  if (config.topes) { delete config.topes[pid]; delete config.topes[String(pid)]; }
+  if (String(topesPid) === String(pid)) { topesBorrador = {}; topesRenderMatriz(); }
+  topesRenderLista();
+  showToast('Protección liberada. Tocá Guardar cambios.', '', 3500);
+}
+
+function topesEditar(pid) {
+  $('topes-producto').value = pid;
+  topesSeleccionar();
+  $('topes-producto').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function topesDiasDesde(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  return Math.max(0, Math.floor((Date.now() - d.getTime()) / 86400000));
+}
+
+function topesAntiguedadTxt(iso) {
+  const d = topesDiasDesde(iso);
+  if (d === null) return 'sin fecha';
+  if (d === 0) return 'puesta hoy';
+  if (d === 1) return 'puesta ayer';
+  if (d < 30) return 'puesta hace ' + d + ' días';
+  const m = Math.round(d / 30);
+  return 'puesta hace ' + m + (m === 1 ? ' mes' : ' meses');
+}
+
+function topesRenderLista() {
+  const cont = $('topes-lista');
+  if (!cont) return;
+  const topes = config.topes || {};
+  const pids = Object.keys(topes);
+  if (!pids.length) {
+    cont.innerHTML = '<div class="loading-state">Todavía no hay ningún diseño protegido.</div>';
+    return;
+  }
+
+  cont.innerHTML = pids.map(pid => {
+    const t = topes[pid] || {};
+    const p = allAdminProducts.find(x => (x.id || x.product_id) == pid);
+    const nombre = (p && (p.name || p.nombre)) || ('Producto #' + pid);
+    const porVar = t.porVariante || {};
+    const reservado = Object.values(porVar).reduce((s, n) => s + (parseInt(n, 10) || 0), 0);
+
+    // Variantes que ya cayeron por debajo del tope: el stock real es menor que lo
+    // reservado, así que la tienda online tampoco tiene lo que quisimos guardarle.
+    let debajo = 0, vendidoDesde = 0, sinDato = !p;
+    if (p) {
+      (p.variantes || []).forEach(v => {
+        const tope = parseInt(porVar[v.size_id] ?? porVar[String(v.size_id)], 10) || 0;
+        if (!tope) return;
+        const st = getStockVarianteAdmin(v) || 0;
+        if (st < tope) debajo++;
+        const antes = parseInt((t.stockAlCrear || {})[v.size_id] ?? (t.stockAlCrear || {})[String(v.size_id)], 10);
+        if (!isNaN(antes)) vendidoDesde += Math.max(0, antes - st);
+      });
+    }
+
+    const modelos = Object.keys(porVar).length;
+    return '<div class="tope-card' + (debajo ? ' alerta' : '') + '">' +
+      '<div class="tope-card-head">' +
+        '<div class="tope-card-name">' + nombre.replace(/</g, '&lt;') + '</div>' +
+        '<span class="tope-chip reservado">' + reservado + ' u. reservadas</span>' +
+        (debajo ? '<span class="tope-chip alerta">⚠ ' + debajo + ' ' + (debajo === 1 ? 'variante ya está' : 'variantes ya están') + ' debajo del tope</span>' : '') +
+        '<button class="tope-btn" onclick="topesEditar(' + pid + ')">Editar</button>' +
+        '<button class="tope-btn peligro" onclick="topesLiberar(' + pid + ')">Liberar</button>' +
+      '</div>' +
+      '<div class="tope-card-meta">' +
+        topesAntiguedadTxt(t.creado) + ' · ' + modelos + ' ' + (modelos === 1 ? 'variante protegida' : 'variantes protegidas') +
+        (sinDato ? ' · <span style="color:var(--danger)">el producto ya no está en el catálogo</span>'
+                 : ' · desde entonces salieron ' + vendidoDesde + ' u. de esas variantes') +
+      '</div>' +
+    '</div>';
+  }).join('');
 }
 
 // Precio especial por variante: clave "productId-sizeId". Vacío = sin precio especial.
@@ -2579,8 +3075,10 @@ function pmSelectProducto() {
   if (variantes.length) {
     cont.innerHTML = variantes.map(v => {
       const vs = getStockVarianteAdmin(v);
+      const tope = pmTope(p.id || p.product_id, v.size_id);
       return '<div class="pm-var-cell">' +
-        '<div class="pm-var-name">' + (v.size || '').replace(/</g, '&lt;') + (vs != null ? ' <span class="pm-var-stock">stock ' + vs + '</span>' : '') + '</div>' +
+        '<div class="pm-var-name">' + (v.size || '').replace(/</g, '&lt;') + (vs != null ? ' <span class="pm-var-stock">stock ' + vs + '</span>' : '') +
+          (tope ? ' <span class="pm-var-stock" style="color:#1d4ed8" title="Unidades guardadas para la tienda online">🛡 ' + tope + '</span>' : '') + '</div>' +
         '<input type="number" min="0" value="0" class="pm-var-qty" data-sizeid="' + v.size_id + '" data-sizename="' + (v.size || '').replace(/"/g, '&quot;') + '" />' +
       '</div>';
     }).join('');
@@ -2589,6 +3087,27 @@ function pmSelectProducto() {
   }
   pmActualizarGanancias();
 }
+// Unidades reservadas de una variante (ver "Protección de stock"). Acá NO se
+// bloquea: el admin es el dueño y a veces quiere vender igual. Solo se avisa.
+function pmTope(productId, sizeId) {
+  const t = (config.topes || {})[productId] || (config.topes || {})[String(productId)];
+  if (!t || !t.porVariante || !sizeId) return 0;
+  const n = parseInt(t.porVariante[sizeId] ?? t.porVariante[String(sizeId)], 10);
+  return isNaN(n) || n < 0 ? 0 : n;
+}
+
+// ¿Esta línea del pedido se mete en lo que guardamos para la tienda online?
+function pmInvasion(l) {
+  const tope = pmTope(l.id, l.sizeId);
+  if (!tope) return null;
+  const p = allAdminProducts.find(x => (x.id || x.product_id) == l.id);
+  const v = p && (p.variantes || []).find(x => String(x.size_id) === String(l.sizeId));
+  const stock = v ? (getStockVarianteAdmin(v) || 0) : 0;
+  const libre = Math.max(0, stock - tope);
+  if (l.cant <= libre) return null;
+  return { tope, stock, libre, deMas: l.cant - libre };
+}
+
 function cmpVariantePedido(a, b) {
   const na = (a.size || ''), nb = (b.size || '');
   // Número de iPhone (13, 14, 15, 16, 17...)
@@ -2647,11 +3166,14 @@ function pmRender() {
   cont.innerHTML = pmLineas.map((l, idx) => {
     const sub = l.precio * l.cant;
     const gan = (l.precio - l.costo) * l.cant;
+    const inv = pmInvasion(l);
     return '<div class="pm-linea">' +
       '<div class="pm-linea-info"><strong>' + (l.nombre || '').replace(/</g, '&lt;') + (l.sizeName ? ' · ' + l.sizeName : '') + '</strong>' +
         '<span class="pm-linea-meta">' +
           '<input type="number" min="1" value="' + l.cant + '" class="pm-linea-qty" onchange="pmSetCant(' + idx + ', this.value)" title="Editar cantidad" /> u × ' +
-          fmtAR(l.precio) + (l.costo > 0 ? ' · ganancia ' + fmtAR(gan) : '') + '</span></div>' +
+          fmtAR(l.precio) + (l.costo > 0 ? ' · ganancia ' + fmtAR(gan) : '') + '</span>' +
+        (inv ? '<span class="pm-linea-meta" style="color:var(--danger)">🛡 se mete en ' + inv.deMas + ' u. de las ' + inv.tope + ' guardadas para la tienda online</span>' : '') +
+        '</div>' +
       '<div class="pm-linea-sub">' + fmtAR(sub) + '</div>' +
       '<button class="btn-del" onclick="pmQuitar(' + idx + ')" title="Quitar">×</button>' +
     '</div>';
@@ -2663,6 +3185,17 @@ async function pmConfirmar() {
   if (!pmLineas.length) { alert('El pedido está vacío.'); return; }
   const cliente = $('pm-cliente').value.trim();
   if (!cliente) { alert('Ingresá el nombre del cliente.'); $('pm-cliente').focus(); return; }
+  // Aviso de protección de stock: acá NO se bloquea (a diferencia del catálogo).
+  // Este es el camino del pedido grande por WhatsApp que carga el dueño, y el
+  // dueño a veces quiere vender igual. Se muestra qué se lleva de lo guardado.
+  const invasiones = pmLineas.map(l => ({ l, inv: pmInvasion(l) })).filter(x => x.inv);
+  if (invasiones.length) {
+    const detalle = invasiones.map(({ l, inv }) =>
+      '• ' + l.nombre + (l.sizeName ? ' · ' + l.sizeName : '') + ': pedís ' + l.cant +
+      ', libres ' + inv.libre + ' → se lleva ' + inv.deMas + ' u. de las guardadas').join('\n');
+    if (!confirm('Ojo: este pedido se mete en el stock que guardaste para la tienda online.\n\n' +
+                 detalle + '\n\n¿Lo cargás igual?')) return;
+  }
   if (!confirm('¿Crear esta venta en Gestión Nube? Se va a descontar el stock.')) return;
   const btn = $('pm-confirmar-btn');
   btn.disabled = true; btn.textContent = 'Creando en GN…';
@@ -2683,7 +3216,13 @@ async function pmConfirmar() {
       comments: 'Pedido mayorista (admin) — ' + cliente,
       items: pmLineas.map(l => ({ product_id: l.id, ...(l.sizeId ? { size_id: l.sizeId } : {}), quantity: l.cant, unit_price: l.precio }))
     };
-    const r = await fetch('/api/proxy?_path=/ventas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    // La contraseña le dice al proxy que esta venta es del admin: se verifica el
+    // stock real de GN, pero SIN descontar los topes (ya avisamos más arriba).
+    const r = await fetch('/api/proxy?_path=/ventas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+      body: JSON.stringify(body)
+    });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) {
       let msg;
@@ -3236,6 +3775,41 @@ function renderSettings() {
   if (minInput) minInput.value = config.minPurchase || 0;
   const descInput = $('input-descuento-base');
   if (descInput) descInput.value = (config.descuentoBase != null ? config.descuentoBase : 15);
+  const togAviso = $('toggle-avisar-descuento-max');
+  if (togAviso) togAviso.classList.toggle('on', !!(config.avisarDescuentoMax));
+  const notaInput = $('input-descuento-max-nota');
+  if (notaInput) {
+    notaInput.value = config.descuentoMaxNota || '';
+    notaInput.oninput = () => { config.descuentoMaxNota = notaInput.value; renderNotaPreview(); };
+  }
+  renderNotaPreview();
+}
+
+// Muestra tal cual lo que va a leer el cliente, armado igual que en el catálogo.
+function renderNotaPreview() {
+  const box = $('nota-preview');
+  if (!box) return;
+  if (!config.avisarDescuentoMax) {
+    box.innerHTML = '<div class="nota-preview-title">Así lo ve el cliente</div>' +
+      '<div class="nota-preview-box apagado">El aviso está <strong>apagado</strong>: el cliente no ve ninguna nota. ' +
+      'Igual sigue pagando el precio con el techo aplicado.</div>';
+    return;
+  }
+  const base = config.descuentoBase || 0;
+  // Un ejemplo real si hay algún producto donde el techo REALMENTE cambie el
+  // precio (mismo criterio que usa el catálogo para decidir si avisa o no).
+  const conTecho = allAdminProducts.find(p => {
+    if (descuentoMaxDe(p.id || p.product_id) === null) return false;
+    return precioListaMejor(p) > precioListaMejor(p, true) + 0.5;
+  });
+  const techo = conTecho ? descuentoMaxDe(conTecho.id || conTecho.product_id) : 5;
+  const motivo = (config.descuentoMaxNota || '').trim();
+  const texto = (techo > 0
+    ? 'Este producto tiene un descuento máximo del ' + techo + '% (tu lista es del ' + base + '%).'
+    : 'Este producto no lleva el descuento de tu lista.') + (motivo ? ' ' + motivo : '');
+  box.innerHTML = '<div class="nota-preview-title">Así lo ve el cliente' +
+    (conTecho ? ' — ejemplo con <strong>' + (conTecho.name || '').replace(/</g, '&lt;') + '</strong>' : '') + '</div>' +
+    '<div class="nota-preview-box">ⓘ ' + texto.replace(/</g, '&lt;') + '</div>';
 }
 
 function toggleSetting(key) {

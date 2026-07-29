@@ -1,7 +1,25 @@
-const KV_URL = process.env.KV_REST_API_URL || process.env.STORAGE_KV_REST_API_URL;
-const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.STORAGE_KV_REST_API_TOKEN;
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'bdi2024';
-const CONFIG_KEY = process.env.CONFIG_KEY || 'catalog-config';
+const { kvGet, kvSet } = require('./_kv');
+
+// Sin respaldo a propósito. Antes había acá una contraseña por defecto escrita en
+// el código: como el repo es público, estaba a la vista de cualquiera y entraba al
+// panel de verdad (comprobado el 29-jul-2026 contra producción: devolvía 200 con
+// toda la config — costos, cupones, códigos de la lista mejor). La contraseña vive
+// SOLO en la variable de entorno de Vercel; el código nunca trae una.
+//
+// Ojo con "simplemente sacar el respaldo": si queda `process.env.ADMIN_PASSWORD`
+// a secas y la variable no está cargada, vale `undefined`, y un pedido SIN el
+// header también trae `undefined` → `undefined !== undefined` es false y entra
+// sin contraseña. Por eso cae a '' y `passwordOk` exige que esté cargada.
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
+
+// Única puerta: sin ADMIN_PASSWORD cargada en Vercel, no entra nadie.
+function passwordOk(req) {
+  if (!ADMIN_PASSWORD) {
+    console.error('[admin] falta la variable ADMIN_PASSWORD en Vercel: se rechaza todo.');
+    return false;
+  }
+  return req.headers['x-admin-password'] === ADMIN_PASSWORD;
+}
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -10,25 +28,6 @@ const CORS = {
 };
 
 const DEFAULT = { hiddenProducts: [], hiddenVariants: {}, categoryOrder: [], hideNoStock: false, minPurchase: 0, referencePrices: {} };
-
-async function kvGet() {
-  if (!KV_URL || !KV_TOKEN) return null;
-  const r = await fetch(`${KV_URL}/get/${CONFIG_KEY}`, {
-    headers: { Authorization: `Bearer ${KV_TOKEN}` }
-  });
-  const d = await r.json();
-  return d.result ? JSON.parse(d.result) : null;
-}
-
-async function kvSet(value) {
-  if (!KV_URL || !KV_TOKEN) throw new Error('KV no configurado');
-  const r = await fetch(KV_URL, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${KV_TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(['SET', CONFIG_KEY, JSON.stringify(value)])
-  });
-  return r.json();
-}
 
 module.exports = async (req, res) => {
   Object.entries(CORS).forEach(([k, v]) => res.setHeader(k, v));
@@ -84,11 +83,16 @@ module.exports = async (req, res) => {
         cliente: c.cliente || '',
         descuentoBase,
         excepciones: cfg.excepciones || {},
+        // Tope de descuento por producto: hay productos de margen chico donde el %
+        // de la lista mejor se come la rentabilidad. Viaja solo acá (no en la
+        // config pública) porque es información de precios, igual que el resto.
+        descuentoMax: cfg.descuentoMax || {},
+        descuentoMaxNota: cfg.descuentoMaxNota || '',
       });
     }
     // Con ?verify=1 valida la contraseña y devuelve la config (para el login del admin)
     if (req.query.verify) {
-      if (req.headers['x-admin-password'] !== ADMIN_PASSWORD)
+      if (!passwordOk(req))
         return res.status(401).json({ error: 'Contraseña incorrecta' });
     }
     try {
@@ -102,6 +106,8 @@ module.exports = async (req, res) => {
         delete config.codigosAcceso;
         delete config.descuentoBase;
         delete config.excepciones;
+        delete config.descuentoMax;
+        delete config.descuentoMaxNota;
       }
       return res.json(config);
     } catch (e) {
@@ -110,7 +116,7 @@ module.exports = async (req, res) => {
   }
 
   if (req.method === 'POST') {
-    if (req.headers['x-admin-password'] !== ADMIN_PASSWORD)
+    if (!passwordOk(req))
       return res.status(401).json({ error: 'Contraseña incorrecta' });
     try {
       const incoming = req.body || {};
