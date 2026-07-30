@@ -4,10 +4,12 @@
 const { esAdmin } = require('./_admin');
 const KV_URL   = process.env.KV_REST_API_URL   || process.env.STORAGE_KV_REST_API_URL;
 const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.STORAGE_KV_REST_API_TOKEN;
+// Igual que en tiendanube-audit: el Monitor llama acá con `apiFetch`, que agrega
+// `x-monitor-auth`, y sin declararlo el navegador frena el preflight y la llamada nunca sale.
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Headers': 'Content-Type, x-monitor-auth',
 };
 async function kvCmd(cmd) {
   const r = await fetch(KV_URL, { method: 'POST', headers: { Authorization: `Bearer ${KV_TOKEN}`, 'Content-Type': 'application/json' }, body: JSON.stringify(cmd) });

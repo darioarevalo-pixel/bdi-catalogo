@@ -25,10 +25,18 @@ const STORES = {
   },
 };
 
+// `x-monitor-auth` es el header con la credencial de quien está usando el Monitor. Este
+// endpoint no la exige —es de lectura—, pero el Monitor la manda igual en TODAS sus llamadas
+// (lib/api-fetch.ts), y si no está declarada acá el navegador frena el preflight y la llamada
+// nunca sale: "Failed to fetch". Faltaba, y como del lado del Monitor cada consumidor cae a
+// una lista vacía, se veía como "no hay nada que revisar" en vez de como un error — nueve
+// lugares leyendo de acá (Márgenes, Comisiones, Reposición, Productos, Gerencial, las cards de
+// Tienda Nube, Etiquetas, Canjes, Verificación de ventas) mostrando datos incompletos en
+// silencio. Los demás endpoints que el Monitor consume ya lo declaraban.
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Headers': 'Content-Type, x-monitor-auth',
 };
 
 async function kvGet(key) {
