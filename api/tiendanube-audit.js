@@ -61,6 +61,17 @@ async function kvSet(key, value) {
   } catch { /* ignorar error de caché */ }
 }
 
+async function kvDel(key) {
+  if (!KV_URL || !KV_TOKEN) return;
+  try {
+    await fetch(KV_URL, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${KV_TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(['DEL', key])
+    });
+  } catch { /* ignorar error de caché */ }
+}
+
 function tnHeaders(token) {
   return {
     'Authentication': `bearer ${token}`,
@@ -448,6 +459,14 @@ module.exports = async (req, res) => {
       res.setHeader('X-Cache', 'HIT');
       return res.json(cached);
     }
+  } else {
+    // Cada tienda guarda DOS cachés —el liviano y el `:var3` con el detalle por variante— y
+    // `refresh=1` regeneraba solo el que se pedía. El Monitor pide el refresco sin `variantes=1`
+    // después de escribir (vincular/desvincular una foto, ocultar un producto), así que el
+    // `:var3` seguía sirviendo la tienda de antes del cambio por hasta una hora: se arreglaba
+    // una foto cruzada, se recargaba, y volvía a aparecer cruzada. Un `refresh` significa "la
+    // tienda cambió", no "actualizame esta vista": se tira el otro también.
+    await kvDel(incluirVariantes ? cfg.cacheKey : cfg.cacheKey + ':var3');
   }
 
   try {
