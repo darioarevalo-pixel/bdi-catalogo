@@ -41,36 +41,62 @@ async function tnGet(storeId, token, path) {
   const r = await tnReq(`https://api.tiendanube.com/v1/${storeId}/${path}`, { headers: tnH(token) });
   return { ok: r.ok, status: r.status, total: parseInt(r.headers.get('X-Total-Count') || '0', 10), data: await r.json() };
 }
+/**
+ * Relee las variantes y cuenta cuántas de `objetivo` quedaron REALMENTE con `esperado`.
+ *
+ * Existe porque contar los 2xx del PUT no alcanza: TiendaNube puede contestar OK y no aplicar el
+ * cambio. Pasó el 31-jul-2026 al quitarle la foto a un color en Zattia — el endpoint informó
+ * "listo", el Monitor refrescó su caché, y la variante seguía con la misma imagen. Informar un
+ * éxito que no se comprobó es peor que informar el error: el que lo usa da el trabajo por hecho.
+ */
+async function verificarImagen(cfg, product_id, objetivo, esperado) {
+  const vr = await tnGet(cfg.storeId, cfg.token, `products/${product_id}/variants?fields=id,image_id`);
+  if (!Array.isArray(vr.data)) return null; // no se pudo comprobar: se devuelve null, no un número inventado
+  const porId = new Map(vr.data.map(v => [String(v.id), v.image_id]));
+  const iguales = (a, b) => (a == null && b == null) || String(a) === String(b);
+  return objetivo.filter(v => iguales(porId.get(String(v.id)), esperado)).length;
+}
+
+/** Las variantes de un color. Mismo criterio en los dos sentidos. */
+async function variantesDelColor(cfg, product_id, color) {
+  const vr = await tnGet(cfg.storeId, cfg.token, `products/${product_id}/variants?fields=id,values`);
+  if (!Array.isArray(vr.data)) return null;
+  return vr.data.filter(v => coloresDeVariante(v).some(c => c.toLowerCase() === String(color).toLowerCase()));
+}
+
 // Vincula una imagen (imageId) a todas las variantes de un color. Reintenta y throttlea para no saturar.
 async function asignarColor(cfg, product_id, imageId, color) {
-  const vr = await tnGet(cfg.storeId, cfg.token, `products/${product_id}/variants?fields=id,values`);
-  if (!Array.isArray(vr.data)) return { objetivo: 0, asignadas: 0, errores: ['no se pudieron leer variantes'] };
-  const objetivo = vr.data.filter(v => coloresDeVariante(v).some(c => c.toLowerCase() === String(color).toLowerCase()));
-  let asignadas = 0; const errores = [];
+  const objetivo = await variantesDelColor(cfg, product_id, color);
+  if (!objetivo) return { objetivo: 0, asignadas: 0, errores: ['no se pudieron leer variantes'] };
+  const errores = [];
   for (const v of objetivo) {
     const pr = await tnReq(`https://api.tiendanube.com/v1/${cfg.storeId}/products/${product_id}/variants/${v.id}`, {
       method: 'PUT', headers: tnH(cfg.token), body: JSON.stringify({ image_id: imageId }),
     });
-    if (pr.ok) asignadas++; else errores.push(`v${v.id}:${pr.status}`);
+    if (!pr.ok) errores.push(`v${v.id}:${pr.status}`);
     await sleep(300); // no saturar el rate limit de TN
   }
-  return { objetivo: objetivo.length, asignadas, errores };
+  // El número que se informa es el COMPROBADO, no el de PUTs que contestaron bien.
+  const aplicadas = await verificarImagen(cfg, product_id, objetivo, imageId);
+  if (aplicadas !== null && aplicadas < objetivo.length) errores.push(`TiendaNube aceptó el pedido pero dejó ${objetivo.length - aplicadas} sin aplicar`);
+  return { objetivo: objetivo.length, asignadas: aplicadas ?? 0, errores };
 }
 // Desvincula (quita) la imagen de todas las variantes de un color: PUT image_id null.
 // image_id null = "sin foto propia" en el modelo de TN (ver tiendanube-audit.js). Espejo de asignarColor.
 async function desasignarColor(cfg, product_id, color) {
-  const vr = await tnGet(cfg.storeId, cfg.token, `products/${product_id}/variants?fields=id,values`);
-  if (!Array.isArray(vr.data)) return { objetivo: 0, desasignadas: 0, errores: ['no se pudieron leer variantes'] };
-  const objetivo = vr.data.filter(v => coloresDeVariante(v).some(c => c.toLowerCase() === String(color).toLowerCase()));
-  let desasignadas = 0; const errores = [];
+  const objetivo = await variantesDelColor(cfg, product_id, color);
+  if (!objetivo) return { objetivo: 0, desasignadas: 0, errores: ['no se pudieron leer variantes'] };
+  const errores = [];
   for (const v of objetivo) {
     const pr = await tnReq(`https://api.tiendanube.com/v1/${cfg.storeId}/products/${product_id}/variants/${v.id}`, {
       method: 'PUT', headers: tnH(cfg.token), body: JSON.stringify({ image_id: null }),
     });
-    if (pr.ok) desasignadas++; else errores.push(`v${v.id}:${pr.status}`);
+    if (!pr.ok) errores.push(`v${v.id}:${pr.status}`);
     await sleep(300); // no saturar el rate limit de TN
   }
-  return { objetivo: objetivo.length, desasignadas, errores };
+  const aplicadas = await verificarImagen(cfg, product_id, objetivo, null);
+  if (aplicadas !== null && aplicadas < objetivo.length) errores.push(`TiendaNube aceptó el pedido pero dejó ${objetivo.length - aplicadas} sin quitar`);
+  return { objetivo: objetivo.length, desasignadas: aplicadas ?? 0, errores };
 }
 
 // La deuda que este comentario documentaba —"cualquiera con la URL puede subir, vincular y
