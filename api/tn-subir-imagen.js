@@ -81,22 +81,67 @@ async function asignarColor(cfg, product_id, imageId, color) {
   if (aplicadas !== null && aplicadas < objetivo.length) errores.push(`TiendaNube aceptó el pedido pero dejó ${objetivo.length - aplicadas} sin aplicar`);
   return { objetivo: objetivo.length, asignadas: aplicadas ?? 0, errores };
 }
-// Desvincula (quita) la imagen de todas las variantes de un color: PUT image_id null.
-// image_id null = "sin foto propia" en el modelo de TN (ver tiendanube-audit.js). Espejo de asignarColor.
+/** El `image_id` actual de cada variante, por id. Para poder volver atrás si algo sale mal. */
+async function imagenesActuales(cfg, product_id) {
+  const vr = await tnGet(cfg.storeId, cfg.token, `products/${product_id}/variants?fields=id,image_id`);
+  return Array.isArray(vr.data) ? new Map(vr.data.map(v => [String(v.id), v.image_id])) : null;
+}
+
+async function ponerImagen(cfg, product_id, variantId, valor) {
+  const r = await tnReq(`https://api.tiendanube.com/v1/${cfg.storeId}/products/${product_id}/variants/${variantId}`, {
+    method: 'PUT', headers: tnH(cfg.token), body: JSON.stringify({ image_id: valor }),
+  });
+  await sleep(300); // no saturar el rate limit de TN
+  return r;
+}
+
+/**
+ * Quita la imagen de las variantes de un color.
+ *
+ * `image_id: null` es lo que el modelo de TiendaNube usa para "sin foto propia" y es lo que su
+ * documentación muestra en el ejemplo, pero **la API contesta 2xx y no lo aplica** (comprobado el
+ * 31-jul-2026 en Zattia: SWEATER BOSTON / BEIGE, releyendo la tienda dos veces). Lo más probable
+ * es que ignore los nulos al mezclar el cuerpo del PUT, porque el mismo PUT con un id numérico sí
+ * funciona.
+ *
+ * Por eso hay un segundo intento con `0`, el centinela habitual para "sin referencia". Cada
+ * intento se comprueba releyendo la tienda, y **si el segundo deja la variante en un estado que
+ * no es el buscado, se restaura la imagen que tenía**: preferimos no poder quitarla antes que
+ * dejarla apuntando a una imagen que no existe.
+ */
 async function desasignarColor(cfg, product_id, color) {
   const objetivo = await variantesDelColor(cfg, product_id, color);
   if (!objetivo) return { objetivo: 0, desasignadas: 0, errores: ['no se pudieron leer variantes'] };
+
+  const original = await imagenesActuales(cfg, product_id);
   const errores = [];
-  for (const v of objetivo) {
-    const pr = await tnReq(`https://api.tiendanube.com/v1/${cfg.storeId}/products/${product_id}/variants/${v.id}`, {
-      method: 'PUT', headers: tnH(cfg.token), body: JSON.stringify({ image_id: null }),
-    });
-    if (!pr.ok) errores.push(`v${v.id}:${pr.status}`);
-    await sleep(300); // no saturar el rate limit de TN
+  let pendientes = objetivo;
+
+  for (const valor of [null, 0]) {
+    for (const v of pendientes) {
+      const pr = await ponerImagen(cfg, product_id, v.id, valor);
+      if (!pr.ok) errores.push(`v${v.id}:${pr.status}`);
+    }
+    const ahora = await imagenesActuales(cfg, product_id);
+    if (!ahora) { errores.push('no se pudo comprobar el resultado'); break; }
+    pendientes = pendientes.filter(v => ahora.get(String(v.id)) != null);
+    if (!pendientes.length) break;
+
+    // Las que quedaron con un valor distinto del que tenían y tampoco están vacías: se deshace.
+    for (const v of pendientes) {
+      const previo = original?.get(String(v.id));
+      if (previo != null && String(ahora.get(String(v.id))) !== String(previo)) {
+        await ponerImagen(cfg, product_id, v.id, previo);
+        errores.push(`v${v.id}: se restauró la imagen anterior`);
+      }
+    }
   }
-  const aplicadas = await verificarImagen(cfg, product_id, objetivo, null);
-  if (aplicadas !== null && aplicadas < objetivo.length) errores.push(`TiendaNube aceptó el pedido pero dejó ${objetivo.length - aplicadas} sin quitar`);
-  return { objetivo: objetivo.length, desasignadas: aplicadas ?? 0, errores };
+
+  const quitadas = objetivo.length - pendientes.length;
+  if (pendientes.length) {
+    errores.push(`TiendaNube aceptó el pedido pero no quitó la imagen de ${pendientes.length} variante(s). Se puede quitar a mano desde el panel de TiendaNube, o directamente vincularle al color la foto que le corresponde.`);
+  }
+  return { objetivo: objetivo.length, desasignadas: quitadas, errores };
 }
 
 // La deuda que este comentario documentaba —"cualquiera con la URL puede subir, vincular y
