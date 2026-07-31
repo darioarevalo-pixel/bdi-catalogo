@@ -98,16 +98,16 @@ async function ponerImagen(cfg, product_id, variantId, valor) {
 /**
  * Quita la imagen de las variantes de un color.
  *
- * `image_id: null` es lo que el modelo de TiendaNube usa para "sin foto propia" y es lo que su
- * documentación muestra en el ejemplo, pero **la API contesta 2xx y no lo aplica** (comprobado el
- * 31-jul-2026 en Zattia: SWEATER BOSTON / BEIGE, releyendo la tienda dos veces). Lo más probable
- * es que ignore los nulos al mezclar el cuerpo del PUT, porque el mismo PUT con un id numérico sí
- * funciona.
+ * **Va con `0`, no con `null`.** `null` es lo que el modelo de TiendaNube usa para "sin foto
+ * propia" y lo que muestra el ejemplo de su documentación, pero **la API contesta 2xx y no lo
+ * aplica**: ignora los nulos al mezclar el cuerpo del PUT (el mismo PUT con un id numérico sí
+ * funciona). Con `0` sí lo aplica. Comprobado el 31-jul-2026 en Zattia —SWEATER BOSTON / BEIGE—
+ * releyendo la tienda: con `null` seguía con la foto de GRIS, con `0` quedó sin foto.
  *
- * Por eso hay un segundo intento con `0`, el centinela habitual para "sin referencia". Cada
- * intento se comprueba releyendo la tienda, y **si el segundo deja la variante en un estado que
- * no es el buscado, se restaura la imagen que tenía**: preferimos no poder quitarla antes que
- * dejarla apuntando a una imagen que no existe.
+ * `null` queda como segundo intento por si TiendaNube algún día hace lo que documenta. Cada
+ * intento se comprueba releyendo la tienda, y **si alguno deja la variante en un estado que no es
+ * el buscado, se restaura la imagen que tenía**: preferimos no poder quitarla antes que dejarla
+ * apuntando a una imagen que no existe.
  */
 async function desasignarColor(cfg, product_id, color) {
   const objetivo = await variantesDelColor(cfg, product_id, color);
@@ -117,7 +117,7 @@ async function desasignarColor(cfg, product_id, color) {
   const errores = [];
   let pendientes = objetivo;
 
-  for (const valor of [null, 0]) {
+  for (const valor of [0, null]) {
     for (const v of pendientes) {
       const pr = await ponerImagen(cfg, product_id, v.id, valor);
       if (!pr.ok) errores.push(`v${v.id}:${pr.status}`);
