@@ -776,6 +776,26 @@ module.exports = async (req, res) => {
     res.json = (cuerpo) => { marcas.total = Date.now() - t0; return jsonOriginal(cuerpo); };
   }
 
+  // El admin (pestaña "Cargar pedido") vende SIN tope a propósito: el dueño
+  // decide caso por caso, y allá el aviso se muestra antes de confirmar.
+  const esAdmin = !!ADMIN_PASSWORD && req.headers['x-admin-password'] === ADMIN_PASSWORD;
+
+  // ESTAS TRES COSAS NO DEPENDEN DEL TURNO, así que se piden MIENTRAS se espera:
+  //   · el freno (¿esta conexión ya mandó demasiados pedidos?)
+  //   · la config (topes de stock y reglas de precio)
+  //   · la libretita de costos
+  // Antes iban una tras otra DESPUÉS de tomar el turno. Medido el 2-8-2026, cada
+  // viaje al almacén cuesta ~112 ms, así que eran ~220 ms que el cliente esperaba
+  // de gusto. El turno solo hace falta antes de LEER EL STOCK, que es donde está
+  // la carrera; nada de esto lo toca.
+  //
+  // Las tres se protegen solas y devuelven un valor seguro si el almacén falla
+  // (el freno deja pasar, la config vuelve vacía, la libretita vuelve null), así
+  // que este Promise.all no puede quedar colgado ni tirar el pedido abajo.
+  const enParalelo = (esConfirmarPedido && !esAdmin)
+    ? Promise.all([pasaElFreno(req), leerConfigKV(), leerCostos()])
+    : null;
+
   // Turno: de acá hasta el `finally`, este pedido es el único que confirma.
   const turno = esConfirmarPedido ? await tomarTurno() : null;
   if (esConfirmarPedido) marcar('turno');
@@ -784,11 +804,10 @@ module.exports = async (req, res) => {
     // Verificación de stock server-side antes de crear la venta
     if (esConfirmarPedido) {
       const items = req.body?.items || [];
-      // El admin (pestaña "Cargar pedido") vende SIN tope a propósito: el dueño
-      // decide caso por caso, y allá el aviso se muestra antes de confirmar.
-      const esAdmin = !!ADMIN_PASSWORD && req.headers['x-admin-password'] === ADMIN_PASSWORD;
+      const [pasaFreno, cfg, costos] = enParalelo ? await enParalelo : [true, {}, null];
+      marcar('datos');
 
-      if (!esAdmin && !(await pasaElFreno(req))) {
+      if (!esAdmin && !pasaFreno) {
         return res.status(429).json({
           error: 'Demasiados pedidos seguidos',
           detalle: 'Se recibieron varios pedidos desde esta conexión en poco tiempo. Esperá unos minutos y volvé a intentar, o escribinos por WhatsApp.',
@@ -796,10 +815,6 @@ module.exports = async (req, res) => {
       }
 
       if (items.length > 0) {
-        // Config y libretita de costos EN PARALELO: son dos consultas al KV que no
-        // dependen una de la otra, así que juntas cuestan lo mismo que una sola.
-        const [cfg, costos] = esAdmin ? [{}, null] : await Promise.all([leerConfigKV(), leerCostos()]);
-        marcar('config');
         const topes = cfg.topes || {};
         const { problemas, completo, productos, via } = await verificarStockServer(items, token, topes, costos);
         marcar('stock');
