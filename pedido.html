@@ -203,7 +203,7 @@ function imprimirSinPrecios() {
 async function refrescarDesdeGN(id) {
   if (id == null || id === '') return;
   try {
-    const r = await fetch('/api/pedido?id=' + encodeURIComponent(id) + '&refresh=1');
+    const r = await fetch('/api/pedido?id=' + encodeURIComponent(id) + '&refresh=1' + qsClave());
     if (!r.ok) return;
     const p = await r.json();
     // Solo tocamos la pantalla si GN devolvió una relectura real (sincronizado).
@@ -258,6 +258,18 @@ function getId() {
   return new URLSearchParams(location.search).get('id');
 }
 
+// La clave que viaja en el link (?k=...). Es lo que prueba que quien abre la
+// página es el dueño del pedido y no alguien probando números al azar.
+function getClave() {
+  return new URLSearchParams(location.search).get('k') || '';
+}
+
+/** El pedazo "&k=..." para agregarle a las consultas, o '' si el link no la trae. */
+function qsClave() {
+  const k = getClave();
+  return k ? '&k=' + encodeURIComponent(k) : '';
+}
+
 function fechaLinda(iso) {
   if (!iso) return '';
   try {
@@ -278,10 +290,10 @@ async function cargar() {
 
   let pedido;
   try {
-    const r = await fetch('/api/pedido?id=' + encodeURIComponent(id));
+    const r = await fetch('/api/pedido?id=' + encodeURIComponent(id) + qsClave());
     if (!r.ok) {
       errorBox('Pedido no disponible', r.status === 404
-        ? 'Este pedido no existe o el link ya venció (los links duran 90 días).'
+        ? 'Este pedido no existe, el link está incompleto o ya venció (los links duran 90 días). Si lo copiaste a mano, asegurate de copiarlo entero.'
         : 'No se pudo cargar el pedido. Probá de nuevo en un rato.');
       return;
     }

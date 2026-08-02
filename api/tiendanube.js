@@ -39,8 +39,43 @@ module.exports = async (req, res) => {
     const colorDeVariante = v => ((v.values || []).map(valEs).filter(t => t && !/iphone/i.test(t) && !esTalle(t))[0]) || '';
     const normColor = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 
-    // Construir mapa nombre_normalizado -> { imgs, desc, varImgByColor }
-    const map = {};
+    // ── El formato de la respuesta ──────────────────────────────────────────
+    //
+    // Antes esto era un objeto plano `clave -> ficha`, y como cada producto se
+    // indexa por su nombre y por el código de cada variante, **la ficha entera
+    // (todas las fotos + la descripción) se repetía una vez por clave**. Medido:
+    // 235 productos de TiendaNube ocupaban 2,04 MB en 1.766 claves. Al sumar los
+    // códigos de barras habría saltado a 5,30 MB — más del doble, y esto lo baja
+    // el navegador de cada cliente.
+    //
+    // Ahora las fichas van UNA sola vez en `fichas`, y `claves` guarda a qué
+    // posición apunta cada clave. Agregar claves nuevas pasa a costar unos bytes
+    // en vez de una copia entera.
+    //
+    // `v: 2` lo usan las páginas para distinguir el formato: la copia guardada en
+    // el CDN dura hasta 24 h, así que después de publicar esto todavía va a haber
+    // navegadores recibiendo el formato viejo un rato. Los dos tienen que andar.
+    const fichas = [];
+    const claves = {};
+    /**
+     * Apunta una clave a una ficha.
+     *
+     * `pisar` mantiene el comportamiento que ya tenía el catálogo: con nombres y
+     * SKU repetidos ganaba el ÚLTIMO producto. No es que sea mejor —con nombres
+     * duplicados cualquiera de los dos es arbitrario— pero cambiarlo movería la
+     * foto de productos que hoy se ven bien (comprobado: pasaba con "iconic case",
+     * "f-0136" y "f-0134"), y este cambio no vino a mover fotos.
+     *
+     * Los códigos de barras SÍ van sin pisar: cuando dos productos comparten un
+     * código genérico (0000000000875 y parecidos), se queda el primero en vez de
+     * que el último se lleve la foto de todos.
+     */
+    const apuntar = (clave, pos, pisar) => {
+      const k = String(clave == null ? '' : clave).trim().toLowerCase();
+      if (!k) return;
+      if (pisar || claves[k] === undefined) claves[k] = pos;
+    };
+
     for (const p of all) {
       const imgs = (p.images || []).map(i => i.src).filter(Boolean);
       const nombre = (p.name?.es || p.name?.pt || Object.values(p.name || {})[0] || '').trim().toLowerCase();
@@ -61,22 +96,39 @@ module.exports = async (req, res) => {
       }
       const entry = { imgs, desc };
       if (Object.keys(varImgByColor).length) entry.varImgByColor = varImgByColor;
-      if (nombre) map[nombre] = entry;
+      const pos = fichas.push(entry) - 1;
+      if (nombre) apuntar(nombre, pos, true);
       if (Array.isArray(p.variants)) {
         for (const v of p.variants) {
-          if (v.sku) map[v.sku.trim().toLowerCase()] = entry;
+          if (v.sku) apuntar(v.sku, pos, true);
+          // ── El código de barras ──────────────────────────────────────────
+          // Es el ÚNICO dato que identifica al mismo producto en los dos
+          // sistemas. Medido el 1-8-2026: 2.474 variantes tienen el mismo
+          // código de barras en Gestión Nube y en TiendaNube (F019815 =
+          // F019815), y cubren 180 de los 185 productos publicados.
+          //
+          // El `sku` de acá arriba NO sirve para eso: en esta tienda es otro
+          // código (f-0002-11) que Gestión Nube no conoce. Por eso el catálogo
+          // venía emparejando todo por NOMBRE, y una palabra de más rompía la
+          // foto. Con el código de barras indexado, el nombre pasa a ser el
+          // camino de respaldo y no el único.
+          //
+          // No se pisa una clave ya cargada: si dos productos comparten código
+          // de barras (pasa con códigos genéricos tipo 0000000000875), se queda
+          // el primero en vez de que el último se lleve la foto de todos.
+          if (v.barcode != null) apuntar(v.barcode, pos);
         }
       }
     }
 
-    // Las imágenes/descripciones de Tienda Nube cambian rara vez, y este mapa pesa
-    // ~2MB y es LENTO de regenerar (pagina toda la API de TN). Por eso lo cacheamos
-    // fuerte en el edge de Vercel: 1 h fresco + 24 h sirviendo al instante mientras
-    // se refresca por detrás. Así, mientras alguien entre al menos una vez por día,
-    // nunca se enfría del todo y las visitas lo reciben casi instantáneo.
+    // Las imágenes/descripciones de Tienda Nube cambian rara vez y esto es LENTO de
+    // regenerar (pagina toda la API de TN). Por eso se cachea fuerte en el CDN de
+    // Vercel: 1 h fresco + 24 h sirviendo al instante mientras se refresca por
+    // detrás. Así, mientras alguien entre al menos una vez por día, nunca se enfría
+    // del todo y las visitas lo reciben casi instantáneo.
     // El navegador además lo guarda 5 min (max-age) para recargas normales.
     res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400');
-    res.json(map);
+    res.json({ v: 2, fichas, claves });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

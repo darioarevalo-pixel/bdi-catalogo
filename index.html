@@ -1229,12 +1229,36 @@ function setBannerSlide(target, isRelative) {
   dots.forEach((d, i) => d.classList.toggle('active', i === bannerIdx));
 }
 
+/**
+ * Deja el mapa de fotos como un objeto `clave -> ficha`, venga en el formato que venga.
+ *
+ * Desde el 1-8-2026 `/api/tiendanube` manda las fichas UNA sola vez y aparte la lista
+ * de qué clave apunta a cuál (`{v:2, fichas, claves}`), porque repetir la ficha por
+ * cada clave hacía que la respuesta pesara 2 MB (y con los códigos de barras habría
+ * pasado de 5 MB). Acá se vuelve a armar el objeto plano que el resto del archivo
+ * espera: son referencias a la misma ficha, así que no ocupa de más en memoria.
+ *
+ * Sigue aceptando el formato viejo a propósito: la copia del CDN dura hasta 24 h, así
+ * que después de publicar todavía hay navegadores que reciben el de antes.
+ */
+function armarMapaTN(data) {
+  if (!data || typeof data !== 'object') return {};
+  if (data.v !== 2 || !Array.isArray(data.fichas) || !data.claves) return data; // formato viejo
+  const out = {};
+  for (const k in data.claves) {
+    const ficha = data.fichas[data.claves[k]];
+    if (ficha) out[k] = ficha;
+  }
+  return out;
+}
+
 async function cargarImagenesTN() {
   try {
     const r = await fetch('/api/tiendanube');
     if (r.ok) {
-      tnImageMap = await r.json();
+      tnImageMap = armarMapaTN(await r.json());
       tnNormIndex = Object.keys(tnImageMap).map(k => ({ key: k, words: normWords(k) }));
+      _tnCache = new Map(); // el mapa cambió: lo emparejado antes ya no vale
     }
   } catch(e) {}
 }
@@ -1251,19 +1275,25 @@ async function conectar() {
     if (fnav) fnav.remove();
   }
   try {
-    // La config del admin (productos/categorías ocultos, precios) SÍ hace falta
-    // antes de dibujar el catálogo → la esperamos.
     // Las referencias (canales, monedas, etc.) solo se usan al CONFIRMAR la
     // compra, no para mostrar productos: las cargamos por detrás para no frenar
     // el primer dibujado. Cuando el cliente vaya a confirmar ya estarán listas.
     cargarReferencias();
-    await cargarConfig();
 
-    // Las imágenes de Tienda Nube son pesadas (~1MB) y NO deben bloquear:
-    // cargan en paralelo y, cuando llegan, se re-renderiza para mostrarlas.
+    // Las fotos de Tienda Nube tampoco frenan: cuando llegan se vuelve a dibujar.
     cargarImagenesTN().then(() => { if (allProducts.length) renderProductos(); });
 
-    await cargarProductos();
+    // El catálogo y la configuración se piden JUNTOS. La configuración hace falta
+    // para filtrar lo oculto, pero no para pedir los productos, así que esperar una
+    // antes de arrancar la otra era regalar el tiempo de la más lenta.
+    const productosPendientes = traerProductosCrudos();
+    // Si el catálogo falla ANTES de que terminemos de esperar la configuración, el
+    // navegador lo reporta como error suelto por no tener quien lo atienda. Este
+    // `catch` vacío es solo para eso: el error de verdad se maneja abajo, al
+    // esperar la promesa, y lo agarra el `catch` grande de esta función.
+    productosPendientes.catch(() => {});
+    await cargarConfig();
+    await cargarProductos(await productosPendientes);
     $('conn-dot').className = 'conn-dot ok';
     $('conn-label').textContent = allProducts.length + ' productos';
     $('toolbar').style.display = 'block';
@@ -1384,7 +1414,14 @@ function toggleCatNav() {
   }
 }
 
-async function cargarProductos() {
+// Baja el catálogo de Gestión Nube y devuelve las páginas crudas.
+//
+// Está separado del armado a propósito: bajar los productos NO necesita la
+// configuración del panel (recién hace falta para filtrar lo oculto), así que las
+// dos cosas se piden a la vez. Antes la configuración —que tarda ~0,4 s porque no
+// se cachea— frenaba el pedido del catálogo, y esos 0,4 s se los comía el cliente
+// antes de ver el primer producto.
+async function traerProductosCrudos() {
   const baseQs = 'per_page=100&include_stock=1&include_images=1&include_variants=1';
   const extraer = d => Array.isArray(d) ? d : (d.data || d.products || d.items || []);
 
@@ -1406,6 +1443,11 @@ async function cargarProductos() {
     );
     pages = pages.concat(rest);
   }
+  return pages;
+}
+
+async function cargarProductos(paginas) {
+  const pages = paginas || await traerProductosCrudos();
 
   const seen = new Set();
   let all = [];
@@ -1622,24 +1664,92 @@ function normWords(s) {
     .filter(Boolean);
 }
 
-function tnLookup(p) {
-  // Busca la imagen de TiendaNube por SKU o por PREFIJO del nombre (en orden).
-  const sku = (p.code || p.sku || p.codigo || '').trim().toLowerCase();
-  if (sku && tnImageMap[sku]) return tnImageMap[sku];
-  const gnWords = normWords(p.name || p.nombre || p.product_name || '');
-  if (!gnWords.length) return null;
-  // Las palabras de TN deben ser el comienzo exacto (en orden) del nombre de GN.
-  // Así una variante con sufijo ("... | iPhone 14", "... MAYORISTA") toma la foto
-  // del producto base, pero un producto DISTINTO con "de" en el medio (ej.
-  // "protector DE camara brillo" vs "protector camara brillo") NO se la roba.
-  // Gana el prefijo más largo (el más específico).
-  let best = null, bestLen = 0;
-  for (const e of tnNormIndex) {
-    const tw = e.words;
-    if (tw.length && tw.length <= gnWords.length && tw.length > bestLen &&
-        tw.every((w, i) => w === gnWords[i])) { best = e.key; bestLen = tw.length; }
+// ---------------------------------------------------------------------------
+// CÓMO SE LE ENCUENTRA LA FOTO A UN PRODUCTO
+//
+// Se prueban tres caminos, en este orden, y gana el primero que traiga fotos:
+//   1. El código del producto.
+//   2. El CÓDIGO DE BARRAS de sus variantes ← el bueno.
+//   3. El nombre, exigiendo que el de TiendaNube sea el comienzo exacto del de
+//      Gestión Nube.
+//
+// El 2 se agregó el 1-8-2026 y es el que importa. Hasta entonces todo colgaba
+// del nombre, y el nombre es frágil: "PROTECTOR DE CAMARA - BRILLO" no
+// encontraba "protector camara brillo" por el "DE" del medio, y quedaba sin
+// foto sin que nadie se enterara. El código de barras es el mismo dato en los
+// dos sistemas (2.474 variantes cruzan exacto), así que un producto nuevo tiene
+// foto aunque lo hayan nombrado distinto en cada lado.
+//
+// Se prueba el código ANTES que el nombre porque identifica al producto sin
+// ambigüedad; el nombre puede coincidir de casualidad con otro.
+// ---------------------------------------------------------------------------
+
+// El resultado se guarda por producto: esto se llama tres veces por producto en
+// cada dibujado (la foto de la tarjeta, la foto por color y la descripción), y
+// ahora además recorre los códigos de todas las variantes.
+let _tnCache = new Map();
+
+function tnBuscar(p) {
+  const id = p.id || p.product_id;
+  if (_tnCache.has(id)) return _tnCache.get(id);
+  const r = tnBuscarSinCache(p);
+  _tnCache.set(id, r);
+  return r;
+}
+
+function tnBuscarSinCache(p) {
+  const candidatos = [];
+
+  // 1) El código del producto.
+  const cod = (p.code || p.sku || p.codigo || '').trim().toLowerCase();
+  if (cod && tnImageMap[cod]) candidatos.push({ entry: tnImageMap[cod], por: 'código', clave: cod });
+
+  // 2) Los códigos de barras de las variantes.
+  //
+  // Se cuenta cuántas variantes apuntan a cada producto de TiendaNube y gana el
+  // más votado. Un solo código mal cargado no alcanza para arrastrar la foto
+  // equivocada a todo el producto: tiene que ganarle a los demás.
+  const votos = new Map();
+  for (const v of (p.variantes || [])) {
+    const cb = v && v.barcode != null ? String(v.barcode).trim().toLowerCase() : '';
+    const e = cb && tnImageMap[cb];
+    if (!e) continue;
+    const acum = votos.get(e) || { n: 0, clave: cb };
+    acum.n++;
+    votos.set(e, acum);
   }
-  return best ? tnImageMap[best] : null;
+  if (votos.size) {
+    let mejor = null, mejorN = 0;
+    for (const [entry, d] of votos) if (d.n > mejorN) { mejor = { entry, por: 'código de barras', clave: d.clave }; mejorN = d.n; }
+    if (mejor) candidatos.push(mejor);
+  }
+
+  // 3) El nombre. Las palabras de TN deben ser el comienzo exacto (en orden) del
+  // nombre de GN. Así una variante con sufijo ("... | iPhone 14", "... MAYORISTA")
+  // toma la foto del producto base, pero un producto DISTINTO con "de" en el medio
+  // NO se la roba. Gana el prefijo más largo (el más específico).
+  const gnWords = normWords(p.name || p.nombre || p.product_name || '');
+  if (gnWords.length) {
+    let best = null, bestLen = 0;
+    for (const e of tnNormIndex) {
+      const tw = e.words;
+      if (tw.length && tw.length <= gnWords.length && tw.length > bestLen &&
+          tw.every((w, i) => w === gnWords[i])) { best = e.key; bestLen = tw.length; }
+    }
+    if (best) candidatos.push({ entry: tnImageMap[best], por: 'nombre', clave: best });
+  }
+
+  // Gana el primero que TENGA fotos. Sin esta condición, un producto que cruza
+  // por código contra una ficha de TiendaNube sin fotos cargadas perdería la
+  // foto que hoy sí consigue por nombre: el cambio habría sacado imágenes en vez
+  // de agregarlas.
+  const conFotos = candidatos.find(c => c.entry && c.entry.imgs && c.entry.imgs.length);
+  return conFotos || candidatos[0] || null;
+}
+
+function tnLookup(p) {
+  const m = tnBuscar(p);
+  return m ? m.entry : null;
 }
 
 function getImagenes(p) {
@@ -2821,8 +2931,12 @@ async function confirmarPedido() {
         items: items.map(i => ({ nombre: i.nombre, variante: i.varNombre || '', cantidad: i.qty, precio: i.precio, img: i.img || '', nota: notaDescuentoTexto(i.id, i.sizeId) })),
       };
       try {
-        await fetch('/api/pedido', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(pedidoDetalle) });
-        pedidoUrl = location.origin + '/pedido/' + pedidoId;
+        // El servidor devuelve la clave del link. Sin ella el pedido no se abre:
+        // el número solo (29588, 29591…) es correlativo y cualquiera podría ir
+        // probando de uno en uno hasta leer los datos de otros clientes.
+        const rp = await fetch('/api/pedido', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(pedidoDetalle) });
+        const dp = await rp.json().catch(() => ({}));
+        pedidoUrl = location.origin + '/pedido/' + pedidoId + (dp.k ? '?k=' + dp.k : '');
       } catch (e) { /* el link es opcional; si falla seguimos igual */ }
     }
 

@@ -1,3 +1,5 @@
+const crypto = require('crypto');
+
 const KV_URL = process.env.KV_REST_API_URL || process.env.STORAGE_KV_REST_API_URL;
 const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.STORAGE_KV_REST_API_TOKEN;
 const GN_BASE = 'https://www.gestionnube.com/api/v1';
@@ -7,8 +9,79 @@ const TTL_SECONDS = 90 * 24 * 60 * 60; // 90 días: pasado ese plazo el link se 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Headers': 'Content-Type, x-admin-password',
 };
+
+// ---------------------------------------------------------------------------
+// QUIÉN PUEDE VER UN PEDIDO
+//
+// Este archivo guarda el detalle de cada pedido mayorista: nombre, teléfono, qué
+// compró y cuánto pagó. Hasta el 1-8-2026 no pedía NADA para leerlo, y el
+// listado completo se bajaba con una sola consulta: comprobado contra producción,
+// `GET /api/pedido?list=1` devolvía 104 pedidos con 94 teléfonos de clientes.
+// Y como el número de pedido es el de Gestión Nube (29561, 29580, 29588…), ir de
+// uno en uno tampoco costaba nada.
+//
+// Ahora hay tres puertas distintas, una por uso:
+//   · El listado          → contraseña del panel (lo usa solo admin.html).
+//   · Un pedido suelto    → la clave que viaja en el link (abajo).
+//   · Guardar un pedido   → se puede escribir UNA vez por número; pisarlo pide
+//                           la contraseña del panel.
+//
+// La clave del link se CALCULA a partir del número de pedido y un secreto del
+// servidor; no se guarda en ningún lado. Eso tiene dos ventajas: vale igual para
+// los pedidos viejos que ya están guardados (no hay que migrar nada), y si el
+// almacenamiento se vacía las claves siguen siendo las mismas.
+// ---------------------------------------------------------------------------
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
+
+// Cae a ADMIN_PASSWORD para no depender de cargar una variable nueva en Vercel.
+// OJO: si algún día se cambia la contraseña del panel, cambian todas las claves
+// y los links ya enviados dejan de abrir. Para evitarlo, cargar PEDIDO_SECRET
+// (cualquier texto largo al azar) y no tocarla más.
+const SECRETO_LINK = process.env.PEDIDO_SECRET || ADMIN_PASSWORD;
+
+// ── La transición, para no romperle el link a nadie ─────────────────────────
+//
+// Los clientes que ya compraron tienen guardado (y reenviado por WhatsApp) un link
+// SIN clave. Si de golpe dejaran de abrir, el lunes serían 96 personas escribiendo
+// para preguntar qué pasó con su pedido.
+//
+// Cómo se distingue un pedido "de antes": los que se guardan A PARTIR de este
+// cambio quedan marcados con `conClave`. El que no tiene la marca es de antes, y
+// se le permite abrir sin clave. Se hace con una marca y NO comparando fechas
+// porque por fecha siempre queda un borde mal: había un pedido hecho el mismo día
+// del cambio que se habría roto al instante.
+//
+// Hasta cuándo dura: los pedidos se borran solos a los 90 días. El más nuevo de
+// los "de antes" vence el 30-10-2026, así que el 31 ya no queda ninguno vivo. Por
+// eso la puerta se cierra ese día: para entonces no rompe NINGÚN link, porque no
+// queda ninguno que abrir. Se cierra sola, no hay que acordarse de apagar nada.
+const FIN_TRANSICION = Date.parse('2026-10-31T00:00:00Z');
+
+function esAdmin(req) {
+  return !!ADMIN_PASSWORD && req.headers['x-admin-password'] === ADMIN_PASSWORD;
+}
+
+/** La clave del link de un pedido, o null si el servidor no tiene secreto cargado. */
+function claveDe(id) {
+  if (!SECRETO_LINK) return null;
+  return crypto.createHmac('sha256', SECRETO_LINK).update('pedido:' + String(id)).digest('hex').slice(0, 12);
+}
+
+/** Comparación en tiempo constante: no le cuenta al de afuera cuántos caracteres acertó. */
+function claveOk(id, k) {
+  const esperada = claveDe(id);
+  if (!esperada || !k) return false;
+  const a = Buffer.from(String(k)), b = Buffer.from(esperada);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+/** ¿Es un pedido de los de antes del cambio (sin la marca), y la ventana sigue abierta? */
+function esLinkViejoTolerado(pedido) {
+  if (Date.now() >= FIN_TRANSICION) return false;
+  return !(pedido && pedido.conClave);
+}
 
 // Normaliza el id para que la clave en KV sea siempre segura.
 function clave(id) {
@@ -100,6 +173,8 @@ module.exports = async (req, res) => {
     // Devuelve un resumen liviano por pedido (sin los items completos); el detalle
     // se obtiene con GET ?id=<id> o navegando a /pedido/<id>.
     if (req.method === 'GET' && req.query.list) {
+      // Esta es la consulta que entregaba la nómina entera de clientes. Solo el panel.
+      if (!esAdmin(req)) return res.status(401).json({ error: 'Necesitás la contraseña del panel.' });
       // 1) Juntar las claves pedido:* con SCAN (no bloqueante, a diferencia de KEYS).
       //    Iterar hasta cursor '0'; tope de 20 vueltas por seguridad.
       const keys = [];
@@ -124,8 +199,12 @@ module.exports = async (req, res) => {
           if (!v) return; // vencido por TTL entre el SCAN y el MGET
           let p;
           try { p = JSON.parse(v); } catch (e) { return; }
+          const idPedido = p.id != null ? p.id : chunk[j].replace(/^pedido:/, '');
           pedidos.push({
-            id: p.id != null ? p.id : chunk[j].replace(/^pedido:/, ''),
+            id: idPedido,
+            // La clave del link, para que el botón "Ver" del panel abra y para poder
+            // reenviarle el link a un cliente que lo perdió.
+            k: claveDe(idPedido),
             fecha: p.fecha || null,
             cliente: p.cliente || '',
             telefono: p.telefono || '',
@@ -151,6 +230,13 @@ module.exports = async (req, res) => {
       if (!d || !d.result) return res.status(404).json({ error: 'Pedido no encontrado o vencido' });
       const pedido = JSON.parse(d.result);
 
+      // La clave del link. Se contesta 404 —y no 401— a propósito: sin clave, el
+      // de afuera no puede distinguir "existe pero no tenés la clave" de "no
+      // existe", así que barrer números no le dice nada.
+      if (!esAdmin(req) && !claveOk(id, req.query.k) && !esLinkViejoTolerado(pedido)) {
+        return res.status(404).json({ error: 'Pedido no encontrado o vencido' });
+      }
+
       // ?refresh=1 → relee los renglones actuales desde Gestión Nube y actualiza
       // la foto guardada. Si GN falla, devuelve el snapshot tal cual (no rompe).
       if (req.query.refresh) {
@@ -168,12 +254,38 @@ module.exports = async (req, res) => {
       return res.json(pedido);
     }
 
-    // Guardar un pedido cuando el cliente confirma
+    // Guardar un pedido cuando el cliente confirma.
+    //
+    // Lo llama el navegador del cliente justo después de crear la venta, así que no
+    // puede pedir contraseña. Los frenos son otros: se escribe UNA sola vez por
+    // número (pisar uno ya guardado pide la contraseña del panel) y el detalle tiene
+    // un tamaño máximo. Sin esto, cualquiera podía reescribir el pedido de otro o
+    // llenar el almacenamiento con basura.
     if (req.method === 'POST') {
       const pedido = req.body || {};
       if (!pedido.id) return res.status(400).json({ error: 'Falta el número de pedido' });
-      await kvCmd(['SET', clave(pedido.id), JSON.stringify(pedido), 'EX', String(TTL_SECONDS)]);
-      return res.json({ ok: true });
+      if (Array.isArray(pedido.items) && pedido.items.length > 500) {
+        return res.status(400).json({ error: 'El pedido tiene demasiados renglones' });
+      }
+      // La marca que separa "de antes" de "de ahora". El link que se le entrega a
+      // este cliente YA lleva la clave, así que a este pedido sí se le puede exigir.
+      pedido.conClave = true;
+      const cuerpo = JSON.stringify(pedido);
+      if (cuerpo.length > 400_000) return res.status(400).json({ error: 'El detalle del pedido es demasiado grande' });
+
+      // NX = "solo si todavía no existe". El panel sí puede pisar: cuando carga un
+      // pedido a mano, a veces lo vuelve a guardar corregido.
+      // El orden NX antes de EX es el que ya usa el turno del proxy contra este
+      // mismo almacenamiento, así que se sabe que lo acepta.
+      const cmd = esAdmin(req)
+        ? ['SET', clave(pedido.id), cuerpo, 'EX', String(TTL_SECONDS)]
+        : ['SET', clave(pedido.id), cuerpo, 'NX', 'EX', String(TTL_SECONDS)];
+      const r = await kvCmd(cmd);
+      if (!esAdmin(req) && r && r.result === null) {
+        return res.status(409).json({ error: 'Ese número de pedido ya estaba guardado' });
+      }
+      // La clave viaja de vuelta para que quien confirmó pueda armar el link.
+      return res.json({ ok: true, k: claveDe(pedido.id) });
     }
 
     return res.status(405).end();

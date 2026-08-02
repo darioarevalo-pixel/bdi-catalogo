@@ -250,7 +250,7 @@ async function verificarStockServer(items, token, topes = {}) {
   }
 
   // No pudimos leer el catálogo completo → fail-open: sin problemas, que la venta pase.
-  if (!completo) return { problemas: [], completo: false };
+  if (!completo) return { problemas: [], completo: false, productos };
 
   const problemas = [];
   for (const item of items) {
@@ -313,7 +313,97 @@ async function verificarStockServer(items, token, topes = {}) {
       }
     }
   }
-  return { problemas, completo: true };
+  return { problemas, completo: true, productos };
+}
+
+// ---------------------------------------------------------------------------
+// EL PRECIO LO PONE EL NAVEGADOR (y eso hay que atajarlo)
+//
+// El catálogo calcula el precio en la máquina del cliente y lo manda en
+// `unit_price`. Hasta el 1-8-2026 el servidor lo reenviaba a Gestión Nube tal
+// cual: con la consola del navegador abierta, cualquiera podía confirmar 100
+// fundas a $1 y la venta se creaba, descontando stock real.
+//
+// Lo correcto sería recalcular el precio acá, pero eso obliga a traer al
+// servidor toda la lógica de la lista mejor, las excepciones y los cupones: es
+// un proyecto, no un control. Mientras tanto, esto ataja el abuso grosero sin
+// arriesgar rechazar un pedido bueno.
+//
+// El piso: el catálogo nunca vende por debajo de `min(costo, mayorista)`
+// (`listaMejorDesde` en index.html). PERO un cupón sí puede bajar de ahí,
+// porque el descuento se reparte entre los renglones. Por eso el límite no es
+// el piso sino el 20% del piso: ningún cupón real descuenta el 80%, y un pedido
+// a $1 sobre un piso de $1.652 queda muy por debajo.
+//
+// Los que caen entre el piso y el 20% se dejan pasar pero quedan avisados en el
+// registro: si aparece manipulación fina, se ve ahí sin haberle trabado la
+// compra a nadie por un cupón raro.
+const FRACCION_MINIMA = 0.20;
+
+function revisarPrecios(items, productos) {
+  const sospechosos = [];
+  for (const item of items) {
+    const p = productos[item.product_id];
+    if (!p) continue; // producto desconocido: ya lo maneja la verificación de stock
+    const may = parseFloat(p.wholesaler_price || 0);
+    const costo = parseFloat(p.unit_cost || 0);
+    const piso = (costo > 0 && may > 0) ? Math.min(costo, may) : (costo || may);
+    if (!(piso > 0)) continue; // sin referencia de precio no se puede opinar
+    const precio = parseFloat(item.unit_price);
+    if (isNaN(precio) || precio < 0) {
+      sospechosos.push({ nombre: p.name, precio: item.unit_price, piso, grave: true });
+      continue;
+    }
+    if (precio < piso * FRACCION_MINIMA) {
+      sospechosos.push({ nombre: p.name, precio, piso, grave: true });
+    } else if (precio < piso) {
+      sospechosos.push({ nombre: p.name, precio, piso, grave: false });
+    }
+  }
+  return sospechosos;
+}
+
+// ---------------------------------------------------------------------------
+// FRENO A LA CANTIDAD DE PEDIDOS
+//
+// Confirmar un pedido crea una venta en Gestión Nube y DESCUENTA STOCK. No hacía
+// falta credencial ni había límite: un script podía crear pedidos en cadena y
+// dejar el depósito en cero sin comprar nada. Los topes por variante no alcanzan
+// contra eso, porque cada pedido nuevo vuelve a leer el stock ya descontado.
+//
+// Los pedidos mayoristas reales son pocos por día y de a uno, así que un tope de
+// 6 por hora por conexión no le toca el camino a nadie. El admin no cuenta: desde
+// el panel se cargan varios seguidos a propósito.
+//
+// Si el KV no contesta, se deja pasar: el mismo criterio que el resto del archivo
+// (preferimos el raro abuso antes que un cliente que no puede comprar).
+const PEDIDOS_POR_HORA = 6;
+
+function deQuienViene(req) {
+  const xff = req.headers['x-forwarded-for'];
+  if (xff) return String(xff).split(',')[0].trim();
+  return req.headers['x-real-ip'] || 'desconocido';
+}
+
+async function pasaElFreno(req) {
+  const quien = deQuienViene(req);
+  if (quien === 'desconocido') return true;
+  const hora = Math.floor(Date.now() / 3600000);
+  const key = `catalogo-freno:${quien}:${hora}`;
+  try {
+    const r = await kvCmd(['INCR', key]);
+    if (r === null) return true; // KV no configurado
+    const n = r && r.result;
+    if (n === 1) await kvCmd(['EXPIRE', key, 3600]);
+    if (typeof n === 'number' && n > PEDIDOS_POR_HORA) {
+      console.warn(`[freno] ${quien} lleva ${n} pedidos en la hora: se rechaza`);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error('[freno] el KV no contestó, se deja pasar:', (e && e.message) || e);
+    return true;
+  }
 }
 
 module.exports = async (req, res) => {
@@ -390,12 +480,37 @@ module.exports = async (req, res) => {
     // Verificación de stock server-side antes de crear la venta
     if (esConfirmarPedido) {
       const items = req.body?.items || [];
+      // El admin (pestaña "Cargar pedido") vende SIN tope a propósito: el dueño
+      // decide caso por caso, y allá el aviso se muestra antes de confirmar.
+      const esAdmin = !!ADMIN_PASSWORD && req.headers['x-admin-password'] === ADMIN_PASSWORD;
+
+      if (!esAdmin && !(await pasaElFreno(req))) {
+        return res.status(429).json({
+          error: 'Demasiados pedidos seguidos',
+          detalle: 'Se recibieron varios pedidos desde esta conexión en poco tiempo. Esperá unos minutos y volvé a intentar, o escribinos por WhatsApp.',
+        });
+      }
+
       if (items.length > 0) {
-        // El admin (pestaña "Cargar pedido") vende SIN tope a propósito: el dueño
-        // decide caso por caso, y allá el aviso se muestra antes de confirmar.
-        const esAdmin = !!ADMIN_PASSWORD && req.headers['x-admin-password'] === ADMIN_PASSWORD;
         const topes = esAdmin ? {} : await leerTopes();
-        const { problemas, completo } = await verificarStockServer(items, token, topes);
+        const { problemas, completo, productos } = await verificarStockServer(items, token, topes);
+
+        // El precio que mandó el navegador, contra el del producto en Gestión Nube.
+        if (!esAdmin && productos) {
+          const sospechosos = revisarPrecios(items, productos);
+          const graves = sospechosos.filter(s => s.grave);
+          for (const s of sospechosos.filter(s => !s.grave)) {
+            console.warn(`[precio] "${s.nombre}" vino a ${s.precio} y el piso es ${s.piso} (pasa, puede ser un cupón)`);
+          }
+          if (graves.length) {
+            console.error('[precio] RECHAZADO por precio imposible:', JSON.stringify(graves));
+            return res.status(400).json({
+              error: 'Los precios del pedido no coinciden con los del catálogo',
+              detalle: 'Recargá la página y volvé a armar el pedido. Si sigue pasando, escribinos por WhatsApp.',
+            });
+          }
+        }
+
         // Solo bloqueamos si pudimos verificar el catálogo COMPLETO y hay faltantes
         // reales. Si la verificación quedó incompleta (GN saturado), dejamos pasar.
         if (completo && problemas.length > 0) {

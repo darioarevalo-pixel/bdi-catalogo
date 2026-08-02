@@ -470,6 +470,7 @@
       <div class="header-sub">Administrador de catálogo</div>
     </div>
     <div style="display:flex; align-items:center; gap:10px">
+      <a class="btn-logout" href="/revision" target="_blank" rel="noopener" style="text-decoration:none">Revisar productos</a>
       <button class="btn-logout" onclick="cerrarSesion()">Cerrar sesión</button>
       <button class="btn-save" id="btn-save" onclick="guardarConfig()">Guardar cambios</button>
     </div>
@@ -1289,7 +1290,19 @@ async function cargarImagenesTN() {
   try {
     const r = await fetch('/api/tiendanube');
     if (!r.ok) return;
-    tnImageMap = await r.json();
+    // `/api/tiendanube` manda las fichas una sola vez y aparte a qué ficha apunta
+    // cada clave (formato `v:2`, para no repetir 2 MB de fotos y descripciones).
+    // Se acepta también el formato viejo: la copia del CDN dura hasta 24 h.
+    const crudo = await r.json();
+    if (crudo && crudo.v === 2 && Array.isArray(crudo.fichas) && crudo.claves) {
+      tnImageMap = {};
+      for (const k in crudo.claves) {
+        const ficha = crudo.fichas[crudo.claves[k]];
+        if (ficha) tnImageMap[k] = ficha;
+      }
+    } else {
+      tnImageMap = crudo || {};
+    }
     tnImageMapKeys = Object.keys(tnImageMap);
     tnNormIndex = tnImageMapKeys.map(k => ({ key: k, words: normWords(k) }));
     // Precalcular la imagen de cada producto (una sola vez) para que el listado
@@ -2732,7 +2745,9 @@ async function cargarPedidos(force) {
   if (allPedidos && !force) { renderPedidos(); return; }
   if (cont) cont.innerHTML = '<div class="loading-state">Cargando pedidos...</div>';
   try {
-    const r = await fetch('/api/pedido?list=1');
+    // El listado trae datos de clientes (nombre, teléfono, qué compró): desde el
+    // 1-8-2026 el servidor lo entrega solo con la contraseña del panel.
+    const r = await fetch('/api/pedido?list=1', { headers: { 'x-admin-password': adminPassword } });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(data.error || 'HTTP ' + r.status);
     allPedidos = Array.isArray(data.pedidos) ? data.pedidos : [];
@@ -2774,9 +2789,24 @@ function renderPedidos() {
         <div class="pedido-meta">${p.nItems} ítem${p.nItems === 1 ? '' : 's'}${p.pago ? ' · ' + p.pago : ''}${p.entrega ? ' · ' + p.entrega : ''}</div>
       </div>
       <div class="pedido-total">${fmtAR(p.total || 0)}</div>
-      <a class="pedido-ver" href="/pedido/${encodeURIComponent(p.id)}" target="_blank" rel="noopener">Ver</a>
+      <button class="pedido-ver" style="border:1px solid var(--border-strong);background:transparent;cursor:pointer;font-family:inherit" onclick="copiarLinkPedido('${encodeURIComponent(p.id)}','${p.k ? encodeURIComponent(p.k) : ''}')">Copiar link</button>
+      <a class="pedido-ver" href="/pedido/${encodeURIComponent(p.id)}${p.k ? '?k=' + encodeURIComponent(p.k) : ''}" target="_blank" rel="noopener">Ver</a>
     </div>
   `).join('');
+}
+
+/**
+ * Copia el link del pedido, con su clave, listo para mandarle por WhatsApp.
+ *
+ * Es el camino para el cliente que perdió el link o que nunca lo mandó al chat:
+ * desde acá se le reenvía sin que tenga que volver a pedir nada. Sin la clave el
+ * link no abre, así que copiarlo a mano de la barra del navegador no alcanza.
+ */
+function copiarLinkPedido(id, k) {
+  const url = location.origin + '/pedido/' + id + (k ? '?k=' + k : '');
+  navigator.clipboard.writeText(url)
+    .then(() => showToast('Link copiado — ya se lo podés mandar al cliente', 'success'))
+    .catch(() => showToast('No se pudo copiar. El link es: ' + url, 'error', 8000));
 }
 
 function populatePriceCatFilter() {
@@ -3247,7 +3277,12 @@ async function pmConfirmar() {
     let pedidoUrl = '';
     if (pedidoId) {
       const det = { id: pedidoId, fecha: new Date().toISOString(), cliente, total: pmLineas.reduce((s, l) => s + l.precio * l.cant, 0), items: pmLineas.map(l => ({ nombre: l.nombre, variante: l.sizeName || '', cantidad: l.cant, precio: l.precio, img: l.img || '' })) };
-      try { await fetch('/api/pedido', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(det) }); pedidoUrl = location.origin + '/pedido/' + pedidoId; } catch (e) {}
+      // El link lleva la clave que devuelve el servidor: sin ella el pedido no abre.
+      try {
+        const rp = await fetch('/api/pedido', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword }, body: JSON.stringify(det) });
+        const dp = await rp.json().catch(() => ({}));
+        pedidoUrl = location.origin + '/pedido/' + pedidoId + (dp.k ? '?k=' + dp.k : '');
+      } catch (e) {}
     }
     $('pm-resultado').innerHTML = '<span class="pm-ok">✅ Pedido creado en Gestión Nube' + (pedidoId ? ' — N° ' + pedidoId : '') + '.</span>' +
       (pedidoUrl ? ' <a href="' + pedidoUrl + '" target="_blank">Ver / compartir link del pedido</a>' : '');
