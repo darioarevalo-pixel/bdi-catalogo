@@ -2,6 +2,7 @@
 // GET  ?store=bdi|zattia            → { ok, config }  (null si nunca se guardó)
 // POST {store, config, adminUser, adminPass | adminToken} → guarda (solo administradores)
 const { esAdmin } = require('./_admin');
+const { exigirUsuario } = require('./_auth');
 const KV_URL   = process.env.KV_REST_API_URL   || process.env.STORAGE_KV_REST_API_URL;
 const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.STORAGE_KV_REST_API_TOKEN;
 // Igual que en tiendanube-audit: el Monitor llama acá con `apiFetch`, que agrega
@@ -27,6 +28,16 @@ module.exports = async (req, res) => {
   try {
     const store = (req.query?.store || req.body?.store || 'bdi').toLowerCase(); // POST manda store en el body
     if (req.method === 'GET') {
+      // Esto es la matriz de márgenes e impuestos por canal: cuánto se gana en cada
+      // forma de venta. Estaba abierta a cualquiera (hoy vacía en las dos marcas, así
+      // que no se filtró nada, pero se filtraría sola el día que la carguen).
+      //
+      // Alcanza con estar en el padrón, no hace falta ser admin: la pantalla de
+      // Comisiones del Monitor la lee cualquiera del equipo. El Monitor manda la
+      // credencial en TODAS sus llamadas (lib/api-fetch.ts), así que no se rompe.
+      // ⚠️ Si se rompiera, se ve como "sin datos" y no como error: la pantalla cae a
+      // la config local en silencio (lib/comisiones/kv.ts).
+      if (!(await exigirUsuario(req, res, 'comisiones:leer'))) return;
       const raw = await kvCmd(['GET', keyFor(store)]);
       return res.status(200).json({ ok: true, config: raw ? JSON.parse(raw) : null });
     }

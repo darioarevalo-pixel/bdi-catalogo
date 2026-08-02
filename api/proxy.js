@@ -107,13 +107,15 @@ function stockDeProducto(p) {
 //   topes: { <product_id>: { porVariante: { <size_id>: <unidades> }, creado, stockAlCrear } }
 // La clave es producto+variante porque en GN el `size_id` es un talle compartido
 // entre productos (el mismo "iPhone 15 - Negro" se repite en muchos diseños).
-async function leerTopes() {
+// Se lee la config ENTERA (no solo `topes`) porque el control de precios de más
+// abajo necesita las excepciones, los precios por variante y los cupones. Es la
+// misma consulta al KV que ya se hacía: no agrega ni una espera.
+async function leerConfigKV() {
   try {
-    const cfg = await kvGet();
-    return (cfg && cfg.topes) || {};
+    return (await kvGet()) || {};
   } catch (e) {
-    // El KV caído no puede trabar las ventas: sin topes, se vende como siempre.
-    console.error('[topes] no se pudieron leer:', (e && e.message) || e);
+    // El KV caído no puede trabar las ventas: sin config, se vende como siempre.
+    console.error('[config] no se pudo leer:', (e && e.message) || e);
     return {};
   }
 }
@@ -250,7 +252,7 @@ async function verificarStockServer(items, token, topes = {}) {
   }
 
   // No pudimos leer el catálogo completo → fail-open: sin problemas, que la venta pase.
-  if (!completo) return { problemas: [], completo: false };
+  if (!completo) return { problemas: [], completo: false, productos };
 
   const problemas = [];
   for (const item of items) {
@@ -313,7 +315,190 @@ async function verificarStockServer(items, token, topes = {}) {
       }
     }
   }
-  return { problemas, completo: true };
+  return { problemas, completo: true, productos };
+}
+
+// ---------------------------------------------------------------------------
+// EL PRECIO LO PONE EL NAVEGADOR (y eso hay que atajarlo)
+//
+// El catálogo calcula el precio en la máquina del cliente y lo manda en
+// `unit_price`. Hasta el 1-8-2026 el servidor lo reenviaba a Gestión Nube tal
+// cual: con la consola del navegador abierta, cualquiera podía confirmar 100
+// fundas a $1 y la venta se creaba, descontando stock real.
+//
+// No hace falta recalcular el precio exacto (eso obliga a traer acá toda la
+// lógica de la lista mejor). Alcanza con calcular el PISO: cuál es el precio más
+// bajo que el catálogo pudo haber generado legítimamente para ese renglón.
+//
+// El piso arranca en `min(costo, mayorista)`, que es donde lo frena
+// `listaMejorDesde` en index.html: el % de la lista mejor, sea 15 o 40, nunca
+// baja de ahí. Después se corrige por las tres únicas cosas que SÍ pueden quedar
+// por debajo, todas cargadas a propósito desde el panel:
+//
+//   · excepción tipo `precio` — precio fijo para un producto. Son globales (no
+//     por código: config.js manda `cfg.excepciones` entero al validar cualquier
+//     código), así que el servidor no necesita saber qué código usó el cliente.
+//   · precio especial de variante (`variantPrices`) más bajo que el costo.
+//   · un cupón vigente, que reparte su descuento entre los renglones.
+//
+// Los cupones se leen del KV en vivo: hoy están apagados y el piso queda entero;
+// si mañana se prende uno del 30%, el margen se abre a 30% solo, sin tocar nada.
+const TOLERANCIA_PORCENTAJE = 0.01; // 1% + $1 de perdón: el catálogo redondea a 2 decimales
+const TOLERANCIA_PESOS = 1;
+
+function positivo(v) {
+  const n = parseFloat(v);
+  return (!isNaN(n) && n > 0) ? n : 0;
+}
+
+// Cuánto puede bajar un renglón por culpa de un cupón vigente.
+// Devuelve { fraccion, incierto }: `incierto` significa "no hay piso calculable".
+//
+// Los cupones de MONTO FIJO son siempre inciertos. El descuento se reparte solo
+// entre los renglones descontables (las ofertas quedan afuera) pero la compra
+// mínima se valida sobre el total CON ofertas: un carrito mayormente de ofertas
+// puede dejar `descuento >= subtotalDescontable`, el factor da 0 y el renglón
+// viaja a $0. Consultado con Bruno el 2-8-2026: eso es LEGÍTIMO ("si le di el
+// cupón, que lo pague $0"), así que no se toca el catálogo y el control de
+// precios no puede opinar mientras ese cupón esté prendido.
+//
+// Los de porcentaje sí acotan: el factor nunca baja de (1 − valor/100).
+function aflojeDeCupones(cfg) {
+  if (!cfg || cfg.mostrarCupones !== true) return { fraccion: 0, incierto: false };
+  const cupones = Array.isArray(cfg.cupones) ? cfg.cupones : [];
+  const ahora = new Date();
+  let fraccion = 0, incierto = false;
+  for (const c of cupones) {
+    if (!c || c.activo === false) continue;
+    if (c.vence) {
+      const fin = new Date(c.vence + 'T23:59:59');
+      if (!isNaN(fin.getTime()) && fin < ahora) continue; // vencido
+    }
+    if (c.tipo === 'porcentaje') {
+      fraccion = Math.max(fraccion, Math.min(positivo(c.valor), 100) / 100);
+    } else if (c.tipo === 'monto') {
+      incierto = true;
+    }
+    // tipo 'envio' no toca precios (descuentoCupon devuelve 0)
+  }
+  return { fraccion: Math.min(fraccion, 1), incierto };
+}
+
+// El precio más bajo que el catálogo pudo generar para este renglón, ANTES de
+// cupones. Se queda con el menor de los candidatos: si hay algo cargado a
+// propósito por debajo del costo, ese manda.
+function pisoDeRenglon(item, p, cfg) {
+  const may = positivo(p.wholesaler_price);
+  const costo = positivo(p.unit_cost);
+  let piso = (costo > 0 && may > 0) ? Math.min(costo, may) : (costo || may);
+
+  const id = item.product_id;
+  const excepciones = (cfg && cfg.excepciones) || {};
+  const exc = excepciones[id] || excepciones[String(id)];
+  if (exc && exc.tipo === 'precio') {
+    // Precio fijo puesto a mano: puede estar por debajo del costo a propósito.
+    const fijo = positivo(exc.valor);
+    if (fijo > 0) piso = (piso > 0) ? Math.min(piso, fijo) : fijo;
+  }
+
+  if (item.size_id !== undefined && item.size_id !== null) {
+    const vp = positivo((cfg && cfg.variantPrices || {})[id + '-' + item.size_id]);
+    if (vp > 0) {
+      // getPrecioVariante frena en min(costo, precioDeLaVariante).
+      const pisoVar = costo > 0 ? Math.min(costo, vp) : vp;
+      piso = (piso > 0) ? Math.min(piso, pisoVar) : pisoVar;
+    }
+  }
+
+  return piso;
+}
+
+function revisarPrecios(items, productos, cfg) {
+  const { fraccion, incierto } = aflojeDeCupones(cfg);
+  if (incierto) {
+    // Que se vea en el registro: mientras dure el cupón de monto, el control de
+    // precios queda mirando sin trabar. Si esto aparece sin cupón de monto
+    // prendido, algo está mal en la config.
+    console.warn('[precio] hay un cupón de MONTO FIJO activo: no se rechaza por precio (un renglón puede ir a $0 legítimamente)');
+  }
+  const sospechosos = [];
+  for (const item of items) {
+    const p = productos[item.product_id];
+    if (!p) continue; // producto desconocido: ya lo maneja la verificación de stock
+    const piso = pisoDeRenglon(item, p, cfg);
+    if (!(piso > 0)) continue; // sin referencia de precio no se puede opinar
+
+    // Los precios imposibles se rechazan siempre, con cupón o sin cupón: ningún
+    // descuento genera un negativo ni un "abc".
+    const precio = parseFloat(item.unit_price);
+    if (isNaN(precio) || precio < 0) {
+      sospechosos.push({ nombre: p.name, precio: item.unit_price, piso, limite: piso, grave: true });
+      continue;
+    }
+
+    if (precio >= piso * (1 - TOLERANCIA_PORCENTAJE) - TOLERANCIA_PESOS) continue; // precio normal
+
+    // Cupón de monto fijo prendido: se anota, no se traba (ver aflojeDeCupones).
+    if (incierto) {
+      sospechosos.push({ nombre: p.name, precio, piso, limite: 0, grave: false });
+      continue;
+    }
+
+    // El límite duro: el piso aflojado por el mayor cupón de porcentaje vigente.
+    // Entre el límite y el piso pasa igual, pero queda anotado: es lo esperable
+    // con un cupón activo, y sin cupones es la señal de que algo hay que mirar.
+    const limiteBruto = piso * (1 - fraccion);
+    const limite = limiteBruto * (1 - TOLERANCIA_PORCENTAJE) - TOLERANCIA_PESOS;
+    sospechosos.push({
+      nombre: p.name, precio, piso,
+      limite: Math.round(limiteBruto),
+      grave: precio < limite,
+    });
+  }
+  return sospechosos;
+}
+
+// ---------------------------------------------------------------------------
+// FRENO A LA CANTIDAD DE PEDIDOS
+//
+// Confirmar un pedido crea una venta en Gestión Nube y DESCUENTA STOCK. No hacía
+// falta credencial ni había límite: un script podía crear pedidos en cadena y
+// dejar el depósito en cero sin comprar nada. Los topes por variante no alcanzan
+// contra eso, porque cada pedido nuevo vuelve a leer el stock ya descontado.
+//
+// Los pedidos mayoristas reales son pocos por día y de a uno, así que un tope de
+// 6 por hora por conexión no le toca el camino a nadie. El admin no cuenta: desde
+// el panel se cargan varios seguidos a propósito.
+//
+// Si el KV no contesta, se deja pasar: el mismo criterio que el resto del archivo
+// (preferimos el raro abuso antes que un cliente que no puede comprar).
+const PEDIDOS_POR_HORA = 6;
+
+function deQuienViene(req) {
+  const xff = req.headers['x-forwarded-for'];
+  if (xff) return String(xff).split(',')[0].trim();
+  return req.headers['x-real-ip'] || 'desconocido';
+}
+
+async function pasaElFreno(req) {
+  const quien = deQuienViene(req);
+  if (quien === 'desconocido') return true;
+  const hora = Math.floor(Date.now() / 3600000);
+  const key = `catalogo-freno:${quien}:${hora}`;
+  try {
+    const r = await kvCmd(['INCR', key]);
+    if (r === null) return true; // KV no configurado
+    const n = r && r.result;
+    if (n === 1) await kvCmd(['EXPIRE', key, 3600]);
+    if (typeof n === 'number' && n > PEDIDOS_POR_HORA) {
+      console.warn(`[freno] ${quien} lleva ${n} pedidos en la hora: se rechaza`);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error('[freno] el KV no contestó, se deja pasar:', (e && e.message) || e);
+    return true;
+  }
 }
 
 module.exports = async (req, res) => {
@@ -390,12 +575,39 @@ module.exports = async (req, res) => {
     // Verificación de stock server-side antes de crear la venta
     if (esConfirmarPedido) {
       const items = req.body?.items || [];
+      // El admin (pestaña "Cargar pedido") vende SIN tope a propósito: el dueño
+      // decide caso por caso, y allá el aviso se muestra antes de confirmar.
+      const esAdmin = !!ADMIN_PASSWORD && req.headers['x-admin-password'] === ADMIN_PASSWORD;
+
+      if (!esAdmin && !(await pasaElFreno(req))) {
+        return res.status(429).json({
+          error: 'Demasiados pedidos seguidos',
+          detalle: 'Se recibieron varios pedidos desde esta conexión en poco tiempo. Esperá unos minutos y volvé a intentar, o escribinos por WhatsApp.',
+        });
+      }
+
       if (items.length > 0) {
-        // El admin (pestaña "Cargar pedido") vende SIN tope a propósito: el dueño
-        // decide caso por caso, y allá el aviso se muestra antes de confirmar.
-        const esAdmin = !!ADMIN_PASSWORD && req.headers['x-admin-password'] === ADMIN_PASSWORD;
-        const topes = esAdmin ? {} : await leerTopes();
-        const { problemas, completo } = await verificarStockServer(items, token, topes);
+        // Una sola lectura del KV para las dos cosas: topes y reglas de precio.
+        const cfg = esAdmin ? {} : await leerConfigKV();
+        const topes = cfg.topes || {};
+        const { problemas, completo, productos } = await verificarStockServer(items, token, topes);
+
+        // El precio que mandó el navegador, contra el del producto en Gestión Nube.
+        if (!esAdmin && productos) {
+          const sospechosos = revisarPrecios(items, productos, cfg);
+          const graves = sospechosos.filter(s => s.grave);
+          for (const s of sospechosos.filter(s => !s.grave)) {
+            console.warn(`[precio] "${s.nombre}" vino a ${s.precio}, el piso es ${s.piso} y el límite ${s.limite} (pasa, queda anotado)`);
+          }
+          if (graves.length) {
+            console.error('[precio] RECHAZADO por precio imposible:', JSON.stringify(graves));
+            return res.status(400).json({
+              error: 'Los precios del pedido no coinciden con los del catálogo',
+              detalle: 'Recargá la página y volvé a armar el pedido. Si sigue pasando, escribinos por WhatsApp.',
+            });
+          }
+        }
+
         // Solo bloqueamos si pudimos verificar el catálogo COMPLETO y hay faltantes
         // reales. Si la verificación quedó incompleta (GN saturado), dejamos pasar.
         if (completo && problemas.length > 0) {

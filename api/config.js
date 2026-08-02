@@ -29,8 +29,33 @@ const CORS = {
 
 const DEFAULT = { hiddenProducts: [], hiddenVariants: {}, categoryOrder: [], hideNoStock: false, minPurchase: 0, referencePrices: {} };
 
+// ---------------------------------------------------------------------------
+// CACHÉ
+//
+// Este endpoint atendía TODO sin caché: medido el 2-8-2026 contra producción,
+// 5 de 5 llamadas dieron MISS a 0,39-0,43 s. Es lo más lento que queda al abrir
+// el catálogo (el listado de productos sí se cachea, ver api/proxy.js).
+//
+// Pero el archivo atiende cuatro cosas distintas por la misma puerta y solo UNA
+// se puede compartir entre visitantes:
+//   · ?accion=cupon  → depende del subtotal y de la hora: no se cachea.
+//   · ?accion=codigo → precios de UN cliente (descuentos, excepciones): jamás.
+//   · ?verify=1      → la config entera para el admin, y se distingue por el
+//                      header de contraseña, que el CDN NO mira. Jamás.
+//   · GET pelado     → la config pública, igual para todos: esta sí.
+//
+// Por eso el default es `no-store` y el permiso se da SOLO en la rama buena, en
+// vez de poner una cabecera arriba y confiar en que ninguna rama se escape.
+const NO_CACHE = 'no-store, max-age=0';
+
+// 60 s de vida + 5 min de "serví lo viejo mientras buscás lo nuevo". Costo de
+// hacerlo: un cambio guardado en el panel puede tardar hasta ~1 minuto en verse
+// en el catálogo. El admin no lo sufre (entra por ?verify=1, sin caché).
+const CACHE_PUBLICA = 'public, s-maxage=60, stale-while-revalidate=300';
+
 module.exports = async (req, res) => {
   Object.entries(CORS).forEach(([k, v]) => res.setHeader(k, v));
+  res.setHeader('Cache-Control', NO_CACHE); // se afloja solo en la config pública
   if (req.method === 'OPTIONS') return res.status(204).end();
 
   if (req.method === 'GET') {
@@ -96,7 +121,8 @@ module.exports = async (req, res) => {
         return res.status(401).json({ error: 'Contraseña incorrecta' });
     }
     try {
-      const config = { ...DEFAULT, ...(await kvGet() || {}) };
+      const guardada = await kvGet();
+      const config = { ...DEFAULT, ...(guardada || {}) };
       // Datos sensibles que NO se exponen al público (solo el admin con verify, o
       // se validan on-demand): cupones (?accion=cupon) y las reglas de la "lista
       // mejor" + códigos de acceso (?accion=codigo). 'apagados' sí es público
@@ -108,10 +134,14 @@ module.exports = async (req, res) => {
         delete config.excepciones;
         delete config.descuentoMax;
         delete config.descuentoMaxNota;
+        // Solo se comparte la respuesta BUENA. Si el KV no contestó, esto es una
+        // config de emergencia (catálogo vacío, sin precios especiales): guardarla
+        // 60 s la repartiría a todos los que entren en ese minuto.
+        if (guardada) res.setHeader('Cache-Control', CACHE_PUBLICA);
       }
       return res.json(config);
     } catch (e) {
-      return res.json({ ...DEFAULT });
+      return res.json({ ...DEFAULT }); // queda con el no-store de arriba
     }
   }
 

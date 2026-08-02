@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Revisión de productos — BDI Catálogo</title>
+<!-- La tipografía no frena el dibujado (ver la nota larga en index.html). -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap"></noscript>
+<style>
+  :root {
+    --bg: #F3F4F6; --surface: #FFFFFF; --border: #E5E7EB; --border-strong: #D1D5DB;
+    --text: #111827; --text-muted: #6B7280; --text-hint: #9CA3AF;
+    --accent: #111827; --danger: #DC2626; --warn: #B45309; --success: #16A34A;
+    --danger-bg: #FEF2F2; --warn-bg: #FFFBEB; --success-bg: #F0FDF4;
+    --radius: 10px; --radius-sm: 6px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  /* Respaldo con la tipografia del sistema mientras DM Sans viaja (ver index.html). */
+  body { font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); font-size: 15px; min-height: 100vh; }
+
+  /* Login (mismo patrón que el panel) */
+  .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+  .login-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 2rem; width: 100%; max-width: 340px; }
+  .login-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+  .login-sub { font-size: 12px; color: var(--text-muted); margin-bottom: 1.5rem; }
+  .login-box input { width: 100%; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 14px; margin-bottom: 10px; outline: none; }
+  .login-box input:focus { border-color: var(--accent); }
+  .login-box button { width: 100%; padding: 10px; background: var(--accent); color: white; border: none; border-radius: var(--radius-sm); font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .login-err { font-size: 12px; color: var(--danger); margin-top: 8px; display: none; }
+
+  /* Encabezado */
+  .hdr { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 1.5rem; height: 56px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
+  .hdr-title { font-size: 14px; font-weight: 700; }
+  .hdr-sub { font-size: 11px; color: var(--text-muted); }
+  .hdr-acts { display: flex; gap: 8px; align-items: center; }
+  .btn { padding: 8px 14px; background: transparent; color: var(--text-muted); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+  .btn:hover { color: var(--text); border-color: var(--text-muted); }
+  .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn-primary:hover { color: #fff; }
+
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+
+  /* Resumen */
+  .resumen { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 1.25rem; }
+  .card-num { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+  .card-num .n { font-size: 26px; font-weight: 700; line-height: 1.1; }
+  .card-num .l { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .card-num.malo .n { color: var(--danger); }
+  .card-num.aviso .n { color: var(--warn); }
+  .card-num.bien .n { color: var(--success); }
+
+  /* Barra de filtros */
+  .filtros { display: flex; gap: 8px; margin-bottom: 1rem; flex-wrap: wrap; }
+  .buscador { flex: 1; min-width: 200px; padding: 9px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 14px; outline: none; background: var(--surface); }
+  .buscador:focus { border-color: var(--accent); }
+  .sel { padding: 9px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; outline: none; background: var(--surface); cursor: pointer; }
+
+  /* Filas de producto */
+  .lista { display: flex; flex-direction: column; gap: 8px; }
+  .fila { background: var(--surface); border: 1px solid var(--border); border-left-width: 4px; border-radius: var(--radius); padding: 12px 14px; display: flex; gap: 14px; align-items: flex-start; }
+  .fila.malo { border-left-color: var(--danger); }
+  .fila.aviso { border-left-color: var(--warn); }
+  .fila.bien { border-left-color: var(--success); }
+  .foto { width: 64px; height: 64px; border-radius: var(--radius-sm); object-fit: cover; background: var(--bg); flex-shrink: 0; border: 1px solid var(--border); }
+  .foto-no { width: 64px; height: 64px; border-radius: var(--radius-sm); background: var(--bg); border: 1px dashed var(--border-strong); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; color: var(--text-hint); text-align: center; line-height: 1.2; }
+  .cuerpo { flex: 1; min-width: 0; }
+  .nom { font-size: 14px; font-weight: 600; }
+  .meta { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+  .chip { font-size: 11.5px; font-weight: 500; padding: 3px 8px; border-radius: 999px; border: 1px solid transparent; }
+  .chip.malo { background: var(--danger-bg); color: var(--danger); border-color: #FECACA; }
+  .chip.aviso { background: var(--warn-bg); color: var(--warn); border-color: #FDE68A; }
+  .chip.bien { background: var(--success-bg); color: var(--success); border-color: #BBF7D0; }
+  .sugerencia { margin-top: 8px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 10px; font-size: 12px; display: flex; gap: 10px; align-items: center; }
+  .sugerencia img { width: 40px; height: 40px; object-fit: cover; border-radius: 4px; border: 1px solid var(--border); }
+  .sugerencia code { background: var(--surface); border: 1px solid var(--border); border-radius: 3px; padding: 1px 5px; font-size: 11.5px; }
+  .estado-msg { text-align: center; padding: 3rem 1rem; color: var(--text-muted); font-size: 14px; }
+  .aclaracion { font-size: 12px; color: var(--text-muted); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; margin-bottom: 1rem; line-height: 1.5; }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(80px); background: var(--accent); color: #fff; padding: 10px 18px; border-radius: var(--radius-sm); font-size: 13px; opacity: 0; transition: all .25s; pointer-events: none; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  @media (max-width: 640px) {
+    .wrap { padding: 1rem; }
+    .fila { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<div class="login-wrap" id="login-screen">
+  <div class="login-box">
+    <div class="login-title">Revisión de productos</div>
+    <div class="login-sub">BDI Accesorios — control de ingreso</div>
+    <input type="password" id="pwd-input" placeholder="Contraseña del panel" autocomplete="current-password">
+    <button id="login-btn" onclick="login()">Ingresar</button>
+    <div class="login-err" id="login-err">Contraseña incorrecta</div>
+  </div>
+</div>
+
+<div id="panel" style="display:none">
+  <div class="hdr">
+    <div>
+      <div class="hdr-title">Revisión de productos</div>
+      <div class="hdr-sub" id="hdr-sub">Cargando…</div>
+    </div>
+    <div class="hdr-acts">
+      <button class="btn" onclick="copiarReporte()">Copiar reporte</button>
+      <button class="btn" onclick="cargarTodo(true)">Actualizar</button>
+      <a class="btn btn-primary" href="/admin">Ir al panel</a>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="aclaracion" id="aclaracion"></div>
+    <div class="resumen" id="resumen"></div>
+    <div class="filtros">
+      <input class="buscador" id="q" placeholder="Buscar por nombre o código…" oninput="renderDebounced()">
+      <select class="sel" id="f-estado" onchange="render()">
+        <option value="problemas">Solo los que tienen algo para revisar</option>
+        <option value="malo">Solo los que NO se van a ver</option>
+        <option value="todos">Todos</option>
+        <option value="bien">Solo los que están listos</option>
+      </select>
+      <select class="sel" id="f-antig" onchange="render()">
+        <option value="7">Cargados en los últimos 7 días</option>
+        <option value="2">Cargados en las últimas 48 hs</option>
+        <option value="30">Cargados en los últimos 30 días</option>
+        <option value="0">Todo el catálogo</option>
+      </select>
+    </div>
+    <div class="lista" id="lista"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ---------------------------------------------------------------------------
+// REVISIÓN DE PRODUCTOS
+//
+// Para qué existe: cuando entra mercadería nueva se cargan decenas de productos
+// en Gestión Nube, y que aparezcan BIEN en el catálogo depende de cinco cosas
+// distintas (precio mayorista cargado, no estar apagado, categoría visible,
+// tener foto, tener stock). Ninguna avisa cuando falta: el producto simplemente
+// no se ve, o se ve sin imagen, y nadie se entera hasta que un cliente pregunta.
+// Esta pantalla revisa las cinco de una y dice qué falta, producto por producto.
+//
+// No es una función nueva del servidor: es una página suelta que le pregunta a
+// los mismos endpoints que ya usa el catálogo (/api/config, /api/proxy,
+// /api/tiendanube). Importa porque el plan Hobby de Vercel permite 12 funciones
+// y el repo está justo en 12: un archivo nuevo en /api rompería TODOS los deploys.
+// ---------------------------------------------------------------------------
+
+const $ = id => document.getElementById(id);
+const REMEMBER_KEY = 'bdi_admin_pwd'; // el mismo del panel: si ya entró ahí, acá no vuelve a pedir
+
+let adminPassword = '';
+let config = {};
+let productos = [];
+let tnMap = {};
+let tnIndex = [];
+let analisis = [];
+
+function showToast(msg, dur = 2600) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'toast show';
+  setTimeout(() => t.className = 'toast', dur);
+}
+
+// ── Ingreso ────────────────────────────────────────────────────────────────
+$('pwd-input').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+
+async function verificarYEntrar(pwd) {
+  const r = await fetch('/api/config?verify=1', { headers: { 'x-admin-password': pwd } });
+  if (r.status === 401) return false;
+  config = await r.json();
+  adminPassword = pwd;
+  $('login-screen').style.display = 'none';
+  $('panel').style.display = 'block';
+  await cargarTodo();
+  return true;
+}
+
+async function login() {
+  const pwd = $('pwd-input').value.trim();
+  if (!pwd) return;
+  const btn = $('login-btn');
+  btn.disabled = true; btn.textContent = 'Verificando…';
+  $('login-err').style.display = 'none';
+  try {
+    if (!(await verificarYEntrar(pwd))) {
+      $('login-err').style.display = 'block';
+      btn.disabled = false; btn.textContent = 'Ingresar';
+    }
+  } catch (e) {
+    $('login-err').textContent = 'No se pudo verificar: ' + e.message;
+    $('login-err').style.display = 'block';
+    btn.disabled = false; btn.textContent = 'Ingresar';
+  }
+}
+
+// Si ya entró al panel en este dispositivo, entra directo.
+(function auto() {
+  try {
+    const g = localStorage.getItem(REMEMBER_KEY);
+    if (!g) return;
+    const pwd = decodeURIComponent(escape(atob(g)));
+    verificarYEntrar(pwd).catch(() => {});
+  } catch (e) {}
+})();
+
+// ── Datos ──────────────────────────────────────────────────────────────────
+async function fetchProxy(path, qs) {
+  const r = await fetch('/api/proxy?_path=' + encodeURIComponent(path) + (qs ? '&' + qs : ''));
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+
+async function cargarTodo(refrescarConfig) {
+  $('hdr-sub').textContent = 'Cargando catálogo…';
+  if (refrescarConfig) {
+    try { config = await (await fetch('/api/config?verify=1', { headers: { 'x-admin-password': adminPassword } })).json(); } catch (e) {}
+  }
+
+  // Productos: igual que el catálogo, página 1 y el resto en paralelo.
+  const baseQs = 'per_page=100&include_stock=1&include_images=1&include_variants=1';
+  const extraer = d => Array.isArray(d) ? d : (d.data || d.products || d.items || []);
+  const first = await fetchProxy('/productos/obtener', baseQs + '&page=1');
+  let lastPage = first.meta ? (first.meta.last_page || first.meta.total_pages || 1) : 1;
+  if (lastPage > 20) lastPage = 20;
+  let paginas = [extraer(first)];
+  if (lastPage > 1) {
+    paginas = paginas.concat(await Promise.all(
+      Array.from({ length: lastPage - 1 }, (_, i) =>
+        fetchProxy('/productos/obtener', baseQs + '&page=' + (i + 2)).then(extraer).catch(() => []))
+    ));
+  }
+  const vistos = new Set();
+  productos = [];
+  for (const pag of paginas) for (const p of pag) {
+    const id = p.id || p.product_id;
+    if (vistos.has(id)) continue;
+    vistos.add(id);
+    productos.push(p);
+  }
+
+  // Mapa de fotos de Tienda Nube (el mismo que usa el catálogo).
+  try {
+    // Igual que el catálogo: acepta el formato nuevo (`v:2`, fichas sin repetir)
+    // y el viejo, porque la copia del CDN puede seguir sirviendo el de antes 24 h.
+    const crudo = await (await fetch('/api/tiendanube')).json();
+    if (crudo && crudo.v === 2 && Array.isArray(crudo.fichas) && crudo.claves) {
+      tnMap = {};
+      for (const k in crudo.claves) {
+        const ficha = crudo.fichas[crudo.claves[k]];
+        if (ficha) tnMap[k] = ficha;
+      }
+    } else {
+      tnMap = crudo || {};
+    }
+    tnIndex = Object.keys(tnMap).map(k => ({ key: k, words: normWords(k) }));
+  } catch (e) { tnMap = {}; tnIndex = []; }
+
+  analizar();
+  render();
+}
+
+// ── Las mismas reglas que usa el catálogo ──────────────────────────────────
+function normWords(s) {
+  return (s == null ? '' : String(s)).toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ').trim().split(/\s+/).filter(Boolean);
+}
+
+// Copia exacta del emparejado del catálogo (`tnBuscar` en index.html): código del
+// producto, después código de barras de las variantes, después nombre; y gana el
+// primero que TENGA fotos. Se replica tal cual —y no una versión aproximada—
+// porque si no esta pantalla diría "tiene foto" para productos que en el catálogo
+// salen sin imagen, que es exactamente lo que vino a evitar.
+//
+// ⚠️ Si algún día se cambia el emparejado en index.html, hay que cambiarlo acá.
+function tnLookup(p) {
+  const candidatos = [];
+
+  const cod = (p.code || p.sku || p.codigo || '').trim().toLowerCase();
+  if (cod && tnMap[cod]) candidatos.push({ entry: tnMap[cod], por: 'código', clave: cod });
+
+  // Código de barras de las variantes: gana el producto de Tienda Nube más votado.
+  const votos = new Map();
+  for (const v of (p.variantes || [])) {
+    const cb = v && v.barcode != null ? String(v.barcode).trim().toLowerCase() : '';
+    const e = cb && tnMap[cb];
+    if (!e) continue;
+    const acum = votos.get(e) || { n: 0, clave: cb };
+    acum.n++;
+    votos.set(e, acum);
+  }
+  if (votos.size) {
+    let mejor = null, mejorN = 0;
+    for (const [entry, d] of votos) if (d.n > mejorN) { mejor = { entry, por: 'código de barras', clave: d.clave }; mejorN = d.n; }
+    if (mejor) candidatos.push(mejor);
+  }
+
+  const gn = normWords(p.name || p.nombre || p.product_name || '');
+  if (gn.length) {
+    let best = null, bestLen = 0;
+    for (const e of tnIndex) {
+      const tw = e.words;
+      if (tw.length && tw.length <= gn.length && tw.length > bestLen && tw.every((w, i) => w === gn[i])) {
+        best = e.key; bestLen = tw.length;
+      }
+    }
+    if (best) candidatos.push({ entry: tnMap[best], por: 'nombre', clave: best });
+  }
+
+  const conFotos = candidatos.find(c => c.entry && c.entry.imgs && c.entry.imgs.length);
+  return conFotos || candidatos[0] || null;
+}
+
+/** ¿Por qué otros caminos también lo encuentra? Sirve para saber si depende de uno solo. */
+function caminosDe(p) {
+  const caminos = [];
+  const cod = (p.code || p.sku || p.codigo || '').trim().toLowerCase();
+  if (cod && tnMap[cod] && tnMap[cod].imgs && tnMap[cod].imgs.length) caminos.push('código');
+  for (const v of (p.variantes || [])) {
+    const cb = v && v.barcode != null ? String(v.barcode).trim().toLowerCase() : '';
+    const e = cb && tnMap[cb];
+    if (e && e.imgs && e.imgs.length) { caminos.push('código de barras'); break; }
+  }
+  const gn = normWords(p.name || '');
+  if (gn.length) {
+    for (const e of tnIndex) {
+      const tw = e.words;
+      if (tw.length && tw.length <= gn.length && tw.every((w, i) => w === gn[i])) {
+        const entry = tnMap[e.key];
+        if (entry && entry.imgs && entry.imgs.length) { caminos.push('nombre'); break; }
+      }
+    }
+  }
+  return caminos;
+}
+
+function fotoGN(p) {
+  return p.image_url || p.image || (p.images && p.images[0] && (p.images[0].url || p.images[0].src)) || null;
+}
+
+/**
+ * El candidato más parecido en Tienda Nube cuando NO hubo match.
+ *
+ * Sirve para poder arreglarlo: la regla es exigente (prefijo exacto), así que el
+ * motivo casi siempre es una palabra de más o de menos. Mostrar el nombre que SÍ
+ * está en Tienda Nube convierte "no tiene foto" en "renombralo así".
+ *
+ * Dos recaudos, aprendidos probando esto contra el catálogo real:
+ *  · Solo se proponen entradas que TENGAN foto. Proponer una que tampoco tiene
+ *    no resuelve nada y manda a renombrar al pedo.
+ *  · El parecido tiene que ser alto (70%). Con la mitad proponía cosas como
+ *    "MOTION CASE YELLOW → motion case pink", que es otro producto: seguir esa
+ *    sugerencia haría que la funda amarilla muestre la foto de la rosa.
+ */
+function candidatoTN(p) {
+  const gn = normWords(p.name || '');
+  if (!gn.length) return null;
+  let mejor = null, mejorPuntaje = 0;
+  for (const e of tnIndex) {
+    if (!e.words.length) continue;
+    const entry = tnMap[e.key];
+    if (!entry || !entry.imgs || !entry.imgs.length) continue; // sin foto no sirve de nada
+    let comunes = 0;
+    for (const w of e.words) if (gn.includes(w)) comunes++;
+    const puntaje = comunes / Math.max(e.words.length, gn.length);
+    if (puntaje > mejorPuntaje) { mejorPuntaje = puntaje; mejor = e; }
+  }
+  if (!mejor || mejorPuntaje < 0.7) return null;
+  const entry = tnMap[mejor.key];
+  return { nombre: mejor.key, img: entry.imgs[0] };
+}
+
+function stockVariante(v) {
+  if (!v || !v.stock_por_tienda || !v.stock_por_tienda.length) return 0;
+  const dep = v.stock_por_tienda.find(t => t.store_name === 'Deposito Minorista');
+  if (dep) return dep.stock_disponible || 0;
+  return v.stock_por_tienda.reduce((s, t) => s + (t.stock_disponible || 0), 0);
+}
+function stockTotal(p) {
+  if (p.variantes && p.variantes.length) return p.variantes.reduce((s, v) => s + stockVariante(v), 0);
+  return p.available_quantity ?? p.stock ?? p.stock_total ?? 0;
+}
+function thumb(src, w) {
+  if (!src || !/mitiendanube\.com/i.test(src)) return src || '';
+  return 'https://images.weserv.nl/?url=' + encodeURIComponent(String(src).replace(/^https?:\/\//, '')) + '&w=' + (w || 128) + '&output=webp&q=80';
+}
+const plata = n => '$' + Math.round(n || 0).toLocaleString('es-AR');
+
+// ── El análisis ────────────────────────────────────────────────────────────
+function analizar() {
+  const apagados = (config.apagados || []).map(String);
+  const ocultos = (config.hiddenProducts || []).map(String);
+  const catsOcultas = config.hiddenCategories || [];
+  const nuevos = (config.newProducts || []).map(String);
+  const topes = config.topes || {};
+
+  // Nombres repetidos: dos productos con el mismo nombre se pelean la misma foto
+  // y confunden al cliente (ya pasó con PROTECTOR DE CAMARA, que quedó duplicado
+  // a $990 y a $4990 al mismo tiempo).
+  const porNombre = {};
+  productos.forEach(p => {
+    const n = (p.name || '').trim().toUpperCase();
+    if (!n) return;
+    (porNombre[n] = porNombre[n] || []).push(p);
+  });
+
+  analisis = productos.map(p => {
+    const id = String(p.id || p.product_id);
+    const problemas = [];   // impiden que se vea
+    const avisos = [];      // se ve, pero hay algo para mirar
+    const bien = [];
+    const notas = [];       // datos sueltos: no cambian el semáforo
+
+    // ¿Es del ingreso reciente? Varios chequeos solo tienen sentido para lo que
+    // acaba de entrar: pedirle "cartel NUEVO" a una funda de hace un año sería
+    // ruido, y el ruido hace que se dejen de mirar los avisos que sí importan.
+    const creado = p.created_at ? new Date(p.created_at) : null;
+    const esReciente = !!creado && (Date.now() - creado.getTime()) < 30 * 86400000;
+
+    // — Lo que decide si el producto se ve o no —
+    if (p.active === 0) problemas.push('Inactivo en Gestión Nube');
+    if (parseFloat(p.wholesaler_price || 0) <= 0) problemas.push('Sin precio mayorista cargado');
+    if (apagados.includes(id)) problemas.push('Apagado en el panel');
+    if (ocultos.includes(id)) problemas.push('Oculto a mano en el panel');
+    if (catsOcultas.includes(p.category || '')) problemas.push('Su categoría está oculta');
+
+    // — La foto —
+    //
+    // "No tiene foto" son dos problemas distintos con arreglos distintos, y
+    // confundirlos hace perder el tiempo: puede ser que el producto NO esté en
+    // Tienda Nube con ese nombre (se arregla renombrando), o que esté pero sin
+    // ninguna foto cargada (se arregla subiéndola en Tienda Nube). Comprobado con
+    // datos reales: DISTRIC CASE GRAY y ADAPTADOR OTG están en Tienda Nube con el
+    // nombre EXACTO y aun así salían "sin foto" — mandarlos a renombrar habría
+    // sido mandar a arreglar algo que ya estaba bien.
+    const m = tnLookup(p);
+    const entry = m && m.entry;
+    const tieneTN = !!(entry && entry.imgs && entry.imgs.length);
+    const gn = fotoGN(p);
+    let sugerencia = null, motivoFoto = '';
+    const caminos = tieneTN ? caminosDe(p) : [];
+    if (tieneTN) {
+      bien.push('Foto por ' + (m.por === 'nombre' ? 'NOMBRE' : m.por.toUpperCase()));
+      // El aviso que importa para la mercadería nueva: si la foto entra SOLO por
+      // el nombre, con que alguien lo renombre en cualquiera de los dos sistemas
+      // la foto desaparece y nadie se entera. Con el código de barras cargado
+      // igual en los dos lados, eso no puede pasar.
+      if (caminos.length === 1 && caminos[0] === 'nombre') {
+        avisos.push('La foto depende SOLO del nombre: si lo renombran, la pierde');
+      }
+    } else {
+      if (entry) {
+        motivoFoto = 'Está en Tienda Nube (como "' + m.clave + '") pero ese producto no tiene ninguna foto cargada ahí.';
+      } else {
+        sugerencia = candidatoTN(p);
+        motivoFoto = sugerencia
+          ? 'El nombre no coincide con ninguno de Tienda Nube.'
+          : 'No se encontró este producto en Tienda Nube.';
+      }
+      if (gn) avisos.push('Sin foto de Tienda Nube — muestra la de Gestión Nube');
+      else problemas.push('SIN NINGUNA FOTO');
+    }
+
+    // — Stock y variantes —
+    const st = stockTotal(p);
+    const nVar = (p.variantes || []).length;
+    if (!nVar) avisos.push('Sin variantes cargadas');
+    if (st <= 0) avisos.push('Sin stock');
+
+    // — Precio —
+    const costo = parseFloat(p.unit_cost || 0);
+    const may = parseFloat(p.wholesaler_price || 0);
+    if (may > 0 && costo > 0 && may <= costo) avisos.push('El precio mayorista no cubre el costo');
+
+    // — Cosas del ingreso (solo para lo recién cargado) —
+    if (esReciente && !nuevos.includes(id)) notas.push('Sin el cartel "NUEVO"');
+    if (esReciente && (!topes[id] || !Object.keys(topes[id].porVariante || {}).length)) {
+      notas.push('Sin tope de stock: nada frena que un cliente se lleve todo');
+    }
+    const gemelos = (porNombre[(p.name || '').trim().toUpperCase()] || []).filter(x => String(x.id) !== id);
+    if (gemelos.length) avisos.push('Nombre repetido con otro producto (id ' + gemelos.map(x => x.id).join(', ') + ')');
+
+    const estado = problemas.length ? 'malo' : (avisos.length ? 'aviso' : 'bien');
+    return {
+      p, id, estado, problemas, avisos, bien, notas, sugerencia, motivoFoto, caminos,
+      stock: st, nVar, foto: tieneTN ? entry.imgs[0] : gn, creado,
+    };
+  });
+}
+
+// ── Pantalla ───────────────────────────────────────────────────────────────
+let _t;
+function renderDebounced() { clearTimeout(_t); _t = setTimeout(render, 200); }
+
+function filtrados() {
+  const q = ($('q').value || '').toLowerCase().trim();
+  const fe = $('f-estado').value;
+  const dias = parseInt($('f-antig').value, 10);
+  const corte = dias > 0 ? Date.now() - dias * 86400000 : null;
+  return analisis.filter(a => {
+    if (corte && (!a.creado || a.creado.getTime() < corte)) return false;
+    if (fe === 'problemas' && a.estado === 'bien') return false;
+    if (fe === 'malo' && a.estado !== 'malo') return false;
+    if (fe === 'bien' && a.estado !== 'bien') return false;
+    if (q) {
+      const txt = ((a.p.name || '') + ' ' + (a.p.code || '') + ' ' + (a.p.category || '')).toLowerCase();
+      if (!txt.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function render() {
+  const dias = parseInt($('f-antig').value, 10);
+  const corte = dias > 0 ? Date.now() - dias * 86400000 : null;
+  const universo = corte ? analisis.filter(a => a.creado && a.creado.getTime() >= corte) : analisis;
+
+  const malos = universo.filter(a => a.estado === 'malo').length;
+  const avisos = universo.filter(a => a.estado === 'aviso').length;
+  const bien = universo.filter(a => a.estado === 'bien').length;
+  const sinFoto = universo.filter(a => a.problemas.includes('SIN NINGUNA FOTO') || a.avisos.some(x => x.startsWith('Sin foto'))).length;
+  const soloNombre = universo.filter(a => a.caminos.length === 1 && a.caminos[0] === 'nombre').length;
+  const porCodigo = universo.filter(a => a.caminos.includes('código de barras')).length;
+
+  $('resumen').innerHTML =
+    tarjeta(universo.length, corte ? 'productos cargados en el período' : 'productos en Gestión Nube', '') +
+    tarjeta(malos, 'NO se van a ver en el catálogo', 'malo') +
+    tarjeta(avisos, 'se ven, pero hay algo para revisar', 'aviso') +
+    tarjeta(bien, 'listos, sin nada pendiente', 'bien') +
+    tarjeta(sinFoto, 'con la foto sin resolver', sinFoto ? 'aviso' : 'bien') +
+    tarjeta(porCodigo, 'con la foto atada al código de barras (firme)', 'bien') +
+    tarjeta(soloNombre, 'con la foto colgada solo del nombre (frágil)', soloNombre ? 'aviso' : 'bien');
+
+  $('aclaracion').innerHTML =
+    'Para que un producto aparezca en el catálogo tiene que estar <b>activo</b> en Gestión Nube, tener <b>precio mayorista</b> cargado, no estar <b>apagado</b> ni <b>oculto</b> en el panel, y su categoría tiene que estar visible. La foto sale de Tienda Nube: se empareja por <b>nombre</b>, y las palabras del nombre en Tienda Nube tienen que ser el <b>comienzo exacto</b> del nombre en Gestión Nube. ' +
+    '<br><b>Ojo:</b> Gestión Nube tarda varias horas en publicar en su API un producto recién creado. Si acabás de cargarlo y no aparece acá, esperá y volvé a actualizar.';
+
+  const lista = filtrados().sort((a, b) => {
+    const orden = { malo: 0, aviso: 1, bien: 2 };
+    if (orden[a.estado] !== orden[b.estado]) return orden[a.estado] - orden[b.estado];
+    return (b.creado || 0) - (a.creado || 0);
+  });
+
+  $('hdr-sub').textContent = productos.length + ' productos leídos · ' + lista.length + ' en pantalla';
+
+  if (!lista.length) {
+    $('lista').innerHTML = '<div class="estado-msg">No hay productos que cumplan ese filtro.<br>Si acabás de cargar la mercadería, probá con «Todo el catálogo» o esperá a que Gestión Nube la publique.</div>';
+    return;
+  }
+
+  $('lista').innerHTML = lista.map(a => {
+    const p = a.p;
+    const fotoHTML = a.foto
+      ? '<img class="foto" src="' + thumb(a.foto, 128) + '" alt="" loading="lazy" onerror="this.outerHTML=\'<div class=&quot;foto-no&quot;>sin<br>foto</div>\'">'
+      : '<div class="foto-no">sin<br>foto</div>';
+    const chips =
+      a.problemas.map(x => '<span class="chip malo">✕ ' + esc(x) + '</span>').join('') +
+      a.avisos.map(x => '<span class="chip aviso">! ' + esc(x) + '</span>').join('') +
+      a.bien.map(x => '<span class="chip bien">✓ ' + esc(x) + '</span>').join('') +
+      (a.estado === 'bien' ? '<span class="chip bien">✓ Listo para el catálogo</span>' : '') +
+      a.notas.map(x => '<span class="chip">· ' + esc(x) + '</span>').join('');
+
+    // El recuadro que explica la foto: qué pasó y qué hacer.
+    let sug = '';
+    if (a.motivoFoto) {
+      const comoArreglar = a.sugerencia
+        ? 'En Tienda Nube hay uno parecido: <code>' + esc(a.sugerencia.nombre) + '</code>. Para que tome esa foto, el nombre en Tienda Nube tiene que ser el <b>comienzo exacto</b> del de Gestión Nube.'
+        : 'Se arregla cargando la foto en Tienda Nube, o poniéndole al producto de Tienda Nube un nombre que sea el comienzo exacto de este.';
+      sug = '<div class="sugerencia">' +
+        (a.sugerencia && a.sugerencia.img ? '<img src="' + thumb(a.sugerencia.img, 80) + '" alt="" loading="lazy">' : '') +
+        '<div>' + esc(a.motivoFoto) + '<br>' + comoArreglar + '</div>' +
+        '</div>';
+    }
+
+    const creado = a.creado ? a.creado.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }) : '—';
+    return '<div class="fila ' + a.estado + '">' + fotoHTML +
+      '<div class="cuerpo">' +
+        '<div class="nom">' + esc(p.name || 'Sin nombre') + '</div>' +
+        '<div class="meta">id ' + a.id + (p.code ? ' · cód ' + esc(p.code) : '') + ' · ' + esc(p.category || 'sin categoría') +
+          ' · ' + a.nVar + ' variantes · stock ' + a.stock +
+          ' · mayorista ' + plata(p.wholesaler_price) + ' · cargado ' + creado +
+          ' · foto por: ' + (a.caminos.length ? esc(a.caminos.join(' + ')) : '—') + '</div>' +
+        '<div class="chips">' + chips + '</div>' + sug +
+      '</div></div>';
+  }).join('');
+}
+
+function tarjeta(n, l, clase) {
+  return '<div class="card-num ' + (clase || '') + '"><div class="n">' + n + '</div><div class="l">' + l + '</div></div>';
+}
+function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+/** El resumen en texto plano, para pegar en el grupo de WhatsApp del depósito. */
+function copiarReporte() {
+  const lista = filtrados();
+  const lineas = ['REVISIÓN DE PRODUCTOS — ' + new Date().toLocaleDateString('es-AR'), ''];
+  const malos = lista.filter(a => a.estado === 'malo');
+  const avisos = lista.filter(a => a.estado === 'aviso');
+  if (malos.length) {
+    lineas.push('NO SE VAN A VER (' + malos.length + '):');
+    malos.forEach(a => lineas.push('· ' + (a.p.name || a.id) + ' → ' + a.problemas.join(', ')));
+    lineas.push('');
+  }
+  if (avisos.length) {
+    lineas.push('PARA REVISAR (' + avisos.length + '):');
+    avisos.forEach(a => lineas.push('· ' + (a.p.name || a.id) + ' → ' + a.avisos.join(', ')));
+    lineas.push('');
+  }
+  if (!malos.length && !avisos.length) lineas.push('Todo en orden.');
+  const txt = lineas.join('\n');
+  navigator.clipboard.writeText(txt)
+    .then(() => showToast('Reporte copiado'))
+    .catch(() => showToast('No se pudo copiar'));
+}
+</script>
+</body>
+</html>
