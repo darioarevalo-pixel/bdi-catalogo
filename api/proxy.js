@@ -343,7 +343,6 @@ async function verificarStockServer(items, token, topes = {}) {
 //
 // Los cupones se leen del KV en vivo: hoy están apagados y el piso queda entero;
 // si mañana se prende uno del 30%, el margen se abre a 30% solo, sin tocar nada.
-const FRACCION_MINIMA = 0.20;      // respaldo para cuando el piso no se puede calcular
 const TOLERANCIA_PORCENTAJE = 0.01; // 1% + $1 de perdón: el catálogo redondea a 2 decimales
 const TOLERANCIA_PESOS = 1;
 
@@ -353,15 +352,17 @@ function positivo(v) {
 }
 
 // Cuánto puede bajar un renglón por culpa de un cupón vigente.
-// Devuelve { fraccion, incierto }: `incierto` significa "no se puede acotar",
-// y en ese caso volvemos al freno viejo del 20% en vez de arriesgar un rechazo.
+// Devuelve { fraccion, incierto }: `incierto` significa "no hay piso calculable".
 //
-// Los cupones de MONTO FIJO son siempre inciertos, y no por prolijidad: el
-// descuento se calcula sobre los renglones descontables (las ofertas quedan
-// afuera) pero la compra mínima se valida sobre el total CON ofertas. Un carrito
-// mayormente de ofertas puede dejar `descuento >= subtotalDescontable`, y ahí el
-// factor da 0 → el renglón viaja a $0. Mientras eso siga así, no hay piso que
-// calcular. Los de porcentaje sí acotan: el factor nunca baja de (1 − valor/100).
+// Los cupones de MONTO FIJO son siempre inciertos. El descuento se reparte solo
+// entre los renglones descontables (las ofertas quedan afuera) pero la compra
+// mínima se valida sobre el total CON ofertas: un carrito mayormente de ofertas
+// puede dejar `descuento >= subtotalDescontable`, el factor da 0 y el renglón
+// viaja a $0. Consultado con Bruno el 2-8-2026: eso es LEGÍTIMO ("si le di el
+// cupón, que lo pague $0"), así que no se toca el catálogo y el control de
+// precios no puede opinar mientras ese cupón esté prendido.
+//
+// Los de porcentaje sí acotan: el factor nunca baja de (1 − valor/100).
 function aflojeDeCupones(cfg) {
   if (!cfg || cfg.mostrarCupones !== true) return { fraccion: 0, incierto: false };
   const cupones = Array.isArray(cfg.cupones) ? cfg.cupones : [];
@@ -414,6 +415,12 @@ function pisoDeRenglon(item, p, cfg) {
 
 function revisarPrecios(items, productos, cfg) {
   const { fraccion, incierto } = aflojeDeCupones(cfg);
+  if (incierto) {
+    // Que se vea en el registro: mientras dure el cupón de monto, el control de
+    // precios queda mirando sin trabar. Si esto aparece sin cupón de monto
+    // prendido, algo está mal en la config.
+    console.warn('[precio] hay un cupón de MONTO FIJO activo: no se rechaza por precio (un renglón puede ir a $0 legítimamente)');
+  }
   const sospechosos = [];
   for (const item of items) {
     const p = productos[item.product_id];
@@ -421,24 +428,32 @@ function revisarPrecios(items, productos, cfg) {
     const piso = pisoDeRenglon(item, p, cfg);
     if (!(piso > 0)) continue; // sin referencia de precio no se puede opinar
 
+    // Los precios imposibles se rechazan siempre, con cupón o sin cupón: ningún
+    // descuento genera un negativo ni un "abc".
     const precio = parseFloat(item.unit_price);
     if (isNaN(precio) || precio < 0) {
       sospechosos.push({ nombre: p.name, precio: item.unit_price, piso, limite: piso, grave: true });
       continue;
     }
 
-    // El límite duro: el piso aflojado por el mayor cupón vigente. Si el afloje
-    // no se puede acotar, se cae al freno viejo (20%) en vez de rechazar de más.
-    const limiteBruto = incierto ? piso * FRACCION_MINIMA : piso * (1 - fraccion);
-    const limite = limiteBruto * (1 - TOLERANCIA_PORCENTAJE) - TOLERANCIA_PESOS;
+    if (precio >= piso * (1 - TOLERANCIA_PORCENTAJE) - TOLERANCIA_PESOS) continue; // precio normal
 
-    if (precio < limite) {
-      sospechosos.push({ nombre: p.name, precio, piso, limite: Math.round(limiteBruto), grave: true });
-    } else if (precio < piso * (1 - TOLERANCIA_PORCENTAJE) - TOLERANCIA_PESOS) {
-      // Entre el límite y el piso: pasa, pero queda anotado. Es lo esperable con
-      // un cupón activo; sin cupones activos, es una señal para mirar.
-      sospechosos.push({ nombre: p.name, precio, piso, limite: Math.round(limiteBruto), grave: false });
+    // Cupón de monto fijo prendido: se anota, no se traba (ver aflojeDeCupones).
+    if (incierto) {
+      sospechosos.push({ nombre: p.name, precio, piso, limite: 0, grave: false });
+      continue;
     }
+
+    // El límite duro: el piso aflojado por el mayor cupón de porcentaje vigente.
+    // Entre el límite y el piso pasa igual, pero queda anotado: es lo esperable
+    // con un cupón activo, y sin cupones es la señal de que algo hay que mirar.
+    const limiteBruto = piso * (1 - fraccion);
+    const limite = limiteBruto * (1 - TOLERANCIA_PORCENTAJE) - TOLERANCIA_PESOS;
+    sospechosos.push({
+      nombre: p.name, precio, piso,
+      limite: Math.round(limiteBruto),
+      grave: precio < limite,
+    });
   }
   return sospechosos;
 }
