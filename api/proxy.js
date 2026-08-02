@@ -344,11 +344,16 @@ async function verificarStockServer(items, token, topes = {}, costos = null) {
     gnFetchRetry(`/productos/obtener?include_stock=1&include_variants=1&per_page=${POR_PAGINA}&page=${page}`, token);
 
   // Se queda con los productos del carrito y devuelve la página cruda.
+  // De paso junta TODOS los productos vistos: si llegamos hasta acá es porque la
+  // libretita de costos faltaba o estaba vieja, y estas páginas la pueden rellenar
+  // sin pedir nada extra (ver `refrescarLibretita` más abajo).
+  const vistos = [];
   const juntar = (data) => {
     const lista = Array.isArray(data) ? data : (data?.data || []);
     for (const p of lista) {
       if (productIds.has(String(p.id))) productos[p.id] = p;
     }
+    vistos.push(...lista);
     return lista;
   };
   const faltan = () => productIds.size > Object.keys(productos).length;
@@ -394,6 +399,26 @@ async function verificarStockServer(items, token, topes = {}, costos = null) {
 
   // No pudimos leer el catálogo completo → fail-open: sin problemas, que la venta pase.
   if (!completo) return { problemas: [], completo: false, productos };
+
+  // AUTO-REPARACIÓN. Si caímos acá es porque la libretita faltaba o estaba vieja.
+  // Estas páginas ya vienen con el costo de cada producto, así que la rellenamos
+  // sin pedirle NADA extra a Gestión Nube: el próximo pedido vuelve a ser rápido.
+  //
+  // Hace falta porque el robot no es puntual: dice correr cada 5 minutos, pero
+  // medido el 2-8-2026 corre ~1 vez por hora y hubo un hueco de 108 min. Sin esto,
+  // un hueco largo dejaba el camino rápido apagado hasta que el robot se acordara.
+  //
+  // Se espera el guardado (no se dispara y se olvida) porque en un servidor sin
+  // estado la función puede terminar antes de que la escritura salga. Son ~100 ms
+  // sobre un camino que ya tardó 2 s, y solo pasa cuando la libretita no servía.
+  if (!costos && vistos.length) {
+    try {
+      const r = await guardarCostos(vistos);
+      console.log(`[costos] libretita rellenada de paso: ${r.guardados} productos`);
+    } catch (e) {
+      console.error('[costos] no se pudo rellenar:', (e && e.message) || e);
+    }
+  }
 
   return { ...evaluar(items, productos, topes), completo: true, productos, via: 'catalogo' };
 }
