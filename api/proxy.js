@@ -107,13 +107,15 @@ function stockDeProducto(p) {
 //   topes: { <product_id>: { porVariante: { <size_id>: <unidades> }, creado, stockAlCrear } }
 // La clave es producto+variante porque en GN el `size_id` es un talle compartido
 // entre productos (el mismo "iPhone 15 - Negro" se repite en muchos diseños).
-async function leerTopes() {
+// Se lee la config ENTERA (no solo `topes`) porque el control de precios de más
+// abajo necesita las excepciones, los precios por variante y los cupones. Es la
+// misma consulta al KV que ya se hacía: no agrega ni una espera.
+async function leerConfigKV() {
   try {
-    const cfg = await kvGet();
-    return (cfg && cfg.topes) || {};
+    return (await kvGet()) || {};
   } catch (e) {
-    // El KV caído no puede trabar las ventas: sin topes, se vende como siempre.
-    console.error('[topes] no se pudieron leer:', (e && e.message) || e);
+    // El KV caído no puede trabar las ventas: sin config, se vende como siempre.
+    console.error('[config] no se pudo leer:', (e && e.message) || e);
     return {};
   }
 }
@@ -324,40 +326,118 @@ async function verificarStockServer(items, token, topes = {}) {
 // cual: con la consola del navegador abierta, cualquiera podía confirmar 100
 // fundas a $1 y la venta se creaba, descontando stock real.
 //
-// Lo correcto sería recalcular el precio acá, pero eso obliga a traer al
-// servidor toda la lógica de la lista mejor, las excepciones y los cupones: es
-// un proyecto, no un control. Mientras tanto, esto ataja el abuso grosero sin
-// arriesgar rechazar un pedido bueno.
+// No hace falta recalcular el precio exacto (eso obliga a traer acá toda la
+// lógica de la lista mejor). Alcanza con calcular el PISO: cuál es el precio más
+// bajo que el catálogo pudo haber generado legítimamente para ese renglón.
 //
-// El piso: el catálogo nunca vende por debajo de `min(costo, mayorista)`
-// (`listaMejorDesde` en index.html). PERO un cupón sí puede bajar de ahí,
-// porque el descuento se reparte entre los renglones. Por eso el límite no es
-// el piso sino el 20% del piso: ningún cupón real descuenta el 80%, y un pedido
-// a $1 sobre un piso de $1.652 queda muy por debajo.
+// El piso arranca en `min(costo, mayorista)`, que es donde lo frena
+// `listaMejorDesde` en index.html: el % de la lista mejor, sea 15 o 40, nunca
+// baja de ahí. Después se corrige por las tres únicas cosas que SÍ pueden quedar
+// por debajo, todas cargadas a propósito desde el panel:
 //
-// Los que caen entre el piso y el 20% se dejan pasar pero quedan avisados en el
-// registro: si aparece manipulación fina, se ve ahí sin haberle trabado la
-// compra a nadie por un cupón raro.
-const FRACCION_MINIMA = 0.20;
+//   · excepción tipo `precio` — precio fijo para un producto. Son globales (no
+//     por código: config.js manda `cfg.excepciones` entero al validar cualquier
+//     código), así que el servidor no necesita saber qué código usó el cliente.
+//   · precio especial de variante (`variantPrices`) más bajo que el costo.
+//   · un cupón vigente, que reparte su descuento entre los renglones.
+//
+// Los cupones se leen del KV en vivo: hoy están apagados y el piso queda entero;
+// si mañana se prende uno del 30%, el margen se abre a 30% solo, sin tocar nada.
+const FRACCION_MINIMA = 0.20;      // respaldo para cuando el piso no se puede calcular
+const TOLERANCIA_PORCENTAJE = 0.01; // 1% + $1 de perdón: el catálogo redondea a 2 decimales
+const TOLERANCIA_PESOS = 1;
 
-function revisarPrecios(items, productos) {
+function positivo(v) {
+  const n = parseFloat(v);
+  return (!isNaN(n) && n > 0) ? n : 0;
+}
+
+// Cuánto puede bajar un renglón por culpa de un cupón vigente.
+// Devuelve { fraccion, incierto }: `incierto` significa "no se puede acotar",
+// y en ese caso volvemos al freno viejo del 20% en vez de arriesgar un rechazo.
+//
+// Los cupones de MONTO FIJO son siempre inciertos, y no por prolijidad: el
+// descuento se calcula sobre los renglones descontables (las ofertas quedan
+// afuera) pero la compra mínima se valida sobre el total CON ofertas. Un carrito
+// mayormente de ofertas puede dejar `descuento >= subtotalDescontable`, y ahí el
+// factor da 0 → el renglón viaja a $0. Mientras eso siga así, no hay piso que
+// calcular. Los de porcentaje sí acotan: el factor nunca baja de (1 − valor/100).
+function aflojeDeCupones(cfg) {
+  if (!cfg || cfg.mostrarCupones !== true) return { fraccion: 0, incierto: false };
+  const cupones = Array.isArray(cfg.cupones) ? cfg.cupones : [];
+  const ahora = new Date();
+  let fraccion = 0, incierto = false;
+  for (const c of cupones) {
+    if (!c || c.activo === false) continue;
+    if (c.vence) {
+      const fin = new Date(c.vence + 'T23:59:59');
+      if (!isNaN(fin.getTime()) && fin < ahora) continue; // vencido
+    }
+    if (c.tipo === 'porcentaje') {
+      fraccion = Math.max(fraccion, Math.min(positivo(c.valor), 100) / 100);
+    } else if (c.tipo === 'monto') {
+      incierto = true;
+    }
+    // tipo 'envio' no toca precios (descuentoCupon devuelve 0)
+  }
+  return { fraccion: Math.min(fraccion, 1), incierto };
+}
+
+// El precio más bajo que el catálogo pudo generar para este renglón, ANTES de
+// cupones. Se queda con el menor de los candidatos: si hay algo cargado a
+// propósito por debajo del costo, ese manda.
+function pisoDeRenglon(item, p, cfg) {
+  const may = positivo(p.wholesaler_price);
+  const costo = positivo(p.unit_cost);
+  let piso = (costo > 0 && may > 0) ? Math.min(costo, may) : (costo || may);
+
+  const id = item.product_id;
+  const excepciones = (cfg && cfg.excepciones) || {};
+  const exc = excepciones[id] || excepciones[String(id)];
+  if (exc && exc.tipo === 'precio') {
+    // Precio fijo puesto a mano: puede estar por debajo del costo a propósito.
+    const fijo = positivo(exc.valor);
+    if (fijo > 0) piso = (piso > 0) ? Math.min(piso, fijo) : fijo;
+  }
+
+  if (item.size_id !== undefined && item.size_id !== null) {
+    const vp = positivo((cfg && cfg.variantPrices || {})[id + '-' + item.size_id]);
+    if (vp > 0) {
+      // getPrecioVariante frena en min(costo, precioDeLaVariante).
+      const pisoVar = costo > 0 ? Math.min(costo, vp) : vp;
+      piso = (piso > 0) ? Math.min(piso, pisoVar) : pisoVar;
+    }
+  }
+
+  return piso;
+}
+
+function revisarPrecios(items, productos, cfg) {
+  const { fraccion, incierto } = aflojeDeCupones(cfg);
   const sospechosos = [];
   for (const item of items) {
     const p = productos[item.product_id];
     if (!p) continue; // producto desconocido: ya lo maneja la verificación de stock
-    const may = parseFloat(p.wholesaler_price || 0);
-    const costo = parseFloat(p.unit_cost || 0);
-    const piso = (costo > 0 && may > 0) ? Math.min(costo, may) : (costo || may);
+    const piso = pisoDeRenglon(item, p, cfg);
     if (!(piso > 0)) continue; // sin referencia de precio no se puede opinar
+
     const precio = parseFloat(item.unit_price);
     if (isNaN(precio) || precio < 0) {
-      sospechosos.push({ nombre: p.name, precio: item.unit_price, piso, grave: true });
+      sospechosos.push({ nombre: p.name, precio: item.unit_price, piso, limite: piso, grave: true });
       continue;
     }
-    if (precio < piso * FRACCION_MINIMA) {
-      sospechosos.push({ nombre: p.name, precio, piso, grave: true });
-    } else if (precio < piso) {
-      sospechosos.push({ nombre: p.name, precio, piso, grave: false });
+
+    // El límite duro: el piso aflojado por el mayor cupón vigente. Si el afloje
+    // no se puede acotar, se cae al freno viejo (20%) en vez de rechazar de más.
+    const limiteBruto = incierto ? piso * FRACCION_MINIMA : piso * (1 - fraccion);
+    const limite = limiteBruto * (1 - TOLERANCIA_PORCENTAJE) - TOLERANCIA_PESOS;
+
+    if (precio < limite) {
+      sospechosos.push({ nombre: p.name, precio, piso, limite: Math.round(limiteBruto), grave: true });
+    } else if (precio < piso * (1 - TOLERANCIA_PORCENTAJE) - TOLERANCIA_PESOS) {
+      // Entre el límite y el piso: pasa, pero queda anotado. Es lo esperable con
+      // un cupón activo; sin cupones activos, es una señal para mirar.
+      sospechosos.push({ nombre: p.name, precio, piso, limite: Math.round(limiteBruto), grave: false });
     }
   }
   return sospechosos;
@@ -492,15 +572,17 @@ module.exports = async (req, res) => {
       }
 
       if (items.length > 0) {
-        const topes = esAdmin ? {} : await leerTopes();
+        // Una sola lectura del KV para las dos cosas: topes y reglas de precio.
+        const cfg = esAdmin ? {} : await leerConfigKV();
+        const topes = cfg.topes || {};
         const { problemas, completo, productos } = await verificarStockServer(items, token, topes);
 
         // El precio que mandó el navegador, contra el del producto en Gestión Nube.
         if (!esAdmin && productos) {
-          const sospechosos = revisarPrecios(items, productos);
+          const sospechosos = revisarPrecios(items, productos, cfg);
           const graves = sospechosos.filter(s => s.grave);
           for (const s of sospechosos.filter(s => !s.grave)) {
-            console.warn(`[precio] "${s.nombre}" vino a ${s.precio} y el piso es ${s.piso} (pasa, puede ser un cupón)`);
+            console.warn(`[precio] "${s.nombre}" vino a ${s.precio}, el piso es ${s.piso} y el límite ${s.limite} (pasa, queda anotado)`);
           }
           if (graves.length) {
             console.error('[precio] RECHAZADO por precio imposible:', JSON.stringify(graves));
