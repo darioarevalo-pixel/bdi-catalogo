@@ -121,22 +121,55 @@ function usuarioPorPass(cfg, user, pass) {
 }
 
 /**
+ * La FILA del KV de quien manda este request (por token o por usuario+contraseña), o null.
+ *
+ * Trae el usuario entero —`admin`, `acceso`, `funcion`— y no solo un booleano, porque hay
+ * endpoints que ya no se contestan con "¿es admin?": Ingresos, por ejemplo, distingue entre poner
+ * el nombre comercial de un diseño y manejar la importación. Antes eso no se podía preguntar sin
+ * volver a leer el KV a mano.
+ *
+ * `cfg` es opcional: si el llamador ya la leyó, se la pasa y evita una segunda consulta.
+ */
+async function usuarioDe(body, cfg) {
+  const b = body || {};
+  const config = cfg !== undefined ? cfg : await leerCfgUsuarios();
+  return b.adminToken
+    ? usuarioPorEmail(config, await emailDelToken(b.adminToken))
+    : usuarioPorPass(config, b.adminUser, b.adminPass);
+}
+
+/**
  * ¿Quien manda este request es administrador?
  *
  * `cfg` es opcional: si el llamador ya la leyó, se la pasa y evita una segunda consulta.
  * Sin token, el comportamiento es exactamente el de antes, bootstrap incluido.
  */
 async function esAdmin(body, cfg) {
-  const b = body || {};
-  const config = cfg !== undefined ? cfg : await leerCfgUsuarios();
-  const u = b.adminToken
-    ? usuarioPorEmail(config, await emailDelToken(b.adminToken))
-    : usuarioPorPass(config, b.adminUser, b.adminPass);
+  const u = await usuarioDe(body, cfg);
   return !!(u && u.admin);
+}
+
+/**
+ * ¿Tiene tildado el sub-permiso `key` en `store`? (`'ingresos.editar'`).
+ *
+ * ⚠️ Es el equivalente de `puedeSub` del monitor (`lib/permisos.core.js`), que NO se puede
+ * importar desde acá: son dos deploys distintos. La equivalencia se sostiene porque los SUB
+ * permisos nunca se heredan de la función —`ACCESO_POR_FUNCION` expande áreas a claves de sección,
+ * nunca a subclaves—, así que para un `x.y` "admin o tilde explícita" es exactamente lo mismo que
+ * `puedeSub`. Si algún día la función empezara a dar subs, esto se queda corto y hay que volver.
+ * La exclusión negativa (`-clave`) se respeta igual que allá.
+ */
+function tieneSub(u, store, key) {
+  if (!u) return false;
+  if (u.admin) return true;
+  const acc = (u.acceso && u.acceso[store]) || {};
+  return !!acc[key] && !acc['-' + key];
 }
 
 module.exports = {
   esAdmin,
+  usuarioDe,
+  tieneSub,
   emailDelToken,
   usuarioPorEmail,
   usuarioPorPass,

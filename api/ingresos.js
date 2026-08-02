@@ -10,7 +10,7 @@
 //
 // También sirve los teléfonos del CRM (?kind=crmtel) y el seguimiento del CRM
 // (?kind=crmseg → mapa id_cliente -> { cadencia, ultimo_contacto, proximo_manual, notas }).
-const { esAdmin } = require('./_admin');
+const { tieneSub, usuarioDe } = require('./_admin');
 const { exigirUsuario } = require('./_auth');
 const KV_URL   = process.env.KV_REST_API_URL   || process.env.STORAGE_KV_REST_API_URL;
 const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.STORAGE_KV_REST_API_TOKEN;
@@ -39,7 +39,7 @@ module.exports = async (req, res) => {
     // los teléfonos y el seguimiento de los clientes. Estaban abiertos, y ya se bajaron 653
     // teléfonos sin autenticarse. Alcanza con estar en el padrón (no hace falta ser admin): las
     // usan las secciones normales del Monitor. La ruta por defecto —los ingresos proyectados—
-    // conserva su `esAdmin` para escribir, más abajo.
+    // tiene su propio chequeo de permiso para escribir, más abajo.
     if (req.query?.kind && !(await exigirUsuario(req, res, `ingresos:${req.query.kind}`))) return;
 
     // --- Config de reposición (mínimos por categoría + apagados) — baja sensibilidad, sin contraseña ---
@@ -209,7 +209,15 @@ module.exports = async (req, res) => {
     if (req.method === 'POST') {
       const { ingresos } = req.body || {};
       if (!Array.isArray(ingresos)) return res.status(400).json({ error: 'ingresos inválidos' });
-      if (!(await esAdmin(req.body))) return res.status(403).json({ error: 'Necesitás ser administrador para editar ingresos.' });
+      // Ya no alcanza con preguntar "¿es admin?": el monitor desglosó el permiso en dos niveles
+      // (`ingresos.nombre`, para poner el nombre comercial de un diseño, y `ingresos.editar`, para
+      // manejar la importación entera). Cualquiera de los dos escribe acá; la restricción de QUÉ
+      // puede tocar cada uno vive en la pantalla, porque el guardado manda el array completo y este
+      // endpoint no puede distinguir qué cambió. Sin este chequeo, el permiso nuevo sería una
+      // puerta pintada: la pantalla dejaría escribir y el guardado contestaría 403.
+      const usuario = await usuarioDe(req.body);
+      const puede = tieneSub(usuario, store, 'ingresos.editar') || tieneSub(usuario, store, 'ingresos.nombre');
+      if (!puede) return res.status(403).json({ error: 'No tenés permiso para editar los ingresos proyectados.' });
       await kvCmd(['SET', keyFor(store), JSON.stringify(ingresos)]);
       return res.status(200).json({ ok: true });
     }
