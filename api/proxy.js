@@ -835,13 +835,11 @@ module.exports = async (req, res) => {
     if (esConfirmarPedido) marcar('precios');
     const r = await fetch(url, opts);
     const data = await r.text();
-    if (esConfirmarPedido) {
-      marcar('crearVenta');
-      // `via` dice por qué camino se verificó el stock: 'rapido' (por producto) o
-      // 'catalogo' (el entero). Si aparece 'catalogo' seguido, el motivo está en el
-      // aviso `[stock] camino de siempre: …` de más arriba.
-      console.log(`[tiempos] ${r.status} en ${Date.now() - t0}ms — ${JSON.stringify(marcas)}`);
-    }
+    // `via` dice por qué camino se verificó el stock: 'rapido' (por producto) o
+    // 'catalogo' (el entero). Si aparece 'catalogo' seguido, el motivo está en el
+    // aviso `[stock] camino de siempre: …` de más arriba. El registro sale en el
+    // `finally`, para que también lo dejen los pedidos rechazados.
+    if (esConfirmarPedido) marcar('crearVenta');
     // Cacheo en el CDN de Vercel SOLO para la lista de productos (lectura pura,
     // se usa para mostrar el catálogo). El navegador igual revalida (max-age=0),
     // pero el CDN sirve una copia compartida hasta 60s → abrir el catálogo es
@@ -866,5 +864,11 @@ module.exports = async (req, res) => {
     // Pase lo que pase (409 por falta de stock, error de GN, excepción), el turno
     // se libera. Si no, el próximo cliente esperaría al pedo hasta que venza.
     await liberarTurno(turno);
+    // El cronómetro va ACÁ y no después de crear la venta: así también quedan
+    // medidos los pedidos que se rechazan por precio o por stock, que antes no
+    // dejaban ningún registro de tiempos. `salida` dice por dónde terminó.
+    if (esConfirmarPedido) {
+      console.log(`[tiempos] ${res.statusCode} en ${Date.now() - t0}ms — ${JSON.stringify(marcas)}`);
+    }
   }
 };
