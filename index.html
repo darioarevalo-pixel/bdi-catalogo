@@ -1520,10 +1520,13 @@ function getTopeVariante(v) {
 // "Sin stock" a secas y nunca se entera de que hay mercadería reservada.
 function getStockVariante(v) {
   if (!v.stock_por_tienda || !v.stock_por_tienda.length) return null;
-  const tienda = v.stock_por_tienda.find(t => t.store_name === 'Deposito Minorista');
-  const real = tienda
-    ? (tienda.stock_disponible || 0)
-    : v.stock_por_tienda.reduce((s, t) => s + (t.stock_disponible || 0), 0);
+  // Un depósito puede venir REPETIDO (varios renglones de inventario del mismo
+  // depósito para la misma variante). GN no los devuelve en orden estable, así
+  // que quedarse con el primero daba 4 o 0 según la consulta. Se SUMAN.
+  // Ver la nota larga en api/proxy.js → stockDeVariante.
+  const delDep = v.stock_por_tienda.filter(t => t.store_name === 'Deposito Minorista');
+  const filas = delDep.length ? delDep : v.stock_por_tienda;
+  const real = filas.reduce((s, t) => s + (t.stock_disponible || 0), 0);
   return Math.max(0, real - getTopeVariante(v));
 }
 

@@ -2393,9 +2393,13 @@ function precioBaseAdmin(p) {
 // Stock disponible de una variante (prioriza "Deposito Minorista", igual que el catálogo).
 function getStockVarianteAdmin(v) {
   if (!v.stock_por_tienda || !v.stock_por_tienda.length) return null;
-  const t = v.stock_por_tienda.find(x => x.store_name === 'Deposito Minorista');
-  if (t) return t.stock_disponible || 0;
-  return v.stock_por_tienda.reduce((s, x) => s + (x.stock_disponible || 0), 0);
+  // Un depósito puede venir REPETIDO (varios renglones de inventario del mismo
+  // depósito para la misma variante). GN no los devuelve en orden estable, así
+  // que quedarse con el primero daba 4 o 0 según la consulta. Se SUMAN.
+  // Ver la nota larga en api/proxy.js → stockDeVariante.
+  const delDep = v.stock_por_tienda.filter(x => x.store_name === 'Deposito Minorista');
+  const filas = delDep.length ? delDep : v.stock_por_tienda;
+  return filas.reduce((s, x) => s + (x.stock_disponible || 0), 0);
 }
 
 // ===== Protección de stock (topes por variante) =============================

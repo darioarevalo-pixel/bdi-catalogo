@@ -387,9 +387,13 @@ function candidatoTN(p) {
 
 function stockVariante(v) {
   if (!v || !v.stock_por_tienda || !v.stock_por_tienda.length) return 0;
-  const dep = v.stock_por_tienda.find(t => t.store_name === 'Deposito Minorista');
-  if (dep) return dep.stock_disponible || 0;
-  return v.stock_por_tienda.reduce((s, t) => s + (t.stock_disponible || 0), 0);
+  // Un depósito puede venir REPETIDO (varios renglones de inventario del mismo
+  // depósito para la misma variante). GN no los devuelve en orden estable, así
+  // que quedarse con el primero daba 4 o 0 según la consulta. Se SUMAN.
+  // Ver la nota larga en api/proxy.js → stockDeVariante.
+  const delDep = v.stock_por_tienda.filter(t => t.store_name === 'Deposito Minorista');
+  const filas = delDep.length ? delDep : v.stock_por_tienda;
+  return filas.reduce((s, t) => s + (t.stock_disponible || 0), 0);
 }
 function stockTotal(p) {
   if (p.variantes && p.variantes.length) return p.variantes.reduce((s, v) => s + stockVariante(v), 0);

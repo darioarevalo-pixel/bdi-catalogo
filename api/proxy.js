@@ -75,13 +75,25 @@ async function gnFetchRetry(path, token, tries = 3) {
 }
 
 // Lee stock de una variante usando stock_por_tienda (formato real de GN).
-// Prioriza "Deposito Minorista" si existe (es el que se descuenta al vender);
-// si no hay, suma stock de todas las tiendas como fallback.
+// Prioriza "Deposito Minorista" (es el que se descuenta al vender); si no hay,
+// suma todas las tiendas como fallback.
+//
+// ⚠️ Un depósito puede venir REPETIDO. No es un error de GN: son varios renglones
+// de inventario del mismo depósito para la misma variante, cada uno con su
+// `inventory_id` (comprobado el 2-8-2026 en PINTED CASE / iPhone 15 Plus - BROWN:
+// inventory_id 1038694 con 4 unidades y 1438922 con 0, los dos en Deposito
+// Minorista). El stock real de ese depósito es la SUMA de sus renglones.
+//
+// Antes esto usaba `.find()`, que se queda con el primero — y GN NO devuelve los
+// renglones en un orden estable: la misma variante daba 4 o 0 según la consulta.
+// Un cliente podía ver "sin stock" habiendo 4, o al revés. Medido sobre las 6.726
+// variantes: 7 tienen el depósito repetido y 2 cambian de valor. Sumar no infla
+// nada (los otros 5 son [0,0]) y además da SIEMPRE el mismo número.
 function stockDeVariante(variante) {
   if (!variante || !variante.stock_por_tienda || !variante.stock_por_tienda.length) return 0;
-  const deposito = variante.stock_por_tienda.find(t => t.store_name === 'Deposito Minorista');
-  if (deposito) return deposito.stock_disponible || 0;
-  return variante.stock_por_tienda.reduce((s, t) => s + (t.stock_disponible || 0), 0);
+  const delDeposito = variante.stock_por_tienda.filter(t => t.store_name === 'Deposito Minorista');
+  const filas = delDeposito.length ? delDeposito : variante.stock_por_tienda;
+  return filas.reduce((s, t) => s + (t.stock_disponible || 0), 0);
 }
 
 function stockDeProducto(p) {
