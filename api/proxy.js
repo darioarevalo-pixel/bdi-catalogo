@@ -120,6 +120,68 @@ async function leerConfigKV() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// LA LIBRETITA DE COSTOS
+//
+// Para confirmar un pedido hacen falta dos cosas de cada producto: el STOCK, que
+// tiene que ser del momento, y el COSTO, que solo sirve para calcular el piso de
+// precio y cambia cuando alguien lo cambia a mano — no solo.
+//
+// Hasta el 2-8-2026 los dos salían del mismo lado: bajarse los 429 productos
+// enteros (3 consultas, 1,5 MB, 2,8 s) para mirar los 5 del carrito. Ahora el
+// stock se pide producto por producto (rápido) y el costo sale de acá: una copia
+// que el robot de warming, que YA se baja el catálogo cada 5 minutos para
+// mantenerlo caliente, deja anotada de paso.
+//
+// Vive en su PROPIA clave del KV y no adentro de la config a propósito: el robot
+// escribe cada 5 minutos y `kvSet` pisa la config entera, así que si el robot y
+// un guardado del panel se cruzaran, uno se comería al otro. Con la clave
+// separada no se tocan.
+//
+// Que quede vieja unos minutos no afloja el control, lo endurece un poco: si un
+// costo SUBIÓ y todavía tenemos el viejo, el piso queda un peso más bajo. El caso
+// al revés —costo que bajó— también está cubierto, porque el precio que ve el
+// cliente sale del listado cacheado, que tiene la misma antigüedad.
+const COSTOS_KEY = process.env.COSTOS_KEY || 'catalog-costos';
+
+// El robot corre cada 5 minutos. Si la libretita tiene más de 2 horas, algo pasó
+// (el robot apagado, GitHub Actions caído) y no queremos seguir confiando en
+// costos viejos: se vuelve al camino de siempre, que tarda 2 s pero saca los
+// costos de Gestión Nube en el momento. Degradar es preferible a adivinar.
+const COSTOS_VIDA_MS = 2 * 60 * 60 * 1000;
+
+async function leerCostos() {
+  try {
+    const r = await kvCmd(['GET', COSTOS_KEY]);
+    if (!r || !r.result) return null;
+    const d = JSON.parse(r.result);
+    if (!d || !d.productos) return null;
+    const edad = Date.now() - Date.parse(d.actualizado);
+    if (!(edad >= 0) || edad > COSTOS_VIDA_MS) {
+      console.warn(`[costos] libretita vieja (${Math.round(edad / 60000)} min): se usa el catálogo entero`);
+      return null;
+    }
+    return d;
+  } catch (e) {
+    console.error('[costos] no se pudo leer la libretita:', (e && e.message) || e);
+    return null; // sin libretita se usa el camino de siempre
+  }
+}
+
+async function guardarCostos(productos) {
+  const mapa = {};
+  for (const p of productos) {
+    const costo = parseFloat(p.unit_cost);
+    if (p && p.id != null && !isNaN(costo)) mapa[p.id] = costo;
+  }
+  if (!Object.keys(mapa).length) return { guardados: 0, motivo: 'ningún producto traía costo' };
+  // kvCmd devuelve null cuando el KV no está configurado. Sin este chequeo el
+  // robot informaba "guardados: 429" sin haber guardado nada.
+  const r = await kvCmd(['SET', COSTOS_KEY, JSON.stringify({ actualizado: new Date().toISOString(), productos: mapa })]);
+  if (r === null) return { guardados: 0, motivo: 'KV no configurado' };
+  return { guardados: Object.keys(mapa).length };
+}
+
 function topeDe(topes, productId, sizeId) {
   const t = topes[productId] || topes[String(productId)];
   if (!t || !t.porVariante) return 0;
@@ -191,16 +253,83 @@ async function liberarTurno(mio) {
   }
 }
 
-async function verificarStockServer(items, token, topes = {}) {
-  // Trae todos los productos paginando y filtra localmente por los IDs del carrito.
-  // GN ignora el parámetro ?id=X en /productos/obtener (siempre devuelve primeros
-  // por paginación). Una sola pasada por el catálogo es lo más eficiente y correcto.
+// ---------------------------------------------------------------------------
+// EL CAMINO RÁPIDO: preguntar por los productos del carrito, no por los 429
+//
+// `/productos/obtener` IGNORA todo intento de filtrar (probado el 2-8-2026 con
+// id, ids, product_id y search: siempre devuelve la página entera). Por eso había
+// que bajarse el catálogo completo.
+//
+// Pero existe `/productos/ver/{id}`, que devuelve UN producto —con su stock, en
+// EXACTAMENTE el mismo formato `stock_por_tienda`— y no estaba documentada en
+// ningún lado nuestro. Medido contra producción: 8 productos en paralelo tardan
+// 0,43 s contra 2,76 s del catálogo entero, y 17 KB contra 1,5 MB.
+//
+// Lo único que NO trae es `unit_cost` (las rutas de costos que documenta la API
+// devuelven 500). De ahí sale la libretita: el costo de ahí, el stock de acá.
+//
+// Se verificó que da los mismos números que el camino de siempre antes de
+// confiarle una venta: ver el detalle en el commit.
+const MAX_PRODUCTOS_CAMINO_RAPIDO = 15;
+
+// ¿Se puede usar el camino rápido para este carrito?
+// Ante la MENOR duda contesta que no, y se usa el camino de siempre. Nunca
+// "dejar pasar sin verificar": eso solo pasa si TAMBIÉN falla el camino viejo.
+function puedeIrPorElRapido(ids, costos) {
+  if (!costos || !costos.productos) return { ok: false, motivo: 'sin libretita de costos' };
+  // Más productos que esto son más consultas que las 3 del catálogo entero, y
+  // encima acercan al límite de 60 por minuto de Gestión Nube.
+  if (ids.length > MAX_PRODUCTOS_CAMINO_RAPIDO) return { ok: false, motivo: `carrito de ${ids.length} productos` };
+  // Un producto recién creado todavía no está en la libretita: sin su costo el
+  // control de precios calcularía mal el piso y rechazaría una compra buena.
+  const sinCosto = ids.filter(id => costos.productos[id] === undefined);
+  if (sinCosto.length) return { ok: false, motivo: `sin costo en la libretita: ${sinCosto.join(', ')}` };
+  return { ok: true };
+}
+
+async function traerProductosSueltos(ids, token, costos) {
+  const resp = await Promise.all(
+    ids.map(id => gnFetchRetry(`/productos/ver/${encodeURIComponent(id)}?include_stock=1&include_variants=1`, token))
+  );
+  const productos = {};
+  for (let i = 0; i < ids.length; i++) {
+    const r = resp[i];
+    // Una sola consulta que falle invalida el camino rápido entero: se cae al de
+    // siempre. No se puede verificar "los que sí vinieron" y confiar en el resto.
+    if (!r || !r.ok) return null;
+    const p = (r.data && r.data.data) ? r.data.data : r.data;
+    if (!p || String(p.id) !== String(ids[i])) return null; // vino otra cosa: no arriesgamos
+    productos[p.id] = { ...p, unit_cost: costos.productos[ids[i]] };
+  }
+  return productos;
+}
+
+async function verificarStockServer(items, token, topes = {}, costos = null) {
   const productIds = new Set(items.map(i => String(i.product_id)));
   const productos = {};
   const MAX_PAGINAS = 30; // safeguard contra loops infinitos
 
+  // --- Camino rápido -------------------------------------------------------
+  const ids = [...productIds];
+  const puede = puedeIrPorElRapido(ids, costos);
+  if (puede.ok) {
+    const sueltos = await traerProductosSueltos(ids, token, costos);
+    if (sueltos) return { ...evaluar(items, sueltos, topes), completo: true, productos: sueltos, via: 'rapido' };
+    console.warn('[stock] el camino rápido falló, se usa el catálogo entero');
+  } else {
+    console.log(`[stock] camino de siempre: ${puede.motivo}`);
+  }
+
+  // --- Camino de siempre: bajarse el catálogo entero ------------------------
+
+  // 200 es el máximo que acepta Gestión Nube (probado el 2-8-2026: pidiendo 500 o
+  // 1000 devuelve 200 igual). Con 100 el catálogo eran 5 páginas; con 200 son 3, y
+  // encima una página de 200 tarda MENOS que una de 100 (1,13 s contra 1,43 s):
+  // menos idas y vueltas. Va como constante y no suelto en la URL porque más abajo
+  // se compara contra este mismo número para saber si una página vino llena.
+  const POR_PAGINA = 200;
   const pedirPagina = (page) =>
-    gnFetchRetry(`/productos/obtener?include_stock=1&include_variants=1&per_page=100&page=${page}`, token);
+    gnFetchRetry(`/productos/obtener?include_stock=1&include_variants=1&per_page=${POR_PAGINA}&page=${page}`, token);
 
   // Se queda con los productos del carrito y devuelve la página cruda.
   const juntar = (data) => {
@@ -238,7 +367,7 @@ async function verificarStockServer(items, token, topes = {}) {
         if (!r.ok) completo = false; // una sola página caída ya invalida la verificación
         else juntar(r.data);
       }
-    } else if (!ultima && lista1.length >= 100) {
+    } else if (!ultima && lista1.length >= POR_PAGINA) {
       // GN no dijo cuántas páginas hay y la primera vino llena: no sabemos hasta
       // dónde ir, así que caminamos de a una como antes. Sin esto marcaríamos
       // como "no existe" todo lo que esté de la página 2 en adelante.
@@ -246,7 +375,7 @@ async function verificarStockServer(items, token, topes = {}) {
         const r = await pedirPagina(page);
         if (!r.ok) { completo = false; break; }
         const lista = juntar(r.data);
-        if (lista.length < 100 || r.data?.meta?.has_more_pages === false) break;
+        if (lista.length < POR_PAGINA || r.data?.meta?.has_more_pages === false) break;
       }
     }
   }
@@ -254,6 +383,13 @@ async function verificarStockServer(items, token, topes = {}) {
   // No pudimos leer el catálogo completo → fail-open: sin problemas, que la venta pase.
   if (!completo) return { problemas: [], completo: false, productos };
 
+  return { ...evaluar(items, productos, topes), completo: true, productos, via: 'catalogo' };
+}
+
+// Decide qué falta, a partir de los productos ya traídos. Está aparte a propósito:
+// los dos caminos (el rápido y el del catálogo entero) pasan por ESTA función, así
+// que no hay forma de que uno cuente el stock distinto que el otro.
+function evaluar(items, productos, topes) {
   const problemas = [];
   for (const item of items) {
     const p = productos[item.product_id];
@@ -315,7 +451,7 @@ async function verificarStockServer(items, token, topes = {}) {
       }
     }
   }
-  return { problemas, completo: true, productos };
+  return { problemas };
 }
 
 // ---------------------------------------------------------------------------
@@ -531,12 +667,26 @@ module.exports = async (req, res) => {
       const d1 = await r1.json().catch(() => ({}));
       let lastPage = d1.meta ? (d1.meta.last_page || d1.meta.total_pages || 1) : 1;
       if (lastPage > 20) lastPage = 20;
+      // El robot ya se trae el catálogo entero para calentar el CDN. Aprovechamos
+      // ESE mismo viaje para anotar los costos: no cuesta ni una consulta más.
+      const todos = [...(d1.data || [])];
+      let completo = r1.ok;
       if (lastPage > 1) {
-        await Promise.all(
-          Array.from({ length: lastPage - 1 }, (_, i) => fetch(urlPagina(i + 2)).catch(() => null))
+        const resto = await Promise.all(
+          Array.from({ length: lastPage - 1 }, (_, i) =>
+            fetch(urlPagina(i + 2)).then(r => r.ok ? r.json() : null).catch(() => null))
         );
+        for (const d of resto) {
+          if (!d) { completo = false; continue; }
+          todos.push(...(d.data || []));
+        }
       }
-      return res.status(200).json({ ok: true, pages: lastPage, ms: Date.now() - t0 });
+      // Solo se reescribe si el catálogo se leyó ENTERO. Media lectura dejaría la
+      // libretita con productos de menos, y cada uno que falte manda ese pedido al
+      // camino lento: preferimos la copia de hace 5 minutos antes que una a medias.
+      let costos = { guardados: 0, motivo: 'lectura incompleta' };
+      if (completo && todos.length) costos = await guardarCostos(todos);
+      return res.status(200).json({ ok: true, pages: lastPage, productos: todos.length, costos, ms: Date.now() - t0 });
     } catch (e) {
       return res.status(500).json({ ok: false, error: e.message, ms: Date.now() - t0 });
     }
@@ -568,8 +718,18 @@ module.exports = async (req, res) => {
   // verificar stock ni topes.
   const esConfirmarPedido = req.method === 'POST' && ruta === '/ventas';
 
+  // Cronómetro de la confirmación. Confirmar son varios tramos y hasta el
+  // 2-8-2026 no sabíamos cuánto pesaba cada uno; en particular CREAR LA VENTA en
+  // Gestión Nube, que no se puede medir sin crear una venta de verdad. Queda todo
+  // en el registro para no volver a optimizar a ciegas.
+  const t0 = Date.now();
+  const marcas = {};
+  let desde = t0;
+  const marcar = (n) => { marcas[n] = Date.now() - desde; desde = Date.now(); };
+
   // Turno: de acá hasta el `finally`, este pedido es el único que confirma.
   const turno = esConfirmarPedido ? await tomarTurno() : null;
+  if (esConfirmarPedido) marcar('turno');
 
   try {
     // Verificación de stock server-side antes de crear la venta
@@ -587,10 +747,15 @@ module.exports = async (req, res) => {
       }
 
       if (items.length > 0) {
-        // Una sola lectura del KV para las dos cosas: topes y reglas de precio.
-        const cfg = esAdmin ? {} : await leerConfigKV();
+        // Config y libretita de costos EN PARALELO: son dos consultas al KV que no
+        // dependen una de la otra, así que juntas cuestan lo mismo que una sola.
+        const [cfg, costos] = esAdmin ? [{}, null] : await Promise.all([leerConfigKV(), leerCostos()]);
+        marcar('config');
         const topes = cfg.topes || {};
-        const { problemas, completo, productos } = await verificarStockServer(items, token, topes);
+        const { problemas, completo, productos, via } = await verificarStockServer(items, token, topes, costos);
+        marcar('stock');
+        marcas.via = via || 'catalogo';
+        marcas.productos = items.length;
 
         // El precio que mandó el navegador, contra el del producto en Gestión Nube.
         if (!esAdmin && productos) {
@@ -630,8 +795,16 @@ module.exports = async (req, res) => {
     if (req.body && ['POST', 'PUT', 'PATCH'].includes(req.method)) {
       opts.body = JSON.stringify(req.body);
     }
+    if (esConfirmarPedido) marcar('precios');
     const r = await fetch(url, opts);
     const data = await r.text();
+    if (esConfirmarPedido) {
+      marcar('crearVenta');
+      // `via` dice por qué camino se verificó el stock: 'rapido' (por producto) o
+      // 'catalogo' (el entero). Si aparece 'catalogo' seguido, el motivo está en el
+      // aviso `[stock] camino de siempre: …` de más arriba.
+      console.log(`[tiempos] ${r.status} en ${Date.now() - t0}ms — ${JSON.stringify(marcas)}`);
+    }
     // Cacheo en el CDN de Vercel SOLO para la lista de productos (lectura pura,
     // se usa para mostrar el catálogo). El navegador igual revalida (max-age=0),
     // pero el CDN sirve una copia compartida hasta 60s → abrir el catálogo es
