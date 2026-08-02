@@ -764,6 +764,18 @@ module.exports = async (req, res) => {
   let desde = t0;
   const marcar = (n) => { marcas[n] = Date.now() - desde; desde = Date.now(); };
 
+  // El total se sella en el MOMENTO DE RESPONDER, no en el `finally`. Medido el
+  // 2-8-2026: el registro decía 3.107 ms cuando el cliente había esperado 0,73 s.
+  // No era un error de medición: en Vercel, lo que queda después de mandar la
+  // respuesta (acá `liberarTurno`) corre en segundo plano y puede quedar
+  // suspendido, así que el reloj sigue corriendo sin que nadie espere. Envolver
+  // `res.json` es la forma de quedarse con el número que de verdad le importa al
+  // cliente, y cubre TODAS las salidas sin tocar cada `return`.
+  if (esConfirmarPedido) {
+    const jsonOriginal = res.json.bind(res);
+    res.json = (cuerpo) => { marcas.total = Date.now() - t0; return jsonOriginal(cuerpo); };
+  }
+
   // Turno: de acá hasta el `finally`, este pedido es el único que confirma.
   const turno = esConfirmarPedido ? await tomarTurno() : null;
   if (esConfirmarPedido) marcar('turno');
@@ -868,7 +880,9 @@ module.exports = async (req, res) => {
     // medidos los pedidos que se rechazan por precio o por stock, que antes no
     // dejaban ningún registro de tiempos. `salida` dice por dónde terminó.
     if (esConfirmarPedido) {
-      console.log(`[tiempos] ${res.statusCode} en ${Date.now() - t0}ms — ${JSON.stringify(marcas)}`);
+      // `total` es lo que esperó el cliente; `hastaLiberar` incluye la limpieza de
+      // después, que nadie espera (y que Vercel puede suspender).
+      console.log(`[tiempos] ${res.statusCode} en ${marcas.total ?? '?'}ms (hastaLiberar ${Date.now() - t0}ms) — ${JSON.stringify(marcas)}`);
     }
   }
 };
