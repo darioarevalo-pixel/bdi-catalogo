@@ -491,6 +491,20 @@ function analizar() {
     const may = parseFloat(p.wholesaler_price || 0);
     if (may > 0 && costo > 0 && may <= costo) avisos.push('El precio mayorista no cubre el costo');
 
+    // Con precio pero SIN COSTO: el producto se ve y se vende igual, así que no es
+    // un problema, pero hay que enterarse. Dos motivos:
+    //  · no se ve el margen de nada de lo que se venda mientras tanto;
+    //  · el control de precios del servidor (api/proxy.js) calcula el piso a partir
+    //    del costo. Sin costo cae al camino de reserva —el mayorista menos el mejor
+    //    descuento configurado—, que sigue frenando un pedido a $1 pero es más
+    //    flojo que el piso real. Cargando el costo vuelve a quedar bien protegido.
+    // Es el estado típico de la mercadería recién ingresada: precio puesto, costo
+    // todavía no. Hoy no lo tiene ningún producto vendible (los 47 sin costo
+    // tampoco tienen mayorista, y esos ya salen como "Sin precio mayorista").
+    if (may > 0 && !(costo > 0)) {
+      avisos.push('Sin costo cargado: no se ve el margen y el control de precios queda más flojo');
+    }
+
     // — Cosas del ingreso (solo para lo recién cargado) —
     if (esReciente && !nuevos.includes(id)) notas.push('Sin el cartel "NUEVO"');
     if (esReciente && (!topes[id] || !Object.keys(topes[id].porVariante || {}).length)) {
@@ -502,7 +516,7 @@ function analizar() {
     const estado = problemas.length ? 'malo' : (avisos.length ? 'aviso' : 'bien');
     return {
       p, id, estado, problemas, avisos, bien, notas, sugerencia, motivoFoto, caminos,
-      stock: st, nVar, foto: tieneTN ? entry.imgs[0] : gn, creado,
+      stock: st, nVar, costo, foto: tieneTN ? entry.imgs[0] : gn, creado,
     };
   });
 }
@@ -597,7 +611,9 @@ function render() {
         '<div class="nom">' + esc(p.name || 'Sin nombre') + '</div>' +
         '<div class="meta">id ' + a.id + (p.code ? ' · cód ' + esc(p.code) : '') + ' · ' + esc(p.category || 'sin categoría') +
           ' · ' + a.nVar + ' variantes · stock ' + a.stock +
-          ' · mayorista ' + plata(p.wholesaler_price) + ' · cargado ' + creado +
+          ' · mayorista ' + plata(p.wholesaler_price) +
+          ' · costo ' + (a.costo > 0 ? plata(a.costo) : '<b>sin cargar</b>') +
+          ' · cargado ' + creado +
           ' · foto por: ' + (a.caminos.length ? esc(a.caminos.join(' + ')) : '—') + '</div>' +
         '<div class="chips">' + chips + '</div>' + sug +
       '</div></div>';
