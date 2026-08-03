@@ -123,11 +123,24 @@ module.exports = async (req, res) => {
 
     // Las imágenes/descripciones de Tienda Nube cambian rara vez y esto es LENTO de
     // regenerar (pagina toda la API de TN). Por eso se cachea fuerte en el CDN de
-    // Vercel: 1 h fresco + 24 h sirviendo al instante mientras se refresca por
-    // detrás. Así, mientras alguien entre al menos una vez por día, nunca se enfría
-    // del todo y las visitas lo reciben casi instantáneo.
-    // El navegador además lo guarda 5 min (max-age) para recargas normales.
-    res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400');
+    // Vercel: la copia se sirve al instante y se refresca por detrás (24 h de
+    // stale-while-revalidate). Así, mientras alguien entre al menos una vez por
+    // día, nunca se enfría del todo y las visitas lo reciben casi instantáneo.
+    //
+    // La ventana "fresca" era de 1 h y el 3-8-2026 se bajó a 10 min. El motivo:
+    // al cargar 19 fundas nuevas en TiendaNube, las fotos NO aparecían en el
+    // catálogo y no había forma de apurarlo (el proyecto vive en otra cuenta de
+    // Vercel, así que ni siquiera se puede purgar a mano). Medido ese día: la
+    // regeneración completa tarda ~3 s y son 2 páginas de la API de TN, o sea
+    // que refrescar cada 10 min en vez de cada hora no le mueve la aguja a nadie
+    // —el cliente sigue recibiendo la copia guardada al instante, la regeneración
+    // pasa por detrás— y a cambio las fotos nuevas se ven el mismo rato en que se
+    // cargan en vez de hasta una hora después.
+    //
+    // El navegador además la guarda 1 min (max-age) para recargas seguidas. Antes
+    // eran 5 min, que era la otra mitad de la espera: aunque el servidor ya
+    // tuviera la foto nueva, la pestaña seguía mostrando la vieja.
+    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=600, stale-while-revalidate=86400');
     res.json({ v: 2, fichas, claves });
   } catch (e) {
     res.status(500).json({ error: e.message });
