@@ -371,7 +371,14 @@ async function verificarStockServer(items, token, topes = {}, costos = null) {
   const meta1 = r1.data?.meta;
   const ultima = Math.min(parseInt(meta1?.last_page || meta1?.total_pages, 10) || 0, MAX_PAGINAS);
 
-  if (faltan() && lista1.length > 0 && meta1?.has_more_pages !== false) {
+  // Normalmente se corta apenas están todos los productos del carrito. PERO si no
+  // hay libretita de costos, se leen TODAS las páginas a propósito: son las que
+  // van a rellenarla, y con media lectura quedaría a medias (comprobado en
+  // producción el 3-8-2026: rellenó 200 de 429 y los otros 229 seguían cayendo al
+  // camino lento). Son 2 consultas de más, UNA sola vez, y deja el camino rápido
+  // andando para todos los pedidos siguientes.
+  const hayQueLeerTodo = faltan() || !costos;
+  if (hayQueLeerTodo && lista1.length > 0 && meta1?.has_more_pages !== false) {
     if (ultima > 1) {
       // El resto de las páginas EN PARALELO. Antes se pedían una tras otra: con 5
       // páginas de ~1s cada una, confirmar un pedido podía tardar 5 segundos. El
@@ -388,7 +395,7 @@ async function verificarStockServer(items, token, topes = {}, costos = null) {
       // GN no dijo cuántas páginas hay y la primera vino llena: no sabemos hasta
       // dónde ir, así que caminamos de a una como antes. Sin esto marcaríamos
       // como "no existe" todo lo que esté de la página 2 en adelante.
-      for (let page = 2; page <= MAX_PAGINAS && faltan(); page++) {
+      for (let page = 2; page <= MAX_PAGINAS && (faltan() || !costos); page++) {
         const r = await pedirPagina(page);
         if (!r.ok) { completo = false; break; }
         const lista = juntar(r.data);
@@ -412,11 +419,19 @@ async function verificarStockServer(items, token, topes = {}, costos = null) {
   // estado la función puede terminar antes de que la escritura salga. Son ~100 ms
   // sobre un camino que ya tardó 2 s, y solo pasa cuando la libretita no servía.
   if (!costos && vistos.length) {
-    try {
-      const r = await guardarCostos(vistos);
-      console.log(`[costos] libretita rellenada de paso: ${r.guardados} productos`);
-    } catch (e) {
-      console.error('[costos] no se pudo rellenar:', (e && e.message) || e);
+    // Se compara contra el total que declara GN: una libretita a medias es peor
+    // que ninguna, porque cada producto que falte manda ese pedido al camino
+    // lento igual y encima nadie se entera de que quedó incompleta.
+    const totalGN = parseInt(meta1?.total, 10);
+    if (totalGN > 0 && vistos.length < totalGN) {
+      console.warn(`[costos] no se rellena: se leyeron ${vistos.length} de ${totalGN} productos`);
+    } else {
+      try {
+        const r = await guardarCostos(vistos);
+        console.log(`[costos] libretita rellenada de paso: ${r.guardados} de ${vistos.length} productos leídos`);
+      } catch (e) {
+        console.error('[costos] no se pudo rellenar:', (e && e.message) || e);
+      }
     }
   }
 
