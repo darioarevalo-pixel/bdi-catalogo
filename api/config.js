@@ -164,7 +164,13 @@ module.exports = async (req, res) => {
       await kvSet(incoming);
       return res.json({ ok: true, updatedAt: incoming.updatedAt });
     } catch (e) {
-      return res.status(500).json({ error: e.message });
+      // Antes una falla del KV no llegaba hasta acá: `kvSet` devolvía el error de
+      // Upstash como si fuera un dato bueno y el panel mostraba "✓ Guardado" sin
+      // haber guardado nada. Ahora revienta, y el cartel dice la verdad.
+      console.error('[config] no se pudo guardar:', (e && e.message) || e);
+      return res.status(500).json({
+        error: `No se guardó nada. ${e.message}. Probá de nuevo en un minuto.`,
+      });
     }
   }
 

@@ -520,7 +520,28 @@ function evaluar(items, productos, topes) {
 //
 // El piso arranca en `min(costo, mayorista)`, que es donde lo frena
 // `listaMejorDesde` en index.html: el % de la lista mejor, sea 15 o 40, nunca
-// baja de ahí. Después se corrige por las tres únicas cosas que SÍ pueden quedar
+// baja de ahí. Ese es el truco que evita que el servidor tenga que saber QUÉ
+// código usó el cliente.
+//
+// ⚠️ SALVO QUE EL PRODUCTO NO TENGA COSTO CARGADO. Ahí el truco se queda sin nada
+// de qué agarrarse y los dos lados hacían cosas opuestas (medido el 3-8-2026):
+//   · la pantalla: `piso = cost > 0 ? min(cost, publico) : 0` → sin costo NO hay
+//     piso, así que aplica el −15% completo;
+//   · el servidor: `costo || may` → el piso quedaba en el MAYORISTA ENTERO.
+// Resultado: el cliente CON CÓDIGO armaba el pedido, apretaba confirmar y le
+// saltaba "los precios no coinciden con el catálogo", sin nada que pudiera hacer.
+// Sin código no pasa (se cobra el mayorista entero y el servidor lo acepta).
+//
+// Hoy no explota porque los 47 productos sin costo tampoco tienen precio
+// mayorista, así que están ocultos; explota en el próximo ingreso de mercadería,
+// que es justo cuando entra un producto con el precio puesto y el costo todavía no.
+//
+// El arreglo: cuando no hay costo, el piso se calcula por el otro lado —el
+// mayorista MENOS el mejor descuento que la lista mejor pueda llegar a hacer— que
+// es exactamente lo que ya se hace con los cupones más abajo. Sigue rechazando el
+// pedido de $1 y deja pasar el de −15%.
+//
+// Después se corrige por las tres únicas cosas que SÍ pueden quedar
 // por debajo, todas cargadas a propósito desde el panel:
 //
 //   · excepción tipo `precio` — precio fijo para un producto. Son globales (no
@@ -572,13 +593,44 @@ function aflojeDeCupones(cfg) {
   return { fraccion: Math.min(fraccion, 1), incierto };
 }
 
+// Cuánto puede bajar un precio por la LISTA MEJOR (el descuento del código), en
+// tanto por uno. Solo se usa para los productos SIN COSTO CARGADO: con costo, el
+// piso sale del costo y este número no hace falta.
+//
+// Se toma el descuento MÁS GRANDE que exista configurado, mirando el % general y
+// el propio de cada código (config.js hace la misma cuenta al validar un código:
+// el del código si lo tiene, si no el general). Tres decisiones a propósito:
+//  · Se miran TODOS los códigos, también los apagados y los vencidos. Es un piso:
+//    ser un poco generoso solo cuesta protección en productos sin costo —un
+//    estado pasajero— mientras que hilar fino trae de vuelta el rechazo de compras
+//    buenas, que es justo lo que estamos arreglando. Y así no entra ningún reloj
+//    en el cálculo (los relojes ya nos costaron el lío de los cupones).
+//  · El techo por producto (`descuentoMax`) SUBE el precio, nunca lo baja, así que
+//    ignorarlo deja el piso más abajo: del lado seguro.
+//  · Si no hay nada configurado se usa 15, el mismo valor por defecto que usan
+//    config.js e index.html.
+function aflojeDeListaMejor(cfg) {
+  const base = parseFloat(cfg && cfg.descuentoBase);
+  let mejor = isNaN(base) ? 15 : base;
+  const codigos = Array.isArray(cfg && cfg.codigosAcceso) ? cfg.codigosAcceso : [];
+  for (const c of codigos) {
+    const d = parseFloat(c && c.descuento);
+    if (!isNaN(d)) mejor = Math.max(mejor, d);
+  }
+  return Math.min(Math.max(mejor, 0), 100) / 100;
+}
+
 // El precio más bajo que el catálogo pudo generar para este renglón, ANTES de
 // cupones. Se queda con el menor de los candidatos: si hay algo cargado a
 // propósito por debajo del costo, ese manda.
-function pisoDeRenglon(item, p, cfg) {
+function pisoDeRenglon(item, p, cfg, afloje) {
   const may = positivo(p.wholesaler_price);
   const costo = positivo(p.unit_cost);
-  let piso = (costo > 0 && may > 0) ? Math.min(costo, may) : (costo || may);
+  // Con costo: min(costo, mayorista), que es donde frena el catálogo.
+  // Sin costo: el mayorista menos el mejor descuento posible (ver la nota larga).
+  let piso = (costo > 0)
+    ? (may > 0 ? Math.min(costo, may) : costo)
+    : may * (1 - afloje);
 
   const id = item.product_id;
   const excepciones = (cfg && cfg.excepciones) || {};
@@ -592,8 +644,9 @@ function pisoDeRenglon(item, p, cfg) {
   if (item.size_id !== undefined && item.size_id !== null) {
     const vp = positivo((cfg && cfg.variantPrices || {})[id + '-' + item.size_id]);
     if (vp > 0) {
-      // getPrecioVariante frena en min(costo, precioDeLaVariante).
-      const pisoVar = costo > 0 ? Math.min(costo, vp) : vp;
+      // getPrecioVariante frena en min(costo, precioDeLaVariante) — y sin costo no
+      // frena en nada, igual que el precio del producto: mismo arreglo.
+      const pisoVar = costo > 0 ? Math.min(costo, vp) : vp * (1 - afloje);
       piso = (piso > 0) ? Math.min(piso, pisoVar) : pisoVar;
     }
   }
@@ -609,11 +662,22 @@ function revisarPrecios(items, productos, cfg) {
     // prendido, algo está mal en la config.
     console.warn('[precio] hay un cupón de MONTO FIJO activo: no se rechaza por precio (un renglón puede ir a $0 legítimamente)');
   }
+  const afloje = aflojeDeListaMejor(cfg);
   const sospechosos = [];
+  const avisados = new Set();
   for (const item of items) {
     const p = productos[item.product_id];
     if (!p) continue; // producto desconocido: ya lo maneja la verificación de stock
-    const piso = pisoDeRenglon(item, p, cfg);
+
+    // Un producto que se vende sin el costo cargado no deja rastro en ningún lado,
+    // y es el que hace que el piso se calcule por el camino flojo. Que se vea, para
+    // poder cargarle el costo y que vuelva a estar bien protegido.
+    if (!(positivo(p.unit_cost) > 0) && positivo(p.wholesaler_price) > 0 && !avisados.has(p.id)) {
+      avisados.add(p.id);
+      console.warn(`[precio] "${p.name}" (${p.id}) se está vendiendo SIN COSTO cargado en Gestión Nube: el piso sale del mayorista menos ${Math.round(afloje * 100)}%, que es más flojo. Conviene cargarle el costo.`);
+    }
+
+    const piso = pisoDeRenglon(item, p, cfg, afloje);
     if (!(piso > 0)) continue; // sin referencia de precio no se puede opinar
 
     // Los precios imposibles se rechazan siempre, con cupón o sin cupón: ningún
@@ -737,7 +801,13 @@ module.exports = async (req, res) => {
       // libretita con productos de menos, y cada uno que falte manda ese pedido al
       // camino lento: preferimos la copia de hace 5 minutos antes que una a medias.
       let costos = { guardados: 0, motivo: 'lectura incompleta' };
-      if (completo && todos.length) costos = await guardarCostos(todos);
+      if (completo && todos.length) {
+        // Aparte: si el KV falla, la libretita no se pudo anotar pero el CDN SÍ
+        // quedó caliente, que es el trabajo principal del robot. Se informa el
+        // problema sin dar por fallada la corrida entera.
+        try { costos = await guardarCostos(todos); }
+        catch (e) { costos = { guardados: 0, motivo: (e && e.message) || String(e) }; }
+      }
       return res.status(200).json({ ok: true, pages: lastPage, productos: todos.length, costos, ms: Date.now() - t0 });
     } catch (e) {
       return res.status(500).json({ ok: false, error: e.message, ms: Date.now() - t0 });
