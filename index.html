@@ -6,6 +6,10 @@
 <title>BDI Accesorios — Catálogo Mayorista</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- De acá salen TODAS las fotos de la grilla (ver thumbTN). Sin este saludo
+     adelantado, la primera foto paga sola el DNS + TCP + TLS y las demás
+     esperan atrás. -->
+<link rel="preconnect" href="https://images.weserv.nl" crossorigin>
 <!-- Los dos preconnect SÍ se quedan: adelantan el saludo a los dos dominios
      (DNS + TCP + TLS) en paralelo con el resto de la página, y eso ahorra
      tiempo real en celular SIN cambiar nada de lo que se ve.
@@ -1813,16 +1817,39 @@ function getImagen(p) {
 }
 
 // --- Optimización de fotos de la grilla -------------------------------------
-// Las fotos de TiendaNube vienen en 1024px (~75KB) aunque en la grilla se ven
-// chiquitas. Las pasamos por un optimizador gratuito (images.weserv.nl) que las
-// achica al tamaño real y las sirve en WebP (~40× más livianas). SEGURO porque:
-//  - Solo rutea fotos de TiendaNube (mitiendanube.com), nada más.
+// Las fotos vienen enormes aunque en la grilla se vean chiquitas. Las pasamos
+// por un optimizador gratuito (images.weserv.nl) que las achica al tamaño real
+// y las sirve en WebP. SEGURO porque:
+//  - Solo rutea fotos de los dos lugares de la lista, nada más.
 //  - Son imágenes: no ejecutan código, no exponen datos sensibles.
 //  - Si el optimizador falla, la foto cae sola a la original (ver imgFallback).
 // La foto grande del zoom/ficha NO pasa por acá: se muestra original y nítida.
+//
+// 🔴 12-8-2026: acá decía "solo fotos de TiendaNube", y por eso el optimizador
+// NO SE ESTABA USANDO. Las fotos del catálogo no vienen de mitiendanube.com sino
+// del almacén de Gestión Nube (user-sheet.s3…amazonaws.com), así que el filtro no
+// las reconocía y las servía CRUDAS. Medido sobre una foto real:
+//     original 674 KB · optimizada 12 KB → 54 veces más liviana
+// Con 159 fotos en la primera pantalla eran ~107 MB contra ~2 MB. En un celular
+// con datos, eso es la diferencia entre "carga" y "no carga".
+//
+// Va como LISTA de dominios permitidos y no como "todo lo que sea http", igual
+// que el portero de api/proxy.js: abrirlo a cualquier dirección convertiría al
+// optimizador en un proxy abierto a costa nuestra.
+const DOMINIOS_FOTO = [
+  'mitiendanube.com',                             // fotos cruzadas de TiendaNube
+  'user-sheet.s3.sa-east-1.amazonaws.com',        // almacén de Gestión Nube
+];
+
+function fotoPermitida(src) {
+  let host;
+  try { host = new URL(src).hostname.toLowerCase(); } catch { return false; }
+  return DOMINIOS_FOTO.some(d => host === d || host.endsWith('.' + d));
+}
+
 function thumbTN(src, w) {
   if (!src || typeof src !== 'string') return src || '';
-  if (!/mitiendanube\.com/i.test(src)) return src; // solo fotos de TN
+  if (!fotoPermitida(src)) return src;
   const sinProto = src.replace(/^https?:\/\//, '');
   return 'https://images.weserv.nl/?url=' + encodeURIComponent(sinProto) +
          '&w=' + w + '&output=webp&q=80';
