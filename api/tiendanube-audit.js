@@ -516,7 +516,9 @@ module.exports = async (req, res) => {
   // ── Órdenes de TN por rango, con líneas + las ventas de GN del mismo rango ──
   // Un solo round-trip con TODO lo que el dry-run del sync de ventas necesita del servidor.
   // A diferencia de las otras ramas, ésta expone nombres de clientes y montos de a cientos ⇒
-  // exige usuario del Monitor. `exigirUsuario` está en MODO_AVISO, así que hoy avisa y no corta.
+  // exige usuario del Monitor. ⚠️ En producción `AUTH_MODO_AVISO=0`: el guard **rechaza de
+  // verdad**, no avisa. Comprobado con un curl sin credencial (403). O sea: esta rama sólo se
+  // puede probar desde el Monitor logueado (apiFetch manda `x-monitor-auth`), no con curl.
   if (req.query?.ordenes === '1') {
     if (!(await exigirUsuario(req, res, 'ordenes TN'))) return;
     const from = req.query.from, to = req.query.to;
