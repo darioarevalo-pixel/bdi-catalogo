@@ -855,6 +855,40 @@ module.exports = async (req, res) => {
   // el navegador, para que el CDN guarde/renueve esas copias y el cliente casi
   // nunca pague el viaje lento a Gestión Nube al abrir. No necesita el token de
   // GN: cada página que pide pasa por este mismo proxy, que sí lo usa.
+  // ---------------------------------------------------------------------------
+  // ?cupo=1 — PREGUNTARLE A GN CUÁNTO CUPO NOS QUEDA, AHORA
+  //
+  // El saldo viaja en las respuestas de GN, pero hasta ahora solo quedaba anotado
+  // cuando alguien confirmaba un pedido: para saber el límite había que esperar
+  // una venta. Esto lo pregunta en el momento, con UNA consulta de un solo
+  // producto (la más barata que hay), y contesta lo que el 12-8-2026 no podíamos
+  // responder: si GN bajó el límite, y si el cupo se está gastando cuando no hay
+  // ventas (ahí el consumo viene de otro sistema que le pega desde la misma
+  // dirección, no del catálogo).
+  //
+  // No va detrás de contraseña por la misma razón que `?warm=1`: gasta UNA
+  // consulta, menos que abrir el catálogo, así que no agrega superficie real.
+  if (req.query.cupo !== undefined) {
+    const token = process.env.GESTIONNUBE_TOKEN;
+    if (!token) return res.status(500).json({ ok: false, error: 'Token no configurado en el servidor' });
+    const t0 = Date.now();
+    const r = await fetch(API_BASE + '/productos/obtener?per_page=1', {
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+    });
+    const cabecera = (n) => r.headers.get(n);
+    return res.status(200).json({
+      ok: r.ok,
+      status: r.status,
+      limite: cabecera('X-RateLimit-Limit'),
+      saldo: cabecera('X-RateLimit-Remaining'),
+      esperar: cabecera('Retry-After'),
+      // Todas las cabeceras de límite que mande GN, se llamen como se llamen: si
+      // cambiaron los nombres al reescribir su sistema, acá se ven igual.
+      otras: Object.fromEntries([...r.headers].filter(([k]) => /limit|rate|retry|quota/i.test(k))),
+      ms: Date.now() - t0,
+    });
+  }
+
   if (req.query.warm !== undefined) {
     const t0 = Date.now();
     try {
