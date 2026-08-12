@@ -972,11 +972,15 @@ module.exports = async (req, res) => {
       const todos = [...(d1.data || [])];
       let completo = r1.ok;
       if (lastPage > 1) {
-        const resto = await Promise.all(
-          Array.from({ length: lastPage - 1 }, (_, i) =>
-            fetch(urlPagina(i + 2)).then(r => r.ok ? r.json() : null).catch(() => null))
-        );
-        for (const d of resto) {
+        // DE A UNA, no todas juntas. Cada página es una llamada a NUESTRA propia
+        // función, o sea otra instancia con su propio regulador de ritmo: pedirlas
+        // en paralelo se saltea el espaciado y choca contra el techo de ~2 por
+        // segundo. Pasó el 12-8-2026: el robot rebotó y no calentó nada. El robot
+        // no tiene apuro, así que va en fila.
+        for (let p = 2; p <= lastPage; p++) {
+          await sleep(MS_ENTRE_CONSULTAS);
+          const r = await fetch(urlPagina(p));
+          const d = r.ok ? await r.json().catch(() => null) : null;
           if (!d) { completo = false; continue; }
           todos.push(...(d.data || []));
         }
@@ -992,7 +996,21 @@ module.exports = async (req, res) => {
         try { costos = await guardarCostos(todos); }
         catch (e) { costos = { guardados: 0, motivo: (e && e.message) || String(e) }; }
       }
-      return res.status(200).json({ ok: true, pages: lastPage, productos: todos.length, costos, ms: Date.now() - t0 });
+      // ⚠️ `ok` tiene que decir la VERDAD. Estaba clavado en `true` y el 12-8-2026
+      // contestó `{"ok":true, "productos":0}`: no había leído una sola página
+      // —GN venía cortando— y aun así informaba éxito. Un robot que miente es
+      // peor que uno que falla, porque tapa justamente el problema que hay que
+      // ver: si la copia no se calienta, cada visita al catálogo le pega a GN.
+      const salioBien = completo && todos.length > 0;
+      if (!salioBien) console.warn(`[warm] NO se calentó la copia: leídos ${todos.length} productos, completo=${completo}`);
+      return res.status(200).json({
+        ok: salioBien,
+        pages: lastPage,
+        productos: todos.length,
+        motivo: salioBien ? undefined : (todos.length ? 'lectura incompleta' : 'Gestión Nube no contestó ninguna página'),
+        costos,
+        ms: Date.now() - t0,
+      });
     } catch (e) {
       return res.status(500).json({ ok: false, error: e.message, ms: Date.now() - t0 });
     }
