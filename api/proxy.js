@@ -50,13 +50,34 @@ async function gnFetch(path, token) {
     headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
   });
   const text = await r.text();
-  try { return { ok: r.ok, status: r.status, data: JSON.parse(text) }; }
-  catch { return { ok: r.ok, status: r.status, data: text }; }
+  // `Retry-After` es GN diciéndonos CUÁNTO esperar. Sin leerlo estábamos
+  // adivinando (ver gnFetchRetry). Puede venir en segundos o no venir.
+  const espera = parseInt(r.headers.get('Retry-After') || '0', 10);
+  const meta = { esperaSeg: isNaN(espera) || espera < 0 ? 0 : espera };
+  try { return { ok: r.ok, status: r.status, data: JSON.parse(text), ...meta }; }
+  catch { return { ok: r.ok, status: r.status, data: text, ...meta }; }
 }
 
-// Igual que gnFetch pero reintenta ante rate limit (429) o errores de GN (5xx),
-// con backoff. Clave para verificar stock: si una página del catálogo se cae por
-// saturación, NO queremos darla por vacía (eso marcaba productos como "no existe").
+// Cuánto esperamos como mucho a que GN se libere. Más que esto y el cliente cree
+// que se colgó: prefiere un aviso claro antes que una rueda girando 60 segundos.
+const ESPERA_MAX_MS = 4000;
+
+// Igual que gnFetch pero reintenta ante rate limit (429) o errores de GN (5xx).
+// Clave para verificar stock: si una página del catálogo se cae por saturación,
+// NO queremos darla por vacía (eso marcaba productos como "no existe").
+//
+// ⚠️ El backoff era de 300 ms y 600 ms, y eso EMPEORABA el problema. El límite de
+// GN se cuenta POR MINUTO y por dirección de internet: esperar 0,3 s no lo libera,
+// así que los 3 intentos chocaban igual y gastaban 3 consultas del límite en vez
+// de 1. Comprobado en producción el 12-8-2026: un carrito de 43 renglones disparó
+// 15 consultas en paralelo que, con reintentos, se volvieron ~45 en dos segundos.
+// El cliente (Facundo Villafaña, $152.930) reintentó 6 veces y las 6 fallaron;
+// cada reintento alimentaba el corte que lo estaba bloqueando.
+//
+// Ahora se le hace caso a GN: si dice cuánto esperar, se espera ESO. Y si lo que
+// pide es más de lo que un cliente tolera mirando la pantalla, se corta el
+// reintento y se devuelve el 429 para avisarle bien (mismo criterio que
+// api/tn-subir-imagen.js, que ya lo hacía con TiendaNube).
 async function gnFetchRetry(path, token, tries = 3) {
   let last = { ok: false, status: 0, data: null };
   for (let i = 0; i < tries; i++) {
@@ -64,14 +85,34 @@ async function gnFetchRetry(path, token, tries = 3) {
       const r = await gnFetch(path, token);
       if (r.ok) return r;
       last = r;
-      if (r.status === 429 || r.status >= 500) { await sleep(300 * (i + 1)); continue; }
+      if (r.status === 429 || r.status >= 500) {
+        // Lo que pide GN, o 1s / 2s si no dijo nada (backoff exponencial: 0,3 s
+        // era demasiado poco para un límite que se cuenta por minuto).
+        const espera = r.esperaSeg ? r.esperaSeg * 1000 : 1000 * Math.pow(2, i);
+        if (espera > ESPERA_MAX_MS) return r; // no vale la pena: que avise arriba
+        await sleep(espera);
+        continue;
+      }
       return r; // otros 4xx no se reintentan
     } catch (e) {
       last = { ok: false, status: 0, data: String(e && e.message || e) };
-      await sleep(300 * (i + 1));
+      await sleep(1000 * Math.pow(2, i));
     }
   }
   return last;
+}
+
+// Corre las tareas de a `tanda`, no todas juntas. GN corta por RÁFAGA desde una
+// misma dirección, y como todos los clientes salen por la dirección de Vercel,
+// 15 consultas simultáneas de un solo carrito se llevaban puesto el límite de
+// todos los demás (por eso había gente que ni podía VER el catálogo: los GET de
+// las 17:39-17:43 del 12-8-2026).
+async function enTandas(tareas, tanda = 4) {
+  const salida = [];
+  for (let i = 0; i < tareas.length; i += tanda) {
+    salida.push(...await Promise.all(tareas.slice(i, i + tanda).map(t => t())));
+  }
+  return salida;
 }
 
 // Lee stock de una variante usando stock_por_tienda (formato real de GN).
@@ -282,7 +323,17 @@ async function liberarTurno(mio) {
 //
 // Se verificó que da los mismos números que el camino de siempre antes de
 // confiarle una venta: ver el detalle en el commit.
-const MAX_PRODUCTOS_CAMINO_RAPIDO = 15;
+// ⚠️ Estuvo en 15 hasta el 12-8-2026, contradiciendo el comentario de acá abajo:
+// 15 consultas son CINCO VECES las 3 del catálogo entero, no menos. Con carritos
+// mayoristas (que tienen muchos renglones pero se cuentan por producto distinto)
+// el camino "rápido" gastaba más límite del que ahorraba, chocaba, y encima caía
+// igual al catálogo entero: lo peor de los dos.
+//
+// 6 es el compromiso: sigue siendo ~5x más rápido que bajar el catálogo entero
+// (0,4 s contra 2,7 s, y hoy bajo carga el catálogo tardó 6,7 s), el turno se
+// libera antes —así no se hace cola— y el gasto de límite queda acotado. Arriba
+// de esto conviene el camino de siempre, que son 3 consultas y listo.
+const MAX_PRODUCTOS_CAMINO_RAPIDO = 6;
 
 // ¿Se puede usar el camino rápido para este carrito?
 // Ante la MENOR duda contesta que no, y se usa el camino de siempre. Nunca
@@ -300,8 +351,11 @@ function puedeIrPorElRapido(ids, costos) {
 }
 
 async function traerProductosSueltos(ids, token, costos) {
-  const resp = await Promise.all(
-    ids.map(id => gnFetchRetry(`/productos/ver/${encodeURIComponent(id)}?include_stock=1&include_variants=1`, token))
+  // De a tandas, no todas juntas: la ráfaga simultánea era lo que hacía cortar a
+  // GN (ver `enTandas`). Con el tope en 6 son dos tandas: se pierde muy poco
+  // tiempo y se deja de reventar el límite compartido con el resto de la gente.
+  const resp = await enTandas(
+    ids.map(id => () => gnFetchRetry(`/productos/ver/${encodeURIComponent(id)}?include_stock=1&include_variants=1`, token))
   );
   const productos = {};
   for (let i = 0; i < ids.length; i++) {
@@ -945,8 +999,43 @@ module.exports = async (req, res) => {
       opts.body = JSON.stringify(req.body);
     }
     if (esConfirmarPedido) marcar('precios');
-    const r = await fetch(url, opts);
-    const data = await r.text();
+
+    // ⚠️ ACÁ SE CREA LA VENTA. Iba sin ninguna red: un corte pasajero de GN le
+    // llegaba crudo al cliente ("Demasiadas solicitudes desde esta dirección",
+    // 12-8-2026) y la venta no se hacía, aunque alcanzaba con esperar unos
+    // segundos.
+    //
+    // Se reintenta SOLO ante 429 y NUNCA ante 5xx ni ante un corte de red. La
+    // diferencia importa: un 429 es GN diciendo "ni la miré", así que no hay
+    // ninguna venta creada y repetir es seguro. Un 500 o una conexión cortada
+    // dejan la duda de si la venta entró o no, y repetir ahí duplicaría el
+    // pedido. Ante la duda, no se repite: un cliente que reintenta a mano es
+    // mucho mejor que una venta cargada dos veces.
+    let r = await fetch(url, opts);
+    let data = await r.text();
+    for (let i = 0; i < 2 && r.status === 429; i++) {
+      const dice = parseInt(r.headers.get('Retry-After') || '0', 10);
+      const espera = dice > 0 ? dice * 1000 : 1000 * Math.pow(2, i);
+      if (espera > ESPERA_MAX_MS) break; // pide más de lo que el cliente espera mirando
+      console.warn(`[gn] cortó por límite, se reintenta en ${espera} ms (intento ${i + 2})`);
+      await sleep(espera);
+      r = await fetch(url, opts);
+      data = await r.text();
+    }
+
+    // Si GN sigue cortando, el cliente merece un aviso en criollo y no su cartel
+    // técnico. Clave: decirle que NO perdió el pedido —el carrito queda guardado
+    // en el navegador— porque si no, reintenta a lo loco y alimenta el corte
+    // (Facundo reintentó 6 veces seguidas y las 6 fallaron por eso mismo).
+    if (r.status === 429) {
+      console.error(`[gn] límite alcanzado, se avisa al cliente (${esConfirmarPedido ? 'confirmar pedido' : req.method + ' ' + apiPath})`);
+      return res.status(429).json({
+        error: 'Gestión Nube está recibiendo demasiados pedidos juntos',
+        detalle: esConfirmarPedido
+          ? 'Tu pedido NO se perdió: quedó guardado en el carrito. Esperá un minuto y tocá Confirmar de nuevo. Si vuelve a pasar, escribinos por WhatsApp y lo cargamos nosotros.'
+          : 'Esperá un minuto y recargá la página. Si sigue pasando, escribinos por WhatsApp.',
+      });
+    }
     // `via` dice por qué camino se verificó el stock: 'rapido' (por producto) o
     // 'catalogo' (el entero). Si aparece 'catalogo' seguido, el motivo está en el
     // aviso `[stock] camino de siempre: …` de más arriba. El registro sale en el
