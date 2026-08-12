@@ -1,3 +1,5 @@
+const { exigirUsuario } = require('./_auth');
+
 const KV_URL   = process.env.KV_REST_API_URL   || process.env.STORAGE_KV_REST_API_URL;
 const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.STORAGE_KV_REST_API_TOKEN;
 const CACHE_TTL = 3600; // 1 hora en segundos
@@ -228,17 +230,20 @@ async function tnFetchOrden(cfg, numero, perPage) {
   // La orden completa por id (acá sí vienen los products). Sin ?fields (con fields el GET por id da 404).
   const rd = await fetch(`${base}/${orderId}`, { headers: tnHeaders(cfg.token) });
   if (!rd.ok) return { error: `TN ${rd.status} en GET /orders/${orderId}: ${(await rd.text()).slice(0, 150)}` };
-  const o = await rd.json();
-  // Todo lo de acá abajo ya venía en la respuesta de TN (el GET por id trae la orden completa):
-  // esto solo lo mapea. Lo consume DEVOLUCIONES del Monitor para calcular cuánta plata hay que
-  // devolver, que no es el precio de lista: es lo que la persona PAGÓ.
-  //   - `pago_*`: por dónde se le devuelve (si pagó con MercadoPago, el reintegro va por ahí).
-  //   - los descuentos + `subtotal`: para prorratear. Sin esto, devolver un ítem de una orden
-  //     con cupón le devuelve de más al cliente — es el hueco que Cambios tiene hoy.
-  //   - `envio_costo_cliente`: lo que pagó de envío, por si corresponde devolvérselo.
+  return { orden: mapOrdenTN(await rd.json()) };
+}
+// La forma canónica de una orden de TN para el Monitor. Vive aparte porque la leen DOS caminos
+// —`?orden=N` (Cambios/Devoluciones) y `?ordenes=1` (el sync de ventas de Stunned)— y si cada uno
+// armara su propio objeto, el día que uno cambie el otro se rompe en silencio.
+// Todo lo de acá abajo ya viene en la respuesta de TN: esto sólo lo mapea.
+//   - `pago_*`: por dónde se le devuelve (si pagó con MercadoPago, el reintegro va por ahí).
+//   - los descuentos + `subtotal`: para prorratear. Sin esto, devolver un ítem de una orden
+//     con cupón le devuelve de más al cliente — es el hueco que Cambios tiene hoy.
+//   - `envio_costo_cliente`: lo que pagó de envío, por si corresponde devolvérselo.
+function mapOrdenTN(o) {
   const pago = o.payment_details || {};
   const num = (v) => (v == null || v === '' ? null : Number(v));
-  return { orden: {
+  return {
     id: o.id, number: o.number,
     cliente: o.contact_name || (o.customer && o.customer.name) || null,
     total: o.total, envio: o.shipping_option || null, fecha: o.created_at || null,
@@ -256,12 +261,129 @@ async function tnFetchOrden(cfg, numero, perPage) {
     estado_pago: o.payment_status || null,                  // 'paid' | 'refunded' | ...
     estado_orden: o.status || null,                         // 'open' | 'closed' | 'cancelled'
     products: (o.products || []).map(p => ({ product_id: p.product_id, variant_id: p.variant_id, name: p.name, sku: p.sku, quantity: p.quantity, price: p.price })),
-  } };
+  };
 }
-async function gnFetchVentas(gnToken, from, to) {
+// ── Leer las órdenes de TN de un RANGO, con sus líneas (sync de ventas Stunned TN→GN) ──
+// La lista de TN es rápida pero mezquina; el GET por id trae todo pero cuesta ~200 ms cada uno.
+// Por eso hay dos modos y un `probe` que los compara: el default se cambia con la medición en la
+// mano, no por corazonada.
+const RANGO_LIMITE_DEFAULT = 60;
+const TN_PAGINAS_MAX = 30;
+
+function tnRangoQs(from, to) {
+  // Mismo formato de fecha que tnFetchCanceladas, que ya está probado en vivo contra TN.
+  return `created_at_min=${from}T00:00:00-03:00&created_at_max=${to}T23:59:59-03:00`;
+}
+
+// Pagina la lista de órdenes del rango pidiendo `fields`. Devuelve [] si TN corta.
+async function tnListaRango(cfg, from, to, fields) {
+  const base = `https://api.tiendanube.com/v1/${cfg.storeId}/orders`;
+  const qs = `${tnRangoQs(from, to)}&status=any&per_page=200&fields=${fields}`;
   const out = [];
+  for (let page = 1; page <= TN_PAGINAS_MAX; page++) {
+    const r = await fetch(`${base}?${qs}&page=${page}`, { headers: tnHeaders(cfg.token) });
+    if (r.status === 404) break;                       // TN devuelve 404 cuando se pasó de páginas
+    if (!r.ok) return { error: `TN ${r.status} en la lista: ${(await r.text()).slice(0, 200)}` };
+    const arr = await r.json();
+    if (!Array.isArray(arr) || !arr.length) break;
+    out.push(...arr);
+    if (arr.length < 200) break;
+  }
+  return { lista: out };
+}
+
+// Corre `tareas` (funciones que devuelven promesa) de a `n` a la vez, en orden de entrada.
+async function enTandas(tareas, n) {
+  const res = new Array(tareas.length);
+  let i = 0;
+  const worker = async () => { while (i < tareas.length) { const k = i++; res[k] = await tareas[k](); } };
+  await Promise.all(Array.from({ length: Math.min(n, tareas.length) }, worker));
+  return res;
+}
+
+// modo 'detalle' (default): correcto por construcción — un GET por id, sin `fields` (con `fields`
+// el GET por id da 404). Es el único camino donde `products` está garantizado.
+async function tnOrdenesDetalle(cfg, from, to, limite) {
+  const base = `https://api.tiendanube.com/v1/${cfg.storeId}/orders`;
+  const r = await tnListaRango(cfg, from, to, 'id,number,status,payment_status,created_at,total,contact_name');
+  if (r.error) return r;
+  const total = r.lista.length;
+  const recorte = r.lista.slice(0, limite);
+  const detalles = await enTandas(recorte.map(x => async () => {
+    const rd = await fetch(`${base}/${x.id}`, { headers: tnHeaders(cfg.token) });
+    if (!rd.ok) return { error: `TN ${rd.status} en GET /orders/${x.id}` };
+    return mapOrdenTN(await rd.json());
+  }), 4);
+  const fallidas = detalles.filter(d => d && d.error).length;
+  return { ordenes: detalles.filter(d => d && !d.error), total_en_rango: total, truncado: total > recorte.length, fallidas };
+}
+
+// modo 'lista': dos listas paginadas y join por `id`. Esquiva la maña conocida (pedir `products`
+// en los `fields` de la lista hace que TN NO devuelva `number`) sacando el `number` de la otra
+// pasada: el join es por `id`, que sí viene siempre. Un mes entero en ~1 s en vez de ~12.
+async function tnOrdenesLista(cfg, from, to, limite) {
+  const [a, b] = await Promise.all([
+    tnListaRango(cfg, from, to, 'id,number,status,payment_status,created_at,total,contact_name,gateway,payment_details,subtotal,discount,promotional_discount,discount_gateway,coupon,shipping_option,shipping_cost_customer,customer'),
+    tnListaRango(cfg, from, to, 'id,products'),
+  ]);
+  if (a.error) return a;
+  if (b.error) return b;
+  const porId = new Map(b.lista.map(x => [String(x.id), x.products || []]));
+  const total = a.lista.length;
+  const ordenes = a.lista.slice(0, limite).map(o => mapOrdenTN({ ...o, products: porId.get(String(o.id)) || [] }));
+  return { ordenes, total_en_rango: total, truncado: total > ordenes.length, fallidas: 0 };
+}
+
+// La firma que compara el probe: qué compró y por cuánto. Si esto coincide entre los dos modos,
+// el modo rápido sirve para el sync (que sólo necesita SKU × cantidad y el total).
+function firmaOrdenProbe(o) {
+  const items = (o.products || []).map(p => `${p.sku || p.variant_id}×${p.quantity}`).sort().join('|');
+  return `${items}#${o.total}`;
+}
+
+async function tnFetchOrdenesRango(cfg, from, to, opts) {
+  const limite = Math.min(Math.max(Number(opts && opts.limite) || RANGO_LIMITE_DEFAULT, 1), 200);
+  const modo = (opts && opts.modo) === 'lista' ? 'lista' : 'detalle';
+  const [res, canc] = await Promise.all([
+    modo === 'lista' ? tnOrdenesLista(cfg, from, to, limite) : tnOrdenesDetalle(cfg, from, to, limite),
+    // No se confía en que la lista traiga las canceladas: se pregunta aparte, con la función que ya existe.
+    tnFetchCanceladas(cfg, from, to),
+  ]);
+  if (res.error) return res;
+  const cancelados = new Set(canc.out.map(o => String(o.number)));
+  res.ordenes.forEach(o => { o.cancelada = cancelados.has(String(o.number)); });
+  return { ...res, modo };
+}
+
+// ?probe=1 — corre los dos modos sobre el mismo rango y devuelve tiempos + si coinciden.
+async function tnProbeModos(cfg, from, to, limite) {
+  const medir = async fn => { const t = Date.now(); const r = await fn(); return { ms: Date.now() - t, r }; };
+  const [d, l] = await Promise.all([
+    medir(() => tnOrdenesDetalle(cfg, from, to, limite)),
+    medir(() => tnOrdenesLista(cfg, from, to, limite)),
+  ]);
+  if (d.r.error || l.r.error) return { error: d.r.error || l.r.error };
+  const firmaD = new Map(d.r.ordenes.map(o => [String(o.number), firmaOrdenProbe(o)]));
+  const firmaL = new Map(l.r.ordenes.map(o => [String(o.number), firmaOrdenProbe(o)]));
+  const faltan_en_lista = [...firmaD.keys()].filter(n => !firmaL.has(n));
+  const difieren = [...firmaD.entries()].filter(([n, f]) => firmaL.has(n) && firmaL.get(n) !== f)
+    .map(([n, f]) => ({ number: n, detalle: f, lista: firmaL.get(n) }));
+  const sin_products = l.r.ordenes.filter(o => !(o.products || []).length).length;
+  return {
+    tiempos: { detalle_ms: d.ms, lista_ms: l.ms },
+    cuentas: { detalle: d.r.ordenes.length, lista: l.r.ordenes.length, lista_sin_products: sin_products },
+    iguales: faltan_en_lista.length === 0 && difieren.length === 0 && sin_products === 0,
+    faltan_en_lista, difieren: difieren.slice(0, 20),
+  };
+}
+
+// `incluirDetalles` agrega los renglones de cada venta (el mismo flag que usa scripts/sync-diario.js
+// del Monitor). Va apagado por defecto para no engordar `?verificar_ventas=1`, que no los usa.
+async function gnFetchVentas(gnToken, from, to, incluirDetalles) {
+  const out = [];
+  const extra = incluirDetalles ? '&include_details=1' : '';
   for (let page = 1; page <= 200; page++) {
-    const r = await fetch(`${GN_BASE}/ventas/obtener?from=${from}&to=${to}&per_page=50&page=${page}`, {
+    const r = await fetch(`${GN_BASE}/ventas/obtener?from=${from}&to=${to}${extra}&per_page=50&page=${page}`, {
       headers: { Authorization: `Bearer ${gnToken}`, Accept: 'application/json' },
     });
     if (!r.ok) break;
@@ -386,6 +508,49 @@ module.exports = async (req, res) => {
       const r = await tnFetchOrden(cfg, String(req.query.orden), req.query?.pp);
       if (r.error) return res.status(502).json({ error: r.error });
       return res.status(200).json({ ok: true, store: storeKey, orden: r.orden });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
+  // ── Órdenes de TN por rango, con líneas + las ventas de GN del mismo rango ──
+  // Un solo round-trip con TODO lo que el dry-run del sync de ventas necesita del servidor.
+  // A diferencia de las otras ramas, ésta expone nombres de clientes y montos de a cientos ⇒
+  // exige usuario del Monitor. `exigirUsuario` está en MODO_AVISO, así que hoy avisa y no corta.
+  if (req.query?.ordenes === '1') {
+    if (!(await exigirUsuario(req, res, 'ordenes TN'))) return;
+    const from = req.query.from, to = req.query.to;
+    if (!from || !to) return res.status(400).json({ error: 'Faltan from/to (YYYY-MM-DD)' });
+    try {
+      const limite = Math.min(Math.max(Number(req.query.limite) || RANGO_LIMITE_DEFAULT, 1), 200);
+      if (req.query?.probe === '1') {
+        const p = await tnProbeModos(cfg, from, to, limite);
+        if (p.error) return res.status(502).json({ error: p.error });
+        return res.status(200).json({ ok: true, store: storeKey, from, to, probe: p });
+      }
+      const [tn, ventasGn] = await Promise.all([
+        tnFetchOrdenesRango(cfg, from, to, { limite, modo: req.query.modo }),
+        cfg.gnToken ? gnFetchVentas(cfg.gnToken, from, to, true) : Promise.resolve([]),
+      ]);
+      if (tn.error) return res.status(502).json({ error: tn.error });
+      return res.status(200).json({
+        ok: true, store: storeKey, from, to,
+        modo: tn.modo, limite, truncado: tn.truncado, total_en_rango: tn.total_en_rango, fallidas: tn.fallidas,
+        ordenes: tn.ordenes,
+        // Lo que el motor necesita para NO duplicar: `tn_order` (las nativas de TN lo traen) y los
+        // renglones, para cruzar por firma de ítems contra lo que hoy se carga a mano.
+        ventas_gn: ventasGn.map(v => ({
+          id: v.id, number: v.number || null, date_sale: v.date_sale || null,
+          channel_id: v.channel_id ?? null, channel: v.channel || null, store: v.store || null,
+          tn_order: v.tn_order != null ? String(v.tn_order) : null,
+          integration_id: v.integration_id != null ? String(v.integration_id) : null,
+          integration_source: v.integration_source || null,
+          total_price: v.total_price ?? null,
+          client_name: v.client_name || (v.client && v.client.name) || null,
+          active: v.active, archived: v.archived,
+          detalles: (v.detalles || v.details || []).map(d => ({ product_id: d.product_id, size_id: d.size_id, quantity: d.quantity })),
+        })),
+      });
     } catch (e) {
       return res.status(500).json({ error: e.message });
     }
