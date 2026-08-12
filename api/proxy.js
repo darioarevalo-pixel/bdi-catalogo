@@ -957,7 +957,10 @@ module.exports = async (req, res) => {
       const base = `${proto}://${host}`;
       // Debe coincidir EXACTO con cargarProductos() en index.html: la copia del
       // CDN se identifica por la URL completa.
-      const baseQs = 'per_page=100&include_stock=1&include_images=1&include_variants=1';
+      // Igual que en index.html, y tiene que seguir igual: la copia se busca por
+      // la URL entera, así que un número distinto acá calienta una copia que
+      // ningún cliente pide (ver la nota larga en `traerProductosCrudos`).
+      const baseQs = 'per_page=200&include_stock=1&include_images=1&include_variants=1';
       const pathEnc = encodeURIComponent('/productos/obtener');
       const urlPagina = (page) => `${base}/api/proxy?_path=${pathEnc}&${baseQs}&page=${page}`;
       const r1 = await fetch(urlPagina(1));
@@ -1149,7 +1152,11 @@ module.exports = async (req, res) => {
       try { cuerpo = JSON.parse(data); } catch { /* puede venir HTML */ }
       const dice = cuantoEsperar(r.headers, cuerpo);
       const espera = dice > 0 ? dice * 1000 : 1000 * Math.pow(2, i);
-      if (espera > ESPERA_MAX_VENTA_MS) break; // pide más de lo que nadie espera mirando
+      // Los 10 s son SOLO para crear la venta, que es lo que sale caro perder.
+      // Para una lectura (mirar el catálogo) esperar 10 s es peor que avisar: la
+      // pantalla se queda colgada y el cliente igual se va.
+      const tope = esConfirmarPedido ? ESPERA_MAX_VENTA_MS : ESPERA_MAX_MS;
+      if (espera > tope) break;
       console.warn(`[gn] cortó por límite, se reintenta en ${espera} ms (intento ${i + 2})`);
       await sleep(espera);
       await esperarTurnoDeRitmo();

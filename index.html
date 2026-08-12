@@ -1433,7 +1433,18 @@ function toggleCatNav() {
 // se cachea— frenaba el pedido del catálogo, y esos 0,4 s se los comía el cliente
 // antes de ver el primer producto.
 async function traerProductosCrudos() {
-  const baseQs = 'per_page=100&include_stock=1&include_images=1&include_variants=1';
+  // De a 200 (el máximo que acepta GN) y no de a 100: son 3 viajes en vez de 5
+  // para los 429 productos. No es por velocidad sino por CUPO — cada visita que
+  // no encuentra la copia lista le cuesta a Gestión Nube un viaje por página, y
+  // el techo son 60 por minuto para TODOS. A 5 por visita, doce personas mirando
+  // se llevan el minuto entero y dejan afuera a los que quieren comprar; a 3,
+  // entran veinte. Medido el 2-8-2026: una página de 200 tarda MENOS que una de
+  // 100 (1,13 s contra 1,43 s), así que además se gana tiempo.
+  //
+  // ⚠️ Debe coincidir EXACTO con el robot (`?warm=1` en api/proxy.js): la copia
+  // se identifica por la URL completa, así que si uno pide 100 y el otro 200,
+  // el robot calienta una copia que nadie usa.
+  const baseQs = 'per_page=200&include_stock=1&include_images=1&include_variants=1';
   const extraer = d => Array.isArray(d) ? d : (d.data || d.products || d.items || []);
 
   // Página 1: además de traer datos, nos dice cuántas páginas hay en total.
