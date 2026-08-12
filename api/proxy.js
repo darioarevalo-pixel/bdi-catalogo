@@ -353,10 +353,21 @@ function topeDe(topes, productId, sizeId) {
 //  · Si el turno sigue ocupado tras ESPERA_MAX, se sigue igual en vez de trabar
 //    al cliente. Mismo criterio que el resto del archivo: preferimos la rara
 //    carrera antes que un cliente que no puede comprar.
+//    ESPERA_MAX pasó de 8 s a 20 s el 12-8-2026. Los 8 s se calcularon cuando
+//    confirmar tardaba ~2 s: entraban 4 pedidos en la fila. Ese mismo día, al
+//    ponerle ritmo a las consultas de GN (~2 por segundo es su techo), confirmar
+//    pasó a tardar ~4 s, así que en la fila entraban 2 y el tercero se cansaba y
+//    pasaba de largo — justo lo que la fila existe para evitar. O sea: hacer los
+//    pedidos más lentos había achicado la fila a la mitad sin que se notara.
+//    Con 20 s vuelven a entrar ~5, y no le agrega espera a nadie en el día a día:
+//    el que llega con la sala vacía entra igual de rápido, y el que espera espera
+//    lo que tarde el de adelante, no los 20. Los 20 son el techo de paciencia.
+//    Coincide con VIDA a propósito: si el de adelante se murió sin liberar, su
+//    nota vence justo cuando el que espera se cansa.
 //  · Si el KV no está o falla, tampoco se traba a nadie: se vende como antes.
 const TURNO_KEY = 'catalogo-turno-venta';
 const TURNO_VIDA_SEG = 20;
-const TURNO_ESPERA_MAX_MS = 8000;
+const TURNO_ESPERA_MAX_MS = 20000;
 const TURNO_REINTENTO_MS = 400;
 
 async function tomarTurno() {
