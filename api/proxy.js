@@ -78,35 +78,59 @@ function anotarSaldo(headers) {
   }
 }
 
+// Cuánto pide esperar GN. Viene en la cabecera `Retry-After` (comprobado el
+// 12-8-2026: llegó con 8) y también puede venir como `retry_after` DENTRO del
+// JSON, que es como lo nombró Eugenio. Se miran los dos: si mañana dejan solo
+// uno, seguimos obedeciendo igual.
+//
+// El número VARÍA a propósito y por eso no se puede reemplazar por una espera
+// fija: ~1 segundo si fue un exceso puntual, hasta ~60 con presión sostenida.
+function cuantoEsperar(headers, data) {
+  const candidatos = [
+    headers.get('Retry-After'),
+    data && typeof data === 'object' ? (data.retry_after ?? data.retryAfter) : null,
+  ];
+  for (const c of candidatos) {
+    const n = parseInt(c ?? '', 10);
+    if (!isNaN(n) && n > 0) return n;
+  }
+  return 0;
+}
+
 async function gnFetch(path, token) {
+  await esperarTurnoDeRitmo();
   const r = await fetch(API_BASE + path, {
     headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
   });
   const text = await r.text();
-  // `Retry-After` es GN diciéndonos CUÁNTO esperar. Sin leerlo estábamos
-  // adivinando (ver gnFetchRetry). Puede venir en segundos o no venir.
-  const espera = parseInt(r.headers.get('Retry-After') || '0', 10);
-  const meta = { esperaSeg: isNaN(espera) || espera < 0 ? 0 : espera };
   anotarSaldo(r.headers);
-  try { return { ok: r.ok, status: r.status, data: JSON.parse(text), ...meta }; }
-  catch { return { ok: r.ok, status: r.status, data: text, ...meta }; }
+  let data = text;
+  try { data = JSON.parse(text); } catch { /* GN a veces contesta HTML */ }
+  return { ok: r.ok, status: r.status, data, esperaSeg: cuantoEsperar(r.headers, data) };
 }
 
-// Cuánto esperamos como mucho a que GN se libere. Más que esto y el cliente cree
-// que se colgó: prefiere un aviso claro antes que una rueda girando 60 segundos.
+// Cuánto esperamos como mucho a que GN se libere. GN puede pedir hasta ~60 s
+// cuando hay presión sostenida, y nadie mira una rueda girando un minuto: pasado
+// este tope se corta y se avisa, que es más honesto.
+//
+// Son dos topes distintos a propósito:
+//  · LEER el stock: 4 s. Si no se pudo leer, el pedido no se frena — hay
+//    fail-open más abajo — así que estirar la espera no compra nada.
+//  · CREAR la venta: 10 s. Acá ya está todo verificado y lo único que falta es
+//    que GN la tome; perder la venta por no esperar 8 segundos sale carísimo.
+//    Entra cómodo en los 30 s que Vercel le da a esta función.
 const ESPERA_MAX_MS = 4000;
+const ESPERA_MAX_VENTA_MS = 10000;
 
 // Igual que gnFetch pero reintenta ante rate limit (429) o errores de GN (5xx).
 // Clave para verificar stock: si una página del catálogo se cae por saturación,
 // NO queremos darla por vacía (eso marcaba productos como "no existe").
 //
-// ⚠️ El backoff era de 300 ms y 600 ms, y eso EMPEORABA el problema. El límite de
-// GN se cuenta POR MINUTO y por dirección de internet: esperar 0,3 s no lo libera,
-// así que los 3 intentos chocaban igual y gastaban 3 consultas del límite en vez
-// de 1. Comprobado en producción el 12-8-2026: un carrito de 43 renglones disparó
-// 15 consultas en paralelo que, con reintentos, se volvieron ~45 en dos segundos.
-// El cliente (Facundo Villafaña, $152.930) reintentó 6 veces y las 6 fallaron;
-// cada reintento alimentaba el corte que lo estaba bloqueando.
+// ⚠️ El backoff era de 300 ms y 600 ms, y eso EMPEORABA el problema. Comprobado
+// en producción el 12-8-2026: un carrito de 43 renglones disparó 15 consultas en
+// paralelo que, con reintentos, se volvieron ~45 en dos segundos. El cliente
+// (Facundo Villafaña, $152.930) reintentó 6 veces y las 6 fallaron; cada
+// reintento alimentaba el corte que lo estaba bloqueando.
 //
 // Ahora se le hace caso a GN: si dice cuánto esperar, se espera ESO. Y si lo que
 // pide es más de lo que un cliente tolera mirando la pantalla, se corta el
@@ -136,17 +160,46 @@ async function gnFetchRetry(path, token, tries = 3) {
   return last;
 }
 
-// Corre las tareas de a `tanda`, no todas juntas. GN corta por RÁFAGA desde una
-// misma dirección, y como todos los clientes salen por la dirección de Vercel,
-// 15 consultas simultáneas de un solo carrito se llevaban puesto el límite de
-// todos los demás (por eso había gente que ni podía VER el catálogo: los GET de
-// las 17:39-17:43 del 12-8-2026).
-async function enTandas(tareas, tanda = 4) {
-  const salida = [];
-  for (let i = 0; i < tareas.length; i += tanda) {
-    salida.push(...await Promise.all(tareas.slice(i, i + tanda).map(t => t())));
-  }
-  return salida;
+// ---------------------------------------------------------------------------
+// EL RITMO: ~800 ms entre consultas, nunca ráfagas
+//
+// 🔴 Confirmado por Eugenio (dueño de GN) el 12-8-2026: **el techo es por
+// SEGUNDO, ~2 consultas**. NO es un cupo por minuto. Medido contra producción:
+// a 1,8/seg corta al 5º pedido; a 1,28/seg pasan 20 seguidos limpios.
+//
+// Por eso este archivo pasó por dos arreglos el mismo día y el primero se quedó
+// corto: cambiar la ráfaga de 15 por tandas de 4 sigue siendo el DOBLE del techo.
+// Contra un límite por segundo no alcanza con "menos de golpe": hay que ir al
+// ritmo. 800 ms da 1,25/seg, que es el ritmo medido como seguro.
+//
+// Las tareas se LANZAN escalonadas y se esperan juntas: no se espera a que una
+// termine para largar la siguiente. Así el ritmo de salida es el correcto sin
+// pagar la latencia de cada consulta en fila india.
+//
+// ⚠️ El techo se comparte por CUENTA, no por dirección de internet (también lo
+// corrigió Eugenio). O sea: el Monitor, los scripts y este catálogo se pisan
+// entre ellos aunque corran en máquinas distintas. Nuestro ritmo puede estar
+// bien y rebotar igual porque otro está ocupando el lugar — razón de más para
+// pedir lo mínimo y obedecer el `retry_after`.
+const MS_ENTRE_CONSULTAS = 800;
+
+// El regulador va ADENTRO de `gnFetch` y del envío de la venta, o sea en el único
+// lugar por donde se sale hacia GN. La primera versión espaciaba en cada sitio que
+// hacía varias consultas, y se le escapó justo la más cara: el pedido que CREA la
+// venta salía pegado a la última consulta de stock — 3 en el mismo segundo, sobre
+// el techo de 2. Lo cazó una prueba. Con el regulador acá, no hay forma de que un
+// camino nuevo se olvide de pedir turno.
+//
+// Reserva turnos en vez de mirar el reloj: si tres consultas piden turno a la vez,
+// se van a las 0 ms, 800 ms y 1600 ms en lugar de creerse las tres que "pasó
+// tiempo suficiente" y salir juntas.
+let proximoTurno = 0;
+
+async function esperarTurnoDeRitmo() {
+  const ahora = Date.now();
+  const turno = Math.max(ahora, proximoTurno);
+  proximoTurno = turno + MS_ENTRE_CONSULTAS;
+  if (turno > ahora) await sleep(turno - ahora);
 }
 
 // Lee stock de una variante usando stock_por_tienda (formato real de GN).
@@ -363,11 +416,17 @@ async function liberarTurno(mio) {
 // el camino "rápido" gastaba más límite del que ahorraba, chocaba, y encima caía
 // igual al catálogo entero: lo peor de los dos.
 //
-// 6 es el compromiso: sigue siendo ~5x más rápido que bajar el catálogo entero
-// (0,4 s contra 2,7 s, y hoy bajo carga el catálogo tardó 6,7 s), el turno se
-// libera antes —así no se hace cola— y el gasto de límite queda acotado. Arriba
-// de esto conviene el camino de siempre, que son 3 consultas y listo.
-const MAX_PRODUCTOS_CAMINO_RAPIDO = 6;
+// 🔴 Y con el techo REAL de GN (~2 consultas por segundo, confirmado por Eugenio
+// el 12-8-2026) el atajo dejó de ser atajo. Al ritmo obligado de 800 ms:
+//   · camino rápido con N productos ≈ N × 0,8 s
+//   · catálogo entero = 3 páginas ≈ 2,7 s, sin importar el tamaño del carrito
+// O sea que a partir de 4 productos el "rápido" TARDA MÁS que el largo. La
+// medición vieja que lo justificaba (8 en paralelo en 0,43 s) valía cuando
+// creíamos que se podía disparar en paralelo; no se puede.
+//
+// Queda en 3: ahí todavía gana un poco de tiempo y sobre todo mueve 17 KB en vez
+// de 1,5 MB. Arriba de eso manda el camino de siempre.
+const MAX_PRODUCTOS_CAMINO_RAPIDO = 3;
 
 // ¿Se puede usar el camino rápido para este carrito?
 // Ante la MENOR duda contesta que no, y se usa el camino de siempre. Nunca
@@ -385,11 +444,10 @@ function puedeIrPorElRapido(ids, costos) {
 }
 
 async function traerProductosSueltos(ids, token, costos) {
-  // De a tandas, no todas juntas: la ráfaga simultánea era lo que hacía cortar a
-  // GN (ver `enTandas`). Con el tope en 6 son dos tandas: se pierde muy poco
-  // tiempo y se deja de reventar el límite compartido con el resto de la gente.
-  const resp = await enTandas(
-    ids.map(id => () => gnFetchRetry(`/productos/ver/${encodeURIComponent(id)}?include_stock=1&include_variants=1`, token))
+  // Se piden juntas y el regulador de `gnFetch` las va soltando al ritmo que GN
+  // aguanta (~800 ms). Acá no hay que espaciar nada a mano.
+  const resp = await Promise.all(
+    ids.map(id => gnFetchRetry(`/productos/ver/${encodeURIComponent(id)}?include_stock=1&include_variants=1`, token))
   );
   const productos = {};
   for (let i = 0; i < ids.length; i++) {
@@ -472,6 +530,7 @@ async function verificarStockServer(items, token, topes = {}, costos = null) {
       // páginas de ~1s cada una, confirmar un pedido podía tardar 5 segundos. El
       // cliente esperaba, y ese rato es justo la ventana en la que dos pedidos
       // simultáneos leen el mismo stock. Pedirlas juntas lo baja a ~2s.
+      // Se piden juntas; el regulador de `gnFetch` las espacia (~800 ms).
       const resp = await Promise.all(
         Array.from({ length: ultima - 1 }, (_, i) => pedirPagina(i + 2))
       );
@@ -1079,15 +1138,21 @@ module.exports = async (req, res) => {
     // dejan la duda de si la venta entró o no, y repetir ahí duplicaría el
     // pedido. Ante la duda, no se repite: un cliente que reintenta a mano es
     // mucho mejor que una venta cargada dos veces.
+    // Turno también acá: es el pedido más caro de todos y salía pegado a la
+    // última consulta de stock.
+    await esperarTurnoDeRitmo();
     let r = await fetch(url, opts);
     let data = await r.text();
     anotarSaldo(r.headers);
     for (let i = 0; i < 2 && r.status === 429; i++) {
-      const dice = parseInt(r.headers.get('Retry-After') || '0', 10);
+      let cuerpo = null;
+      try { cuerpo = JSON.parse(data); } catch { /* puede venir HTML */ }
+      const dice = cuantoEsperar(r.headers, cuerpo);
       const espera = dice > 0 ? dice * 1000 : 1000 * Math.pow(2, i);
-      if (espera > ESPERA_MAX_MS) break; // pide más de lo que el cliente espera mirando
+      if (espera > ESPERA_MAX_VENTA_MS) break; // pide más de lo que nadie espera mirando
       console.warn(`[gn] cortó por límite, se reintenta en ${espera} ms (intento ${i + 2})`);
       await sleep(espera);
+      await esperarTurnoDeRitmo();
       r = await fetch(url, opts);
       data = await r.text();
       anotarSaldo(r.headers);
