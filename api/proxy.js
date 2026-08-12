@@ -45,6 +45,39 @@ const CORS = {
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
+// ---------------------------------------------------------------------------
+// EL TABLERO: cuánto cupo nos queda en Gestión Nube
+//
+// GN manda el límite y el saldo en CADA respuesta, y nunca los habíamos mirado:
+// veníamos manejando sin tablero. Anotarlos cuesta cero consultas y contesta dos
+// preguntas que hoy no podemos responder:
+//
+//  · ¿Cuánto es el límite HOY? El 3-8-2026 medimos 60 por minuto, pero para el
+//    12-8-2026 GN ya había cambiado su manejo de límites (antes contestaba un 500
+//    con HTML al saturarse; ahora contesta un 429 con mensaje en español). Cuando
+//    alguien reescribe eso, es normal que también cambie el número o la forma de
+//    contar. Este registro lo dice en vez de suponerlo.
+//
+//  · ¿Quién se está comiendo el cupo? El 12-8 hubo clientes que no podían ni ver
+//    el catálogo 20 MINUTOS ANTES de que apareciera ningún carrito grande, así que
+//    algo lo estaba gastando por su cuenta. Si el saldo aparece bajo en un momento
+//    sin ventas, el consumo viene de otro lado (otro sistema pegándole a GN desde
+//    la misma dirección), no del catálogo.
+//
+// Solo se avisa cuando el saldo está para preocuparse, para no llenar el registro.
+let ultimoSaldo = null;
+let ultimoLimite = null;
+
+function anotarSaldo(headers) {
+  const saldo = parseInt(headers.get('X-RateLimit-Remaining') || '', 10);
+  const limite = parseInt(headers.get('X-RateLimit-Limit') || '', 10);
+  if (!isNaN(saldo)) ultimoSaldo = saldo;
+  if (!isNaN(limite)) ultimoLimite = limite;
+  if (!isNaN(saldo) && !isNaN(limite) && saldo <= Math.max(5, Math.floor(limite / 4))) {
+    console.warn(`[cupo] queda poco: ${saldo} de ${limite}`);
+  }
+}
+
 async function gnFetch(path, token) {
   const r = await fetch(API_BASE + path, {
     headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
@@ -54,6 +87,7 @@ async function gnFetch(path, token) {
   // adivinando (ver gnFetchRetry). Puede venir en segundos o no venir.
   const espera = parseInt(r.headers.get('Retry-After') || '0', 10);
   const meta = { esperaSeg: isNaN(espera) || espera < 0 ? 0 : espera };
+  anotarSaldo(r.headers);
   try { return { ok: r.ok, status: r.status, data: JSON.parse(text), ...meta }; }
   catch { return { ok: r.ok, status: r.status, data: text, ...meta }; }
 }
@@ -1013,6 +1047,7 @@ module.exports = async (req, res) => {
     // mucho mejor que una venta cargada dos veces.
     let r = await fetch(url, opts);
     let data = await r.text();
+    anotarSaldo(r.headers);
     for (let i = 0; i < 2 && r.status === 429; i++) {
       const dice = parseInt(r.headers.get('Retry-After') || '0', 10);
       const espera = dice > 0 ? dice * 1000 : 1000 * Math.pow(2, i);
@@ -1021,6 +1056,7 @@ module.exports = async (req, res) => {
       await sleep(espera);
       r = await fetch(url, opts);
       data = await r.text();
+      anotarSaldo(r.headers);
     }
 
     // Si GN sigue cortando, el cliente merece un aviso en criollo y no su cartel
@@ -1071,6 +1107,10 @@ module.exports = async (req, res) => {
     if (esConfirmarPedido) {
       // `total` es lo que esperó el cliente; `hastaLiberar` incluye la limpieza de
       // después, que nadie espera (y que Vercel puede suspender).
+      // `cupo` es el saldo que declaró GN en su última respuesta. Va en cada
+      // pedido a propósito: es la única forma de ver, con el tiempo, si el límite
+      // cambia o si alguien se lo está comiendo cuando no hay ventas.
+      if (ultimoSaldo !== null) marcas.cupo = `${ultimoSaldo}/${ultimoLimite ?? '?'}`;
       console.log(`[tiempos] ${res.statusCode} en ${marcas.total ?? '?'}ms (hastaLiberar ${Date.now() - t0}ms) — ${JSON.stringify(marcas)}`);
     }
   }
