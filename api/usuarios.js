@@ -55,7 +55,22 @@ async function leerCfg() {
 }
 // `email` entra en la lista: el perfil viaja al browser con una lista FIJA de campos,
 // así que un campo que no esté acá se guarda en el KV pero nunca llega al monitor.
-const perfilDe = u => ({ name: u.name, admin: !!u.admin, cuenta: u.cuenta || null, acceso: u.acceso || { bdi: {}, zattia: {} }, funcion: Array.isArray(u.funcion) ? u.funcion : [], email: u.email || null });
+//
+// `apodo` y `cumple` son los dos campos humanos: el Monitor recibe a cada uno por su nombre
+// («Hola, Mari!») y `name` no sirve para eso —es el usuario de login, y en los puestos
+// compartidos es `bdilocal`—. `cumple` va como `MM-DD`, sin año: no hace falta la edad.
+const perfilDe = u => ({ name: u.name, admin: !!u.admin, cuenta: u.cuenta || null, acceso: u.acceso || { bdi: {}, zattia: {} }, funcion: Array.isArray(u.funcion) ? u.funcion : [], email: u.email || null, apodo: u.apodo || null, cumple: u.cumple || null });
+
+/**
+ * Los cumpleaños del equipo, para que el Monitor pueda saludar. Sale con el login porque el
+ * padrón entero es admin-only y esto lo tiene que ver todo el mundo.
+ *
+ * Va **sólo apodo y `MM-DD`**: ni mail, ni permisos, ni quién es admin, ni el año de
+ * nacimiento. Y van todos, sin recortar a una ventana de días, porque **el día lo decide el
+ * navegador**: el server corre en UTC y a las 21:00 de Argentina ya es mañana. Son ~20 filas
+ * de dos campos: filtrar acá costaría un bug y no ahorraría nada.
+ */
+const cumplesDe = cfg => (cfg?.users || []).filter(u => u.cumple).map(u => ({ apodo: u.apodo || u.name, cumple: u.cumple }));
 
 
 /**
@@ -125,7 +140,7 @@ module.exports = async (req, res) => {
             /* que no se caiga un login por esto */
           }
         }
-        return res.status(200).json({ ok: true, perfil: perfilDe(u) });
+        return res.status(200).json({ ok: true, perfil: perfilDe(u), cumples: cumplesDe(cfg) });
       }
 
       // Login con Google: la identidad la pone el proveedor, el acceso lo pone el KV.
@@ -137,7 +152,7 @@ module.exports = async (req, res) => {
         const cfg = await leerCfg();
         const u = usuarioPorEmail(cfg, email);
         if (!u) return res.status(200).json({ ok: false, error: 'sin-acceso', email });
-        return res.status(200).json({ ok: true, perfil: perfilDe(u) });
+        return res.status(200).json({ ok: true, perfil: perfilDe(u), cumples: cumplesDe(cfg) });
       }
 
       // Config para administradores — pantalla de gestión.
