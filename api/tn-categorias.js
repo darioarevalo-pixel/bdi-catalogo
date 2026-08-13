@@ -83,11 +83,14 @@ async function fetchTodosProductos(storeId, token) {
 async function fetchAllCats(storeId, token) {
   let cats = [], page = 1;
   while (page <= 15) {
-    const r = await tnGet(storeId, token, `categories?per_page=200&page=${page}&fields=id,name`);
+    // `parent` viaja para poder mostrar la RUTA en el selector del Monitor. Sin él, dos categorías
+    // con el mismo nombre (pasa: `JEANS` está duplicada, y las subcategorías de un sale se llaman
+    // igual que las globales) son indistinguibles y se elige a ciegas.
+    const r = await tnGet(storeId, token, `categories?per_page=200&page=${page}&fields=id,name,parent`);
     if (!Array.isArray(r.data) || !r.data.length) break;
     cats.push(...r.data); if (r.data.length < 200) break; page++;
   }
-  return cats.map(c => ({ id: c.id, name: valEs(c.name) })).filter(c => c.name);
+  return cats.map(c => ({ id: c.id, name: valEs(c.name), parent: c.parent || null })).filter(c => c.name);
 }
 const normNombre = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
 
