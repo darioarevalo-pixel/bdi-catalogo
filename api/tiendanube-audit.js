@@ -240,9 +240,21 @@ async function tnFetchOrden(cfg, numero, perPage) {
 //   - los descuentos + `subtotal`: para prorratear. Sin esto, devolver un ítem de una orden
 //     con cupón le devuelve de más al cliente — es el hueco que Cambios tiene hoy.
 //   - `envio_costo_cliente`: lo que pagó de envío, por si corresponde devolvérselo.
-function mapOrdenTN(o) {
+//   - el bloque `envio_*` (13-ago-2026): lo que necesita la pantalla de Envíos del día del Monitor
+//     para armar la hoja del cadete. Antes de esto, de todo el envío sólo viajaban la opción y lo
+//     que pagó el cliente, y por eso el diagnóstico de la planilla de reparto dio "no se puede
+//     medir" en tiempos, estados y zona: el dato no faltaba, no lo estábamos trayendo.
+//
+// ⚠️ **`conDireccion` está apagado por defecto, y no es una preferencia: es el permiso.**
+// La dirección y el teléfono son datos personales de un cliente, y `?orden=N` —el otro camino que
+// entra acá— **no exige usuario**: contesta a cualquiera que sepa un número de orden. Prenderlo
+// para los dos caminos publicaría el domicilio de cada comprador de las dos tiendas. Sólo lo pide
+// `?ordenes=1`, que sí pasa por `exigirUsuario`.
+function mapOrdenTN(o, opts) {
   const pago = o.payment_details || {};
   const num = (v) => (v == null || v === '' ? null : Number(v));
+  const txt = (v) => (v == null || v === '' ? null : String(v));
+  const dir = o.shipping_address || {};
   return {
     id: o.id, number: o.number,
     cliente: o.contact_name || (o.customer && o.customer.name) || null,
@@ -258,8 +270,30 @@ function mapOrdenTN(o) {
     descuento_pago: num(o.discount_gateway),                // el % por medio de pago (ej. transferencia)
     cupon: Array.isArray(o.coupon) ? (o.coupon[0] && o.coupon[0].code) || null : null,
     envio_costo_cliente: num(o.shipping_cost_customer),     // lo que PAGÓ de envío
+    // 🔑 Lo que NOS cuesta el envío. Es el único campo que permite saber si el envío se subsidia:
+    // hasta hoy sólo se sabía cuánto se cobra. Si TN lo devuelve vacío, se dice, no se estima.
+    envio_costo_nuestro: num(o.shipping_cost_owner),
+    envio_tipo: txt(o.shipping_pickup_type),                // 'ship' (a domicilio) | 'pickup' (retira)
+    envio_sucursal: txt(o.shipping_store_branch_name),      // a qué sucursal retira, si retira
+    envio_estado: txt(o.shipping_status),                   // 'unpacked' | 'fulfilled'
+    envio_tracking: txt(o.shipping_tracking_number),
+    envio_despachado_en: txt(o.shipped_at),                 // el tramo que SÍ controlamos: venta → despacho
+    pagado_en: txt(o.paid_at),
     estado_pago: o.payment_status || null,                  // 'paid' | 'refunded' | ...
     estado_orden: o.status || null,                         // 'open' | 'closed' | 'cancelled'
+    // Datos personales: sólo con permiso explícito. Ver el aviso de arriba.
+    envio_direccion: opts && opts.conDireccion ? {
+      nombre: txt(dir.name),
+      telefono: txt(dir.phone),
+      calle: txt(dir.address),
+      numero: txt(dir.number),
+      piso: txt(dir.floor),
+      entre_calles: txt(dir.between_streets),
+      localidad: txt(dir.locality) || txt(dir.city),        // TN usa una u otra según el país
+      ciudad: txt(dir.city),
+      provincia: txt(dir.province),
+      cp: txt(dir.zipcode),
+    } : null,
     products: (o.products || []).map(p => ({ product_id: p.product_id, variant_id: p.variant_id, name: p.name, sku: p.sku, quantity: p.quantity, price: p.price })),
   };
 }
@@ -312,7 +346,7 @@ async function tnOrdenesDetalle(cfg, from, to, limite) {
   const detalles = await enTandas(recorte.map(x => async () => {
     const rd = await fetch(`${base}/${x.id}`, { headers: tnHeaders(cfg.token) });
     if (!rd.ok) return { error: `TN ${rd.status} en GET /orders/${x.id}` };
-    return mapOrdenTN(await rd.json());
+    return mapOrdenTN(await rd.json(), { conDireccion: true });
   }), 4);
   const fallidas = detalles.filter(d => d && d.error).length;
   return { ordenes: detalles.filter(d => d && !d.error), total_en_rango: total, truncado: total > recorte.length, fallidas };
@@ -323,22 +357,65 @@ async function tnOrdenesDetalle(cfg, from, to, limite) {
 // pasada: el join es por `id`, que sí viene siempre. Un mes entero en ~1 s en vez de ~12.
 async function tnOrdenesLista(cfg, from, to, limite) {
   const [a, b] = await Promise.all([
-    tnListaRango(cfg, from, to, 'id,number,status,payment_status,created_at,total,contact_name,gateway,payment_details,subtotal,discount,promotional_discount,discount_gateway,coupon,shipping_option,shipping_cost_customer,customer'),
+    // El bloque de envío viaja en esta pasada. Si TN volviera a hacer la maña de esconder un campo
+    // cuando se le piden otros, lo canta `?probe=1`, que compara esta lista contra el detalle.
+    tnListaRango(cfg, from, to, 'id,number,status,payment_status,created_at,total,contact_name,gateway,payment_details,subtotal,discount,promotional_discount,discount_gateway,coupon,shipping_option,shipping_cost_customer,shipping_cost_owner,shipping_pickup_type,shipping_store_branch_name,shipping_status,shipping_tracking_number,shipped_at,paid_at,shipping_address,customer'),
     tnListaRango(cfg, from, to, 'id,products'),
   ]);
   if (a.error) return a;
   if (b.error) return b;
   const porId = new Map(b.lista.map(x => [String(x.id), x.products || []]));
   const total = a.lista.length;
-  const ordenes = a.lista.slice(0, limite).map(o => mapOrdenTN({ ...o, products: porId.get(String(o.id)) || [] }));
+  const ordenes = a.lista.slice(0, limite).map(o => mapOrdenTN({ ...o, products: porId.get(String(o.id)) || [] }, { conDireccion: true }));
   return { ordenes, total_en_rango: total, truncado: total > ordenes.length, fallidas: 0 };
 }
 
-// La firma que compara el probe: qué compró y por cuánto. Si esto coincide entre los dos modos,
-// el modo rápido sirve para el sync (que sólo necesita SKU × cantidad y el total).
+// Los campos de envío que la pantalla de Envíos del día necesita, en un solo lugar: los mira el
+// probe (¿la lista los trae igual que el detalle?) y el resumen de cobertura (¿TN los llena?).
+const CAMPOS_ENVIO = [
+  'envio', 'envio_costo_cliente', 'envio_costo_nuestro', 'envio_tipo', 'envio_sucursal',
+  'envio_estado', 'envio_tracking', 'envio_despachado_en', 'pagado_en',
+];
+const CAMPOS_DIRECCION = ['nombre', 'telefono', 'calle', 'numero', 'piso', 'localidad', 'provincia', 'cp'];
+
+// La firma que compara el probe: qué compró, por cuánto, **y cómo se lo mandamos**. Los ítems y el
+// total alcanzaban cuando el único consumidor era el sync de ventas. Desde que la lista trae el
+// bloque de envío, dejarlos afuera haría que el probe diera verde con los campos nuevos vacíos —
+// que es justo la maña que el probe existe para cazar (pedir `products` hacía desaparecer
+// `number`). Un ensayo que no mira el campo nuevo no lo está probando.
 function firmaOrdenProbe(o) {
   const items = (o.products || []).map(p => `${p.sku || p.variant_id}×${p.quantity}`).sort().join('|');
-  return `${items}#${o.total}`;
+  const envio = CAMPOS_ENVIO.map(k => `${k}=${o[k] ?? ''}`).join(',');
+  const d = o.envio_direccion || {};
+  const dir = CAMPOS_DIRECCION.map(k => `${k}=${d[k] ?? ''}`).join(',');
+  return `${items}#${o.total}#${envio}#${dir}`;
+}
+
+/**
+ * Cuántas de las órdenes del rango traen cada campo de envío con algo adentro.
+ *
+ * Es la sonda que faltaba, y va acá y no en una ruta nueva porque esta rama ya baja las órdenes,
+ * ya exige usuario y ya es la que va a alimentar la pantalla de Envíos. Sin este número, decidir
+ * qué columnas puede tener la hoja del cadete sería adivinar: el diagnóstico de la planilla dio
+ * "no se pudo medir" en media docena de cosas, y la pregunta acá es cuáles de ésas TN sí contesta.
+ *
+ * `envio_costo_nuestro` es el que más importa: es el único que permite comparar lo que cobramos
+ * contra lo que nos cuesta. Si viene en 0%, la respuesta es "TN no lo da", no una estimación.
+ */
+function coberturaEnvio(ordenes) {
+  const lleno = (v) => v != null && v !== '';
+  const cuenta = (k) => ordenes.filter(o => lleno(o[k])).length;
+  const cuentaDir = (k) => ordenes.filter(o => lleno((o.envio_direccion || {})[k])).length;
+  const out = { ordenes: ordenes.length, campos: {}, direccion: {}, opciones_de_envio: {} };
+  for (const k of CAMPOS_ENVIO) out.campos[k] = cuenta(k);
+  for (const k of CAMPOS_DIRECCION) out.direccion[k] = cuentaDir(k);
+  // Qué valores toma `shipping_option`: es lo ÚNICO que distingue "va en moto" de "va por correo",
+  // y sin esa lista la pantalla del día no sabe qué filtrar.
+  for (const o of ordenes) {
+    const k = o.envio == null || o.envio === '' ? '(vacío)' : String(o.envio);
+    out.opciones_de_envio[k] = (out.opciones_de_envio[k] || 0) + 1;
+  }
+  return out;
 }
 
 async function tnFetchOrdenesRango(cfg, from, to, opts) {
@@ -538,6 +615,9 @@ module.exports = async (req, res) => {
       return res.status(200).json({
         ok: true, store: storeKey, from, to,
         modo: tn.modo, limite, truncado: tn.truncado, total_en_rango: tn.total_en_rango, fallidas: tn.fallidas,
+        // Qué tan lleno viene el bloque de envío en este rango. Barato (se calcula sobre lo que ya
+        // se bajó) y es lo que decide qué columnas puede tener la pantalla de Envíos del día.
+        envio_cobertura: coberturaEnvio(tn.ordenes),
         ordenes: tn.ordenes,
         // Lo que el motor necesita para NO duplicar: `tn_order` (las nativas de TN lo traen) y los
         // renglones, para cruzar por firma de ítems contra lo que hoy se carga a mano.
