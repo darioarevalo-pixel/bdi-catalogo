@@ -275,10 +275,19 @@ module.exports = async (req, res) => {
     return res.status(200).json({ ok: true, store: storeKey, total: updates.length, aplicados, errores });
   }
 
-  // --- Asignación masiva de categoría ---
-  if (req.method === 'POST' && req.body && req.body.accion === 'asignar') {
+  // --- Asignación (y desasignación) masiva de categoría ---
+  //
+  // `desasignar` es el mismo camino al revés y comparte TODO menos una línea: cómo se arma la lista
+  // final de categorías del producto. Va acá y no en un bloque propio porque el PUT a TiendaNube
+  // —que REEMPLAZA `categories` y es la parte peligrosa— tiene que existir una sola vez.
+  //
+  // Nació para las subcategorías temporales de un sale (`SALE · TOPS Y BODIES`…): al terminar la
+  // campaña hay que sacárselas a 260 productos, y borrar la categoría en TiendaNube no es lo mismo
+  // —deja al producto con la referencia colgada— ni se puede hacer de a uno.
+  if (req.method === 'POST' && req.body && (req.body.accion === 'asignar' || req.body.accion === 'desasignar')) {
     try {
       const { categoriaId, nombres, items } = req.body;
+      const sacando = req.body.accion === 'desasignar';
 
       // MODO APLICAR POR LOTES: el cliente manda items ya resueltos {id, nombre, nuevas}.
       // Así no re-leemos todos los productos en cada lote y mostramos progreso real.
@@ -310,13 +319,23 @@ module.exports = async (req, res) => {
         const p = byName[normNombre(nm)];
         if (!p) { noEncontrados.push(nm); return; }
         const actuales = (p.categories || []).map(c => (typeof c === 'object' ? c.id : c)).filter(Boolean);
-        if (actuales.includes(catId)) { yaTenian.push(valEs(p.name)); return; }
-        matched.push({ id: p.id, nombre: valEs(p.name), nuevas: [...new Set([...actuales, catId])] });
+        // `yaTenian` es "no hay nada que hacerle": al agregar, que ya la tenga; al sacar, que no la
+        // tenga. Es lo que hace que repetir la corrida sea seguro y barato.
+        const laTiene = actuales.includes(catId);
+        if (sacando ? !laTiene : laTiene) { yaTenian.push(valEs(p.name)); return; }
+        const nuevas = sacando
+          ? actuales.filter(id => id !== catId)
+          : [...new Set([...actuales, catId])];
+        matched.push({ id: p.id, nombre: valEs(p.name), nuevas });
       });
+      // ⚠️ Sacar la última categoría deja al producto SIN NINGUNA, y un producto sin categoría no
+      // aparece en la navegación de la tienda: se llega sólo por buscador o por link directo. No se
+      // frena —puede ser lo que se quiere—, pero el que aprieta tiene que verlo antes.
+      const quedanSinCategoria = sacando ? matched.filter(m => !m.nuevas.length).map(m => m.nombre) : [];
       return res.status(200).json({
-        ok: true, modo: 'prueba', categoria: catObj.name,
+        ok: true, modo: 'prueba', accion: sacando ? 'desasignar' : 'asignar', categoria: catObj.name,
         total: nombres.length,
-        matched, yaTenian, noEncontrados, // matched = objetos {id, nombre, nuevas}
+        matched, yaTenian, noEncontrados, quedanSinCategoria, // matched = objetos {id, nombre, nuevas}
       });
     } catch (e) { return res.status(500).json({ error: e.message }); }
   }
