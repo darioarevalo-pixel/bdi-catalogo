@@ -310,13 +310,31 @@ function tnRangoQs(from, to) {
 }
 
 // Pagina la lista de órdenes del rango pidiendo `fields`. Devuelve [] si TN corta.
+//
+// 🔴 **TN usa el MISMO 404 para dos cosas que no se parecen en nada**: "ya no hay más páginas" y
+// "ese `fields` no existe". Leerlos igual —`if (404) break`— es lo que dejó el modo `lista` en 0
+// órdenes durante semanas **sin un solo error**: se pedía `customer`, que no es un campo válido del
+// listado, TN contestaba 404 en la página 1 y esto lo leía como el final de la paginación.
+//
+// 🔑 **Los separa la `description`, y la regla es POSITIVA a propósito**: sólo "Last page…" es el
+// final; cualquier otro 404 es un error y se dice. Al revés (todo lo que no reconozca es el final)
+// vuelve a fallar en silencio, que es exactamente el modo de falla que costó 26 órdenes de 99. Con
+// esta regla, un 404 nuevo de TN aparece como error ruidoso — molesto, pero visible.
+function tn404EsFinDePaginas(cuerpo) {
+  return /last page/i.test(cuerpo);
+}
+
 async function tnListaRango(cfg, from, to, fields) {
   const base = `https://api.tiendanube.com/v1/${cfg.storeId}/orders`;
   const qs = `${tnRangoQs(from, to)}&status=any&per_page=200&fields=${fields}`;
   const out = [];
   for (let page = 1; page <= TN_PAGINAS_MAX; page++) {
     const r = await fetch(`${base}?${qs}&page=${page}`, { headers: tnHeaders(cfg.token) });
-    if (r.status === 404) break;                       // TN devuelve 404 cuando se pasó de páginas
+    if (r.status === 404) {
+      const cuerpo = await r.text();
+      if (tn404EsFinDePaginas(cuerpo)) break;
+      return { error: `TN 404 en la lista: ${cuerpo.replace(/\s+/g, ' ').slice(0, 200)}` };
+    }
     if (!r.ok) return { error: `TN ${r.status} en la lista: ${(await r.text()).slice(0, 200)}` };
     const arr = await r.json();
     if (!Array.isArray(arr) || !arr.length) break;
@@ -364,7 +382,11 @@ const CAMPOS_LISTA_TN = [
   'discount_gateway', 'coupon', 'shipping_option', 'shipping_cost_customer',
   'shipping_cost_owner', 'shipping_pickup_type', 'shipping_store_branch_name',
   'shipping_status', 'shipping_tracking_number', 'shipped_at', 'paid_at',
-  'shipping_address', 'customer',
+  'shipping_address',
+  // ⛔ `customer` NO va: el listado de órdenes lo rechaza con 404 «Invalid fields for this
+  // resource: customer» (medido el 14-ago-2026 con `?campos=1`). En el GET por id viene igual
+  // porque ese camino no manda `fields`. Sólo era el respaldo de `contact_name` para el nombre,
+  // así que el probe compara `cliente` para que la diferencia, si aparece, se vea.
 ];
 
 async function tnOrdenesLista(cfg, from, to, limite) {
@@ -400,7 +422,10 @@ function firmaOrdenProbe(o) {
   const envio = CAMPOS_ENVIO.map(k => `${k}=${o[k] ?? ''}`).join(',');
   const d = o.envio_direccion || {};
   const dir = CAMPOS_DIRECCION.map(k => `${k}=${d[k] ?? ''}`).join(',');
-  return `${items}#${o.total}#${envio}#${dir}`;
+  // `cliente` entra desde que la lista dejó de pedir `customer` (14-ago-2026): en el detalle sigue
+  // siendo el respaldo de `contact_name`, así que si alguna orden viene con el contacto vacío, los
+  // dos modos dejan de decir lo mismo. Sin esto, esa diferencia pasaría con el probe en verde.
+  return `${items}#${o.total}#${o.cliente ?? ''}#${envio}#${dir}`;
 }
 
 /**
