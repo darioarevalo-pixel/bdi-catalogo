@@ -405,27 +405,30 @@ async function tnOrdenesLista(cfg, from, to, limite) {
 }
 
 // Los campos de envío que la pantalla de Envíos del día necesita, en un solo lugar: los mira el
-// probe (¿la lista los trae igual que el detalle?) y el resumen de cobertura (¿TN los llena?).
+// resumen de cobertura (¿TN los llena?). El probe ya no los usa — compara la orden entera.
 const CAMPOS_ENVIO = [
   'envio', 'envio_costo_cliente', 'envio_costo_nuestro', 'envio_tipo', 'envio_sucursal',
   'envio_estado', 'envio_tracking', 'envio_despachado_en', 'pagado_en',
 ];
 const CAMPOS_DIRECCION = ['nombre', 'telefono', 'calle', 'numero', 'piso', 'localidad', 'provincia', 'cp'];
 
-// La firma que compara el probe: qué compró, por cuánto, **y cómo se lo mandamos**. Los ítems y el
-// total alcanzaban cuando el único consumidor era el sync de ventas. Desde que la lista trae el
-// bloque de envío, dejarlos afuera haría que el probe diera verde con los campos nuevos vacíos —
-// que es justo la maña que el probe existe para cazar (pedir `products` hacía desaparecer
-// `number`). Un ensayo que no mira el campo nuevo no lo está probando.
+// La firma que compara el probe: **la orden mapeada ENTERA**, no una lista de campos elegidos.
+//
+// 🔑 **La lista enumerada era el agujero.** Empezó con ítems y total, cuando el único consumidor
+// era el sync de ventas; después le entró el bloque de envío. Los que nunca miró —`estado_pago`,
+// los descuentos, las cuotas, el gateway— son justo los que la pantalla de Envíos usa para decidir
+// si algo está PAGADO de verdad, y la maña de TN es esconder un campo **en silencio** cuando se le
+// piden otros (pedir `products` hacía desaparecer `number`). Un probe que enumera sólo caza lo que
+// alguien se acordó de enumerar; comparando el objeto entero, un campo que se agregue mañana al
+// mapper entra al probe sin que nadie lo agregue acá.
+//
+// `products` va aparte y ORDENADO: es lo único que puede venir en distinto orden sin que nada esté
+// mal, porque en el modo `lista` sale de una segunda pasada y se une por `id`.
 function firmaOrdenProbe(o) {
   const items = (o.products || []).map(p => `${p.sku || p.variant_id}×${p.quantity}`).sort().join('|');
-  const envio = CAMPOS_ENVIO.map(k => `${k}=${o[k] ?? ''}`).join(',');
-  const d = o.envio_direccion || {};
-  const dir = CAMPOS_DIRECCION.map(k => `${k}=${d[k] ?? ''}`).join(',');
-  // `cliente` entra desde que la lista dejó de pedir `customer` (14-ago-2026): en el detalle sigue
-  // siendo el respaldo de `contact_name`, así que si alguna orden viene con el contacto vacío, los
-  // dos modos dejan de decir lo mismo. Sin esto, esa diferencia pasaría con el probe en verde.
-  return `${items}#${o.total}#${o.cliente ?? ''}#${envio}#${dir}`;
+  const resto = Object.keys(o).filter(k => k !== 'products').sort()
+    .map(k => `${k}=${JSON.stringify(o[k] ?? null)}`).join(',');
+  return `${items}#${resto}`;
 }
 
 /**
@@ -477,11 +480,20 @@ async function tnProbeModos(cfg, from, to, limite) {
     medir(() => tnOrdenesLista(cfg, from, to, limite)),
   ]);
   if (d.r.error || l.r.error) return { error: d.r.error || l.r.error };
-  const firmaD = new Map(d.r.ordenes.map(o => [String(o.number), firmaOrdenProbe(o)]));
-  const firmaL = new Map(l.r.ordenes.map(o => [String(o.number), firmaOrdenProbe(o)]));
-  const faltan_en_lista = [...firmaD.keys()].filter(n => !firmaL.has(n));
-  const difieren = [...firmaD.entries()].filter(([n, f]) => firmaL.has(n) && firmaL.get(n) !== f)
-    .map(([n, f]) => ({ number: n, detalle: f, lista: firmaL.get(n) }));
+  const porNumD = new Map(d.r.ordenes.map(o => [String(o.number), o]));
+  const porNumL = new Map(l.r.ordenes.map(o => [String(o.number), o]));
+  const faltan_en_lista = [...porNumD.keys()].filter(n => !porNumL.has(n));
+  // Qué campo difiere, no las dos firmas enteras: con la orden completa adentro, dos firmas pegadas
+  // son 2 kB por orden y hay que leerlas a ojo para encontrar el carácter que cambió.
+  const difieren = [];
+  for (const [n, od] of porNumD) {
+    const ol = porNumL.get(n);
+    if (!ol || firmaOrdenProbe(od) === firmaOrdenProbe(ol)) continue;
+    const campos = [...new Set([...Object.keys(od), ...Object.keys(ol)])]
+      .filter(k => JSON.stringify(od[k] ?? null) !== JSON.stringify(ol[k] ?? null))
+      .map(k => ({ campo: k, detalle: JSON.stringify(od[k] ?? null).slice(0, 120), lista: JSON.stringify(ol[k] ?? null).slice(0, 120) }));
+    difieren.push({ number: n, campos });
+  }
   const sin_products = l.r.ordenes.filter(o => !(o.products || []).length).length;
   return {
     tiempos: { detalle_ms: d.ms, lista_ms: l.ms },
