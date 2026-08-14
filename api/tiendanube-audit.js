@@ -553,10 +553,11 @@ async function tnBisecarCampos(prueba, campos) {
 // y con un campo vacío adentro —así se descubrió que pedir `products` hacía desaparecer `number`—.
 // Si un campo se llena pidiéndolo solo y se vacía pidiéndolo con los otros 20, es la maña; si viene
 // vacío en las dos, es que TN no lo da en el listado y punto.
-async function tnLlenadoCampos(cfg, from, to, juegos) {
+async function tnLlenadoCampos(cfg, from, to, juegos, perPage) {
   const salida = {};
+  const pp = Math.min(Math.max(Number(perPage) || 200, 1), 200);
   for (const [nombre, campos] of Object.entries(juegos)) {
-    const qs = `${tnRangoQs(from, to)}&status=any&per_page=200&page=1&fields=${campos.join(',')}`;
+    const qs = `${tnRangoQs(from, to)}&status=any&per_page=${pp}&page=1&fields=${campos.join(',')}`;
     const r = await fetch(`https://api.tiendanube.com/v1/${cfg.storeId}/orders?${qs}`, { headers: tnHeaders(cfg.token) });
     const j = await r.json().catch(() => null);
     if (!Array.isArray(j)) { salida[nombre] = { status: r.status, error: true }; continue; }
@@ -753,7 +754,7 @@ module.exports = async (req, res) => {
         const l = await tnLlenadoCampos(cfg, from, to, {
           solos: ['id', ...sueltos],
           con_todos: CAMPOS_LISTA_TN.includes(sueltos[0]) ? CAMPOS_LISTA_TN : [...CAMPOS_LISTA_TN, ...sueltos],
-        });
+        }, req.query.pp);
         return res.status(200).json({ ok: true, store: storeKey, from, to, pedidos: sueltos, llenado: l });
       }
       if (req.query?.probe === '1') {
