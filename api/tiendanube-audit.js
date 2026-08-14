@@ -355,11 +355,23 @@ async function tnOrdenesDetalle(cfg, from, to, limite) {
 // modo 'lista': dos listas paginadas y join por `id`. Esquiva la maña conocida (pedir `products`
 // en los `fields` de la lista hace que TN NO devuelva `number`) sacando el `number` de la otra
 // pasada: el join es por `id`, que sí viene siempre. Un mes entero en ~1 s en vez de ~12.
+// Los `fields` de la pasada grande del modo `lista`, en un array y no en un string suelto: el
+// diagnóstico `?campos=1` bisecta EXACTAMENTE esta lista. Una copia pegada allá se desincroniza,
+// y entonces el diagnóstico daría verde sobre campos que el modo real ya no pide.
+const CAMPOS_LISTA_TN = [
+  'id', 'number', 'status', 'payment_status', 'created_at', 'total', 'contact_name',
+  'gateway', 'payment_details', 'subtotal', 'discount', 'promotional_discount',
+  'discount_gateway', 'coupon', 'shipping_option', 'shipping_cost_customer',
+  'shipping_cost_owner', 'shipping_pickup_type', 'shipping_store_branch_name',
+  'shipping_status', 'shipping_tracking_number', 'shipped_at', 'paid_at',
+  'shipping_address', 'customer',
+];
+
 async function tnOrdenesLista(cfg, from, to, limite) {
   const [a, b] = await Promise.all([
     // El bloque de envío viaja en esta pasada. Si TN volviera a hacer la maña de esconder un campo
     // cuando se le piden otros, lo canta `?probe=1`, que compara esta lista contra el detalle.
-    tnListaRango(cfg, from, to, 'id,number,status,payment_status,created_at,total,contact_name,gateway,payment_details,subtotal,discount,promotional_discount,discount_gateway,coupon,shipping_option,shipping_cost_customer,shipping_cost_owner,shipping_pickup_type,shipping_store_branch_name,shipping_status,shipping_tracking_number,shipped_at,paid_at,shipping_address,customer'),
+    tnListaRango(cfg, from, to, CAMPOS_LISTA_TN.join(',')),
     tnListaRango(cfg, from, to, 'id,products'),
   ]);
   if (a.error) return a;
@@ -452,6 +464,78 @@ async function tnProbeModos(cfg, from, to, limite) {
     iguales: faltan_en_lista.length === 0 && difieren.length === 0 && sin_products === 0,
     faltan_en_lista, difieren: difieren.slice(0, 20),
   };
+}
+
+// ── ?campos=1 — QUÉ campo de `fields` hace que TN conteste vacío ──────────────────────────────
+//
+// El modo `lista` devuelve 0 órdenes donde el `detalle` devuelve 32, y sin error: TN contesta 200
+// con la lista vacía. `tnListaRango` no puede decir cuál campo lo provoca porque pide los 25 de una,
+// y el token de TN vive sólo en Vercel (`env pull` lo baja vacío) ⇒ la medición tiene que salir de
+// acá, del endpoint deployado y logueado, no de un script local.
+//
+// 🔑 **Mira una sola página, a propósito.** `tnListaRango` pagina hasta 30 veces; con 25 campos ×
+// 30 páginas × dos rondas se va del `maxDuration`. Con un rango corto (2-3 días) una página de 200
+// ES el rango entero, así que la cuenta de la única página alcanza para comparar.
+async function tnUnaPagina(cfg, from, to, campos) {
+  const qs = `${tnRangoQs(from, to)}&status=any&per_page=200&page=1&fields=${campos.join(',')}`;
+  const r = await fetch(`https://api.tiendanube.com/v1/${cfg.storeId}/orders?${qs}`, { headers: tnHeaders(cfg.token) });
+  const txt = await r.text();
+  let j = null;
+  try { j = JSON.parse(txt); } catch { /* TN contestó algo que no es JSON */ }
+  return {
+    status: r.status,
+    n: Array.isArray(j) ? j.length : null,
+    // Lo que TN contesta cuando NO es una lista es la mitad de la respuesta: puede ser un objeto de
+    // error con 200 adentro. Sin esto, "no vino nada" y "vino un error disfrazado" se ven igual.
+    cuerpo: Array.isArray(j) ? null : txt.slice(0, 300),
+  };
+}
+
+// Bisecta la lista buscando UN campo culpable. `prueba(sub)` dice si TN contestó bien.
+// Si ninguna de las dos mitades falla sola, el problema es una COMBINACIÓN y lo dice: reportar
+// "no encontré culpable" sería leerlo como "ya está arreglado".
+async function tnBisecarCampos(prueba, campos) {
+  let malo = campos.slice();
+  const pasos = [];
+  while (malo.length > 1) {
+    const corte = Math.ceil(malo.length / 2);
+    const a = malo.slice(0, corte), b = malo.slice(corte);
+    const okA = await prueba(a);
+    pasos.push({ probado: a.join(','), ok: okA });
+    if (!okA) { malo = a; continue; }
+    const okB = await prueba(b);
+    pasos.push({ probado: b.join(','), ok: okB });
+    if (!okB) { malo = b; continue; }
+    return { culpable: null, combinacion: true, entre: malo, pasos };
+  }
+  return { culpable: malo[0] || null, combinacion: false, pasos };
+}
+
+async function tnDiagCampos(cfg, from, to) {
+  // El piso: `id` solo. Si esto ya viene vacío, no es un campo — es el rango.
+  const piso = await tnUnaPagina(cfg, from, to, ['id']);
+  const completo = await tnUnaPagina(cfg, from, to, CAMPOS_LISTA_TN);
+  const esperado = piso.n;
+  if (!esperado) return { piso, completo, veredicto: 'El rango no tiene órdenes ni pidiendo `id` solo: probar otras fechas.' };
+  if (completo.n === esperado) return { piso, completo, veredicto: 'La lista completa trae todo: el defecto no se reproduce en este rango.' };
+
+  // Uno por uno (`id` + el campo): caza los nombres que TN no conoce. Va de a 4 como los detalles.
+  const individuales = await enTandas(
+    CAMPOS_LISTA_TN.filter(c => c !== 'id').map(c => async () => {
+      const r = await tnUnaPagina(cfg, from, to, ['id', c]);
+      return { campo: c, status: r.status, n: r.n, cuerpo: r.cuerpo };
+    }), 4);
+  const solos_que_fallan = individuales.filter(x => x.n !== esperado);
+
+  // Si alguno falla solo, ya está: bisecar de nuevo sería medir lo mismo dos veces.
+  if (solos_que_fallan.length) {
+    return { piso, completo, esperado, solos_que_fallan, veredicto: 'Hay campos que rompen la lista ellos solos.' };
+  }
+  const bisect = await tnBisecarCampos(
+    async (sub) => (await tnUnaPagina(cfg, from, to, sub.includes('id') ? sub : ['id', ...sub])).n === esperado,
+    CAMPOS_LISTA_TN,
+  );
+  return { piso, completo, esperado, solos_que_fallan: [], bisect, veredicto: bisect.combinacion ? 'Ningún campo rompe solo: es una combinación.' : `Culpable: ${bisect.culpable}` };
 }
 
 // `incluirDetalles` agrega los renglones de cada venta (el mismo flag que usa scripts/sync-diario.js
@@ -602,6 +686,10 @@ module.exports = async (req, res) => {
     if (!from || !to) return res.status(400).json({ error: 'Faltan from/to (YYYY-MM-DD)' });
     try {
       const limite = Math.min(Math.max(Number(req.query.limite) || RANGO_LIMITE_DEFAULT, 1), 200);
+      if (req.query?.campos === '1') {
+        const d = await tnDiagCampos(cfg, from, to);
+        return res.status(200).json({ ok: true, store: storeKey, from, to, campos: d });
+      }
       if (req.query?.probe === '1') {
         const p = await tnProbeModos(cfg, from, to, limite);
         if (p.error) return res.status(502).json({ error: p.error });
