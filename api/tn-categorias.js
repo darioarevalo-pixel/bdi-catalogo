@@ -33,6 +33,7 @@ function tnHeaders(token) {
 // handler la regla sólo se puede ejercer con token de TiendaNube y escribiendo en una tienda
 // viva. Afuera se corre con `node scripts/check-desc-talles.mjs`, sin credenciales.
 const { armarDescripcion } = require('./_desc-talles');
+const { hashDesc, conservaLaTabla, idiomaDe } = require('./_desc-prosa');
 const valEs = v => v?.es || (v && Object.values(v)[0]) || '';
 const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); // p/ matchear modelos
 
@@ -152,8 +153,8 @@ module.exports = async (req, res) => {
   // barato uno termina dando por hecho que entró — que es justo lo que falló el 13-ago. Acá
   // un `GET ?accion=loquesea` contesta 400 sin escribir nada y sin loguearse. No se filtra
   // nada: los nombres de las acciones ya están en este repo, que es público.
-  const ACCIONES_POST = new Set(['descripcion-talles', 'publicar', 'ocultar', 'stock', 'asignar', 'desasignar', 'auto-modelos']);
-  const ACCIONES_GET = new Set(['variantes', 'cats']);
+  const ACCIONES_POST = new Set(['descripcion-talles', 'descripcion-prosa', 'publicar', 'ocultar', 'stock', 'asignar', 'desasignar', 'auto-modelos']);
+  const ACCIONES_GET = new Set(['variantes', 'cats', 'descripcion']);
   const accionBody = req.body && req.body.accion;
   const accionQuery = req.query && req.query.accion;
   if (accionBody && !ACCIONES_POST.has(accionBody)) {
@@ -172,6 +173,87 @@ module.exports = async (req, res) => {
   const storeKey = (req.query?.store || 'bdi').toLowerCase();
   const cfg = STORES[storeKey];
   if (!cfg || !cfg.storeId || !cfg.token) return res.status(500).json({ error: 'TiendaNube no configurado para ' + storeKey });
+
+  // --- Leer la descripción de UN producto, fresca y con su huella ---
+  // GET ?accion=descripcion&productId=123 → { html, hash, lang }
+  //
+  // Existe aparte del audit porque el audit está CACHEADO, y acá el html que se lee es el que
+  // se va a respaldar y el que se va a comparar antes de pisar. Un respaldo sacado de un caché
+  // de hace media hora es un respaldo de otra cosa — y es la única copia que va a existir,
+  // porque TiendaNube no tiene historial.
+  if (req.query?.accion === 'descripcion') {
+    const productId = req.query.productId;
+    if (!productId) return res.status(400).json({ error: 'Falta productId' });
+    try {
+      const g = await tnGet(cfg.storeId, cfg.token, `products/${productId}?fields=id,description`);
+      if (!g.ok) return res.status(g.status).json({ error: 'No se pudo leer el producto en TN', detalle: JSON.stringify(g.data).slice(0, 200) });
+      const descObj = (g.data && g.data.description && typeof g.data.description === 'object') ? g.data.description : {};
+      const lang = idiomaDe(descObj);
+      const html = typeof descObj[lang] === 'string' ? descObj[lang] : '';
+      return res.status(200).json({ ok: true, store: storeKey, productId: String(productId), lang, html, hash: hashDesc(html) });
+    } catch (e) { return res.status(500).json({ error: e.message }); }
+  }
+
+  // --- Escribir la PROSA de un producto (compare-and-swap + relectura) ---
+  // POST { accion:'descripcion-prosa', productId, nuevo, hashPrevio }
+  //
+  // 🔴 El texto llega COMPUESTO: lo arma `lib/tn-desc/bloques.ts` del monitor, que es donde
+  // están los tests y donde quien revisa decidió si el residuo se conserva o se tira. Acá NO
+  // se vuelve a componer — dos composiciones distintas del mismo campo es lo que se
+  // desincroniza. Lo que se hace acá son las tres preguntas que sólo se pueden hacer con la
+  // tienda delante: ¿es lo mismo que respaldaron?, ¿se comió la tabla?, ¿la escritura pasó?
+  //
+  // ⛔ Y el respaldo NO se escribe acá: se escribe ANTES, del lado del monitor, que es el que
+  // tiene la tabla. Este endpoint asume que ya está — por eso pide `hashPrevio` y no lo
+  // calcula solo: mandarlo es la prueba de que alguien leyó y guardó esa versión.
+  if (req.method === 'POST' && req.body && req.body.accion === 'descripcion-prosa') {
+    const { productId, nuevo, hashPrevio } = req.body;
+    if (!productId) return res.status(400).json({ error: 'Falta productId' });
+    if (!nuevo || typeof nuevo !== 'string') return res.status(400).json({ error: 'Falta el html nuevo' });
+    if (!hashPrevio || typeof hashPrevio !== 'string') return res.status(400).json({ error: 'Falta hashPrevio (el respaldo va ANTES de escribir)' });
+    try {
+      const g = await tnGet(cfg.storeId, cfg.token, `products/${productId}?fields=id,description`);
+      if (!g.ok) return res.status(g.status).json({ error: 'No se pudo leer el producto en TN', detalle: JSON.stringify(g.data).slice(0, 200) });
+      const descObj = (g.data && g.data.description && typeof g.data.description === 'object') ? g.data.description : {};
+      const lang = idiomaDe(descObj);
+      const actual = typeof descObj[lang] === 'string' ? descObj[lang] : '';
+
+      // 1. Compare-and-swap. Si alguien la tocó en el medio, no se escribe: el respaldo que
+      //    hay guardado es de OTRA versión, y pisar dejaría la única copia apuntando al aire.
+      const hashActual = hashDesc(actual);
+      if (hashActual !== hashPrevio) {
+        return res.status(409).json({
+          error: 'La descripción cambió en TiendaNube desde que la leíste. No se escribió nada.',
+          hashActual, hashPrevio, html: actual,
+        });
+      }
+      // 2. ¿Esto se comió la tabla de talles?
+      if (!conservaLaTabla(actual, nuevo)) {
+        return res.status(400).json({ error: 'El texto nuevo se come la tabla de talles. No se escribió nada.' });
+      }
+
+      const r = await fetch(`https://api.tiendanube.com/v1/${cfg.storeId}/products/${productId}`, {
+        method: 'PUT', headers: tnHeaders(cfg.token), body: JSON.stringify({ description: { ...descObj, [lang]: nuevo } }),
+      });
+      if (!r.ok) { const t = await r.text(); return res.status(r.status).json({ error: 'No se pudo guardar la descripción en TN', detalle: t.slice(0, 200) }); }
+
+      // 3. Relectura. Un 200 del PUT no prueba que la escritura haya pasado: se vuelve a leer
+      //    y se compara. Si no coincide, se contesta 200 igual —porque escribir se escribió—
+      //    pero con `verificado:false`, y del otro lado eso queda marcado en la fila.
+      let escrito = null, verificado = false, avisoRelectura = null;
+      try {
+        const g2 = await tnGet(cfg.storeId, cfg.token, `products/${productId}?fields=id,description`);
+        const d2 = (g2.data && g2.data.description && typeof g2.data.description === 'object') ? g2.data.description : {};
+        escrito = typeof d2[lang] === 'string' ? d2[lang] : '';
+        verificado = escrito === nuevo;
+      } catch (e) { avisoRelectura = e.message; }
+
+      return res.status(200).json({
+        ok: true, store: storeKey, productId: String(productId), lang,
+        escrito, verificado, hashEscrito: escrito == null ? null : hashDesc(escrito), avisoRelectura,
+      });
+    } catch (e) { return res.status(500).json({ error: e.message }); }
+  }
 
   // --- Cargar la TABLA DE TALLES en la descripción del producto (sin pisar el resto) ---
   if (req.method === 'POST' && req.body && req.body.accion === 'descripcion-talles') {
