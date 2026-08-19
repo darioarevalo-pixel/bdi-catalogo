@@ -149,6 +149,31 @@ module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method === 'OPTIONS') return res.status(204).end();
 
+  // --- Portón: una acción DESCONOCIDA muere acá, no cae a la auto-categorización ---
+  // 🔴 Sin esto, cualquier `accion` que este archivo no reconozca se saltea todos los `if`
+  // de abajo y termina en el bloque final, que recategoriza LA TIENDA ENTERA. No es
+  // teórico: pasó el 13-ago-2026 — el monitor mandó `desasignar` con este repo sin deployar
+  // y corrió la auto-categorización sobre Zattia. Como los dos repos deployan por separado,
+  // el monitor SIEMPRE puede ir un paso adelante, así que la protección va de ESTE lado.
+  // 🔑 El patrón es el de `api/datos.js` del monitor: lista BLANCA, y lo que no está muere en
+  // 400. Blanca a propósito: una lista negra deja pasar lo que todavía no existe, que es
+  // exactamente el caso que muerde.
+  // 🔑 Va ANTES de `exigirUsuario` a propósito, y el motivo es la verificación: después del
+  // portero, comprobar que este guard está DEPLOYADO exige credenciales, y sin un oráculo
+  // barato uno termina dando por hecho que entró — que es justo lo que falló el 13-ago. Acá
+  // un `GET ?accion=loquesea` contesta 400 sin escribir nada y sin loguearse. No se filtra
+  // nada: los nombres de las acciones ya están en este repo, que es público.
+  const ACCIONES_POST = new Set(['descripcion-talles', 'publicar', 'ocultar', 'stock', 'asignar', 'desasignar', 'auto-modelos']);
+  const ACCIONES_GET = new Set(['variantes', 'cats']);
+  const accionBody = req.body && req.body.accion;
+  const accionQuery = req.query && req.query.accion;
+  if (accionBody && !ACCIONES_POST.has(accionBody)) {
+    return res.status(400).json({ error: `acción desconocida: ${accionBody}`, validas: [...ACCIONES_POST] });
+  }
+  if (accionQuery && !ACCIONES_GET.has(accionQuery)) {
+    return res.status(400).json({ error: `acción desconocida: ${accionQuery}`, validas: [...ACCIONES_GET] });
+  }
+
   // Portero. Todo este endpoint escribe en la tienda en vivo: publica, despublica, pisa el
   // stock de hasta 500 variantes y reescribe descripciones. Un POST sin body llega a
   // recategorizar la tienda entera. Alcanza con estar en el padrón —no hace falta ser admin—
@@ -343,7 +368,13 @@ module.exports = async (req, res) => {
     } catch (e) { return res.status(500).json({ error: e.message }); }
   }
 
-  const aplicar = req.method === 'POST';
+  // Auto-categorización por modelo de iPhone. GET = informe (no escribe), POST = aplica.
+  // ⚠️ El POST PELADO (sin `accion`) sigue aplicando porque es lo que manda hoy el botón
+  // "Aplicar" de la card de Categorías (`aplicarCategorias`, `lib/tncat/cliente.ts:45` del
+  // monitor). Se lo deja vivo A PROPÓSITO hasta que el monitor mande `accion:'auto-modelos'`
+  // y esté deployado: sacarlo antes rompe el botón. Cuando el monitor esté en la calle, se
+  // borra el `|| !accionBody` y el POST pelado pasa a ser un 400 como cualquier otro.
+  const aplicar = req.method === 'POST' && (accionBody === 'auto-modelos' || !accionBody);
 
   try {
     const [productos, modelCats] = await Promise.all([
