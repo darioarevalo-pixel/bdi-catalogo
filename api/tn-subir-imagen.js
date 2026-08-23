@@ -1,10 +1,16 @@
-// Carga de imágenes a TiendaNube (BDI/Zattia).
+// Carga de imágenes a TiendaNube (BDI/Zattia/Stunned).
 // GET  ?store=bdi&productos=1 → lista de productos (id, name, sku, colores) para los selectores.
 // POST {store, product_id, image (dataURL base64), filename, color?} → sube la imagen al producto
 //      y, si se pasa color, la asigna a las variantes de ese color.
+//
+// STUNNED es una LÍNEA del Gestión Nube de Zattia, pero su TIENDA es propia (app 30031, store
+// 7516263): otro token, otro catálogo. Mismo par de envs que ya usan tn-categorias y
+// tiendanube-audit. Era el único de los tres que no la conocía, y es el final del ciclo de la
+// sesión de fotos: sin esto la foto de Stunned no tiene por dónde subir.
 const STORES = {
-  bdi:    { storeId: process.env.TIENDANUBE_STORE_ID,        token: process.env.TIENDANUBE_TOKEN },
-  zattia: { storeId: process.env.TIENDANUBE_STORE_ID_ZATTIA, token: process.env.TIENDANUBE_TOKEN_ZATTIA },
+  bdi:     { storeId: process.env.TIENDANUBE_STORE_ID,          token: process.env.TIENDANUBE_TOKEN },
+  zattia:  { storeId: process.env.TIENDANUBE_STORE_ID_ZATTIA,   token: process.env.TIENDANUBE_TOKEN_ZATTIA },
+  stunned: { storeId: process.env.TIENDANUBE_STORE_ID_STUNNED || '7516263', token: process.env.TIENDANUBE_TOKEN_STUNNED },
 };
 const { exigirUsuario } = require('./_auth');
 
