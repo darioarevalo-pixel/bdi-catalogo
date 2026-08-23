@@ -236,7 +236,13 @@
   /* Fila 1: nombre y cartel NUEVO */
   .lista-foto .product-body { grid-area: body; display: flex; flex-direction: row; flex-wrap: nowrap; align-items: baseline; gap: 6px; text-align: left; padding: 0; }
   .lista-foto .product-name { order: 1; flex: 0 1 auto; min-width: 0; font-size: 13px; line-height: 1.25; white-space: normal; }
-  .lista-foto .product-cat, .lista-foto .product-code { display: none; }
+  .lista-foto .product-code { display: none; }
+  /* La categoría no aporta: el cliente ve la foto y ya sabe qué es. Y el
+     descuento se decía dos veces (el cartel rojo sobre la foto y el -40% al
+     lado del precio): queda el del precio, que muestra de cuánto a cuánto bajó.
+     El cartel OFERTA no es un duplicado y sigue sobre la foto. */
+  .product-card .product-cat { display: none; }
+  .product-card .product-img-wrap .product-img-badge:not(.oferta):not(.nuevo) { display: none; }
   .lista-foto .badge-nuevo-inline { order: 2; flex: 0 0 auto; align-self: center; }
   .lista-foto .product-img-wrap .product-img-badge.nuevo { display: none; }
   /* El descuento se decía dos veces: el cartelito rojo sobre la foto y el -40%
@@ -260,16 +266,16 @@
   .lista-foto .vcard-colors { grid-area: colors; align-content: flex-start; align-self: start; }
   /* Sin rótulo, el cliente ve unas pastillas sueltas y no entiende que tiene
      que elegir una. A veces son colores y a veces modelos: se nombran los dos. */
-  .lista-foto .vcard-colors::before { content: 'Elegí el color / modelo'; flex: 0 0 100%; font-size: 9px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 3px; }
+  .vcard-colors::before { content: 'Elegí el color / modelo'; flex: 0 0 100%; font-size: 9px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 3px; }
   .lista-foto .vcard-variants { grid-area: vars; padding-top: 6px; gap: 0; align-self: center; }
   /* Renglón de modelo compacto: el alto lo manda el botón de 32 (que no se
      toca, es lo que agarra el dedo). Lo que se saca es el aire: el relleno de
      5px baja a 2 y la cajita de cada modelo pasa a ser una línea divisoria. */
-  .lista-foto .modal-variant-row,
-  .product-card.abierta .modal-variant-row { gap: 4px; padding: 2px 4px; border: none; border-bottom: 1px solid var(--border); border-radius: 0; }
-  .lista-foto .modal-variant-row:last-child,
-  .product-card.abierta .modal-variant-row:last-child { border-bottom: none; }
-  .product-card.abierta .vcard-variants { gap: 0; }
+  .vcard-variants .modal-variant-row { gap: 4px; padding: 2px 4px; border: none; border-bottom: 1px solid var(--border); border-radius: 0; }
+  .vcard-variants .modal-variant-row:last-child { border-bottom: none; }
+  /* Sin cajita, el hover ya no puede marcarse con el borde: queda el fondo. */
+  .vcard-variants .modal-variant-row:hover { background: var(--bg); }
+  .vcard-variants { gap: 0; }
   /* La foto se centra en el alto de la ficha y acompaña: si el diseño tiene 2
      modelos la ficha es baja y la foto queda al medio; si tiene 16, también. */
   .lista-foto .product-img-wrap { align-self: stretch; }
