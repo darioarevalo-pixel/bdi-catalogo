@@ -131,6 +131,10 @@
   .search-wrap input:focus { border-color: var(--accent); }
   .search-icon { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--text-hint); font-size: 15px; pointer-events: none; }
   .sort-select { padding: 9px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; background: var(--surface); color: var(--text); outline: none; cursor: pointer; }
+  /* Cambiar la forma del catálogo. Solo en celular: en la compu entran las dos
+     columnas con los modelos al lado, así que no hay nada que elegir. */
+  .txt-celu { display: none; }
+  .btn-vista { display: none; flex-shrink: 0; align-items: center; gap: 5px; padding: 9px 12px; border: 1.5px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; font-weight: 600; background: var(--surface); color: var(--text); cursor: pointer; white-space: nowrap; }
   .btn-por-modelo { flex-shrink: 0; padding: 9px 14px; border: 1.5px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; font-weight: 600; background: var(--surface); color: var(--text); cursor: pointer; white-space: nowrap; transition: all 0.15s; }
   .btn-por-modelo:hover { border-color: var(--accent); }
   .btn-por-modelo.active { background: var(--accent); color: #fff; border-color: var(--accent); }
@@ -181,6 +185,100 @@
   .vcard-mobile-btn { display: none; margin: 0 6px 8px; padding: 9px; background: var(--accent); color: #fff; border: none; border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
   .vcard-mobile-btn:hover { opacity: 0.9; }
 
+  /* --- Un diseño por fila, con sus modelos debajo --------------------------
+     Dos caminos hacia la misma forma: la vista "Lista" (.lista-grid) la aplica
+     a TODAS las tarjetas, y en la grilla común una tarjeta se pone .abierta
+     cuando el cliente toca "Ver modelos" (ocupa las dos columnas y se despliega
+     ahí mismo, sin pop-up). El HTML de los modelos ya venía en la tarjeta: en
+     celular estaba escondido. Acá se muestra. */
+  .products-grid.lista-grid { grid-template-columns: 1fr !important; gap: 10px; }
+  .lista-grid .product-card, .product-card.abierta { display: grid; grid-template-columns: 92px 1fr; align-items: start; column-gap: 12px; padding: 10px; }
+  .product-card.abierta { grid-column: 1 / -1; }
+  .lista-grid .product-img-wrap, .product-card.abierta .product-img-wrap { width: 92px; height: 92px; border-radius: 8px; overflow: hidden; }
+  .lista-grid .product-body, .product-card.abierta .product-body { padding: 0; }
+  .lista-grid .vcard-colors, .lista-grid .vcard-variants,
+  .product-card.abierta .vcard-colors, .product-card.abierta .vcard-variants { grid-column: 1 / -1; display: flex !important; }
+  .lista-grid .vcard-variants, .product-card.abierta .vcard-variants { flex-direction: column; padding: 8px 0 0; }
+  .lista-grid .vcard-colors, .product-card.abierta .vcard-colors { flex-wrap: wrap; padding: 8px 0 0; }
+  .lista-grid .vcard-mobile-btn { display: none !important; }
+  /* El precio suelto y el cartel NUEVO al lado del nombre nacen apagados: los
+     prende la vista que los necesita. El NUEVO va junto al nombre en la lista y
+     en la tarjeta desplegada de la grilla, donde la foto es chica y el cartel
+     encima la tapaba entera. En la grilla cerrada sigue sobre la foto grande. */
+  .precio-lista { display: none; }
+  .badge-nuevo-inline { display: none; background: #16A34A; color: #fff; font-size: 9px; font-weight: 700; letter-spacing: 0.3px; padding: 2px 5px; border-radius: 4px; }
+  .lista-foto .badge-nuevo-inline, .product-card.abierta .badge-nuevo-inline { display: inline-block; }
+  .product-card.abierta .product-img-wrap .product-img-badge.nuevo { display: none; }
+  .product-card.abierta .product-body { display: flex; flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 3px 6px; }
+  .product-card.abierta .product-cat { flex: 0 0 100%; }
+  .product-card.abierta .product-name { order: 1; flex: 0 1 auto; }
+  .product-card.abierta .badge-nuevo-inline { order: 2; }
+  .product-card.abierta .product-code,
+  .product-card.abierta .product-price,
+  .product-card.abierta .product-price-wrap { order: 3; flex: 0 0 100%; }
+
+  /* --- Vista de lista: un diseño por fila -----------------------------------
+     La ficha se arma en tres franjas:
+       fila 1 (a lo ancho)  el nombre a la izquierda y el cartel NUEVO a la derecha
+       fila 2               el precio | arrancan los modelos (o los colores)
+       fila 3               la foto   | siguen los modelos
+     El precio comparte fila con el arranque de los modelos porque nunca es tan
+     largo como para llegar hasta esa columna: así no gasta un renglón propio.
+     La categoría no se muestra: con ver la foto ya se sabe qué es. */
+  .lista-foto .product-card { position: relative; grid-template-columns: 40% 1fr; column-gap: 10px;
+    grid-template-areas: "body body" "precio vars" "img vars";
+    /* La franja del precio se queda SOLO con lo que necesita y la de la foto se
+       lleva todo el resto. Sin esto, como los modelos abarcan las dos franjas,
+       el navegador le regalaba alto a la del precio y la foto caía al fondo. */
+    grid-template-rows: auto min-content 1fr; }
+  .lista-foto .product-card.con-colores { grid-template-areas: "body body" "precio colors" "img vars"; }
+
+  /* Fila 1: nombre y cartel NUEVO */
+  .lista-foto .product-body { grid-area: body; display: flex; flex-direction: row; flex-wrap: nowrap; align-items: baseline; gap: 6px; text-align: left; padding: 0; }
+  .lista-foto .product-name { order: 1; flex: 0 1 auto; min-width: 0; font-size: 13px; line-height: 1.25; white-space: normal; }
+  .lista-foto .product-cat, .lista-foto .product-code { display: none; }
+  .lista-foto .badge-nuevo-inline { order: 2; flex: 0 0 auto; align-self: center; }
+  .lista-foto .product-img-wrap .product-img-badge.nuevo { display: none; }
+  /* El descuento se decía dos veces: el cartelito rojo sobre la foto y el -40%
+     al lado del precio. Se queda el del precio, que va junto al precio viejo
+     tachado y al nuevo, o sea donde la cuenta se entiende. El cartel OFERTA no
+     es lo mismo y sigue sobre la foto. */
+  .lista-foto .product-img-wrap .product-img-badge:not(.oferta) { display: none; }
+  .product-card.abierta .product-img-wrap .product-img-badge:not(.oferta) { display: none; }
+
+  /* Fila 2, izquierda: el precio */
+  .lista-foto .precio-lista { display: block; grid-area: precio; justify-self: start; align-self: start; }
+  .lista-foto .precio-lista .product-price { font-size: 18px; margin: 0 !important; padding: 0 !important; letter-spacing: -0.3px; }
+  .lista-foto .precio-lista .product-price-wrap { margin: 0 !important; padding: 0 !important; gap: 4px; }
+  .lista-foto .product-body .product-price, .lista-foto .product-body .product-price-wrap { display: none !important; }
+
+  /* Fila 3, izquierda: la foto. No impone alto: se acomoda a lo que midan los
+     modelos, así una ficha de un solo modelo no queda estirada al pedo. */
+  .lista-foto .product-img-wrap { grid-area: img; width: 100%; height: 100%; min-height: 96px; }
+
+  /* Columna derecha: colores (si hay) y modelos */
+  .lista-foto .vcard-colors { grid-area: colors; align-content: flex-start; align-self: start; }
+  /* Sin rótulo, el cliente ve unas pastillas sueltas y no entiende que tiene
+     que elegir una. A veces son colores y a veces modelos: se nombran los dos. */
+  .lista-foto .vcard-colors::before { content: 'Elegí el color / modelo'; flex: 0 0 100%; font-size: 9px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 3px; }
+  .lista-foto .vcard-variants { grid-area: vars; padding-top: 6px; gap: 0; align-self: center; }
+  /* Renglón de modelo compacto: el alto lo manda el botón de 32 (que no se
+     toca, es lo que agarra el dedo). Lo que se saca es el aire: el relleno de
+     5px baja a 2 y la cajita de cada modelo pasa a ser una línea divisoria. */
+  .lista-foto .modal-variant-row,
+  .product-card.abierta .modal-variant-row { gap: 4px; padding: 2px 4px; border: none; border-bottom: 1px solid var(--border); border-radius: 0; }
+  .lista-foto .modal-variant-row:last-child,
+  .product-card.abierta .modal-variant-row:last-child { border-bottom: none; }
+  .product-card.abierta .vcard-variants { gap: 0; }
+  /* La foto se centra en el alto de la ficha y acompaña: si el diseño tiene 2
+     modelos la ficha es baja y la foto queda al medio; si tiene 16, también. */
+  .lista-foto .product-img-wrap { align-self: stretch; }
+  /* Los carteles NUEVO / -20% / "+6 fotos" están pensados para la foto grande
+     de la grilla: sobre una foto de 92px la tapan entera. Acá van en chico. */
+  .lista-grid .product-img-badge, .product-card.abierta .product-img-badge { top: 3px; left: 3px; font-size: 8px; padding: 2px 4px; border-radius: 3px; letter-spacing: 0; box-shadow: none; }
+  .lista-grid .product-imgs-badge, .product-card.abierta .product-imgs-badge { bottom: 3px; right: 3px; font-size: 8px; padding: 1px 5px; gap: 2px; }
+  .lista-grid .product-imgs-badge svg, .product-card.abierta .product-imgs-badge svg { width: 9px; height: 9px; }
+  .product-card.abierta .vcard-mobile-btn { grid-column: 1 / -1; margin: 8px 0 0; background: transparent; color: var(--text-muted); border: 1px solid var(--border-strong); }
   .products-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(195px, 1fr)); gap: 12px; align-items: stretch; }
   .products-grid.variants-grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
   .product-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; transition: box-shadow 0.15s; }
@@ -264,7 +362,14 @@
   .product-price.dif { color: var(--precio-dif); }
   .modal-price.dif { color: var(--precio-dif); }
   .modal-vqty-wrap { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
-  .modal-vqty-btn { width: 28px; height: 28px; border: none; border-radius: 50%; cursor: pointer; font-size: 18px; font-weight: 300; display: flex; align-items: center; justify-content: center; line-height: 1; transition: opacity 0.1s; }
+  /* El + y el − NO son letras: se dibujan con dos rayas (::before horizontal,
+     ::after vertical). Como letras, cada celular las tomaba de su tipografía
+     del sistema y caían corridas del centro. Así quedan clavadas siempre.
+     --vq-len = largo de la raya, --vq-bar = grosor. */
+  .modal-vqty-btn { width: 28px; height: 28px; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; position: relative; font-size: 0; line-height: 0; color: inherit; -webkit-tap-highlight-color: transparent; transition: opacity 0.1s; }
+  .modal-vqty-btn::before, .modal-vqty-btn::after { content: ''; position: absolute; top: 50%; left: 50%; background: currentColor; border-radius: 1px; }
+  .modal-vqty-btn::before { width: var(--vq-len, 11px); height: var(--vq-bar, 1.6px); transform: translate(-50%, -50%); }
+  .modal-vqty-btn.plus::after { width: var(--vq-bar, 1.6px); height: var(--vq-len, 11px); transform: translate(-50%, -50%); }
   .modal-vqty-btn.minus { background: var(--border-strong); color: var(--text-muted); }
   .modal-vqty-btn.minus:hover { background: #B0B7C0; }
   .modal-vqty-btn.plus { background: var(--accent); color: white; }
@@ -320,8 +425,26 @@
   .cart-variant-qty { font-size: 12px; color: var(--text); font-weight: 500; white-space: nowrap; }
   .cart-item-del { background: none; border: none; cursor: pointer; color: var(--text-hint); font-size: 14px; padding: 0 2px; transition: color 0.12s; line-height: 1; }
   .cart-item-del:hover { color: var(--danger); }
-  .drawer-footer { padding: 1.25rem 1.5rem; border-top: 1px solid var(--border); flex-shrink: 0; max-height: 75vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  /* El carrito son DOS hojas dentro del mismo panel: la hoja 1 es el pedido
+     (la lista) y la hoja 2 es cerrar la compra (cupón, total y datos). Nunca
+     se ven las dos juntas: antes convivían y el formulario le comía la
+     pantalla a la lista. Cuál se ve lo deciden las clases paso-1 / paso-2. */
+  .drawer-footer { padding: 1.25rem 1.5rem; flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .cart-drawer.paso-1 .drawer-footer, .cart-drawer.paso-1 .drawer-action-fin { display: none !important; }
+  .cart-drawer.paso-2 .drawer-body, .cart-drawer.paso-2 #drawer-action { display: none !important; }
   .drawer-header { flex-shrink: 0; }
+  .drawer-head-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .drawer-head-txt { min-width: 0; }
+  .drawer-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .drawer-back { width: 32px; height: 32px; flex-shrink: 0; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: transparent; cursor: pointer; font-size: 20px; line-height: 1; color: var(--text-muted); font-family: inherit; display: flex; align-items: center; justify-content: center; padding: 0 2px 2px 0; transition: background 0.12s; }
+  .drawer-back:hover { background: var(--bg); }
+  /* Barra pegada abajo del panel: nunca se desliza con el contenido. */
+  .drawer-action { display: flex; align-items: center; gap: 12px; padding: 12px 1.5rem; border-top: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
+  .drawer-action-tot { display: flex; flex-direction: column; line-height: 1.2; }
+  .drawer-action-lbl { font-size: 12px; color: var(--text-muted); }
+  .drawer-action-amt { font-size: 20px; font-weight: 700; color: var(--text); }
+  .drawer-action-btn { width: auto !important; flex: 1; max-width: 55%; margin-left: auto; }
+  .cart-vaciar { width: 100%; margin-top: 14px; background: none; border: none; color: var(--text-hint); font-family: inherit; font-size: 12px; text-decoration: underline; cursor: pointer; padding: 6px; }
   .total-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 1rem; }
   #subtotal-row, #descuento-row { margin-bottom: 4px; }
   .total-label { font-size: 13px; color: var(--text-muted); }
@@ -402,9 +525,50 @@
        se ocultan las variantes inline y se muestra el botón "Ver y pedir"
        (que abre el pop-up con todo el detalle). En compu queda inline como hoy. */
     .vcard-colors, .vcard-variants { display: none !important; }
+    /* El descuento se decía dos veces (sobre la foto y al lado del precio).
+       Queda el del precio, que muestra de cuánto a cuánto bajó. */
+    .product-img-wrap .product-img-badge:not(.oferta):not(.nuevo) { display: none; }
     .vcard-mobile-btn { display: block; }
-    .modal-vqty-btn { width: 24px; height: 24px; font-size: 15px; }
-    .modal-vqty-num { width: 26px; height: 24px; font-size: 12px; }
+    /* Botones de cantidad más grandes en celular: es lo que más se toca de
+       toda la compra. 32px de círculo = casi el doble de superficie que 24. */
+    /* La barra del total vive fija abajo: cada píxel que ocupa se lo saca al
+       catálogo, todo el tiempo. Las unidades pasan al lado del total en vez de
+       arriba (una línea en vez de dos) y se recorta el relleno. De 78 a ~50. */
+    .summary-bar { padding: 8px 14px; }
+    .summary-bar-left { flex-direction: row; align-items: baseline; gap: 7px; }
+    .summary-bar-total { font-size: 18px; }
+    .summary-bar-units { font-size: 11px; order: 2; }
+    .summary-bar-btn { padding: 9px 16px; font-size: 13px; }
+    body.has-summary-bar .wa-fab { bottom: 62px; }
+    /* Fila de arriba: el buscador es lo que más se usa y era lo más chico (84px
+       de 358). Ahora los dos botones se achican y el buscador se queda con lo
+       que sobra. "Por modelo" SIGUE en la pantalla principal: es un filtro que
+       el cliente usa, no algo para esconder en un menú. */
+    .btn-vista { display: flex; width: 40px; padding: 0; justify-content: center; font-size: 17px; }
+    .btn-por-modelo { padding: 9px 10px; font-size: 12px; }
+    .txt-compu { display: none; }
+    .txt-celu { display: inline; }
+    .search-wrap input { font-size: 16px; }
+    .modal-vqty-btn { width: 32px; height: 32px; --vq-len: 13px; --vq-bar: 1.8px; }
+    /* 16px de letra a propósito: por debajo de 16, el iPhone hace zoom solo
+       al tocar el campo y descuadra la pantalla. */
+    .modal-vqty-num { width: 38px; height: 32px; font-size: 16px; }
+    .modal-vqty-wrap { gap: 5px; }
+    /* NINGÚN campo que toque el cliente puede tener menos de 16px de letra:
+       por debajo de eso el iPhone hace zoom solo al tocarlo y deja la pantalla
+       corrida y agrandada, justo cuando está cargando sus datos para cerrar
+       la compra. 16px lo desactiva. Los selects también. */
+    .form-group input, .form-group select,
+    #search-input, #cupon-input, #codigo-input,
+    #client-payment, #client-delivery { font-size: 16px !important; }
+    /* El carrito era DOS zonas que se deslizaban por separado: la lista de
+       productos arriba y el formulario abajo, cada una con su propio scroll.
+       En una pantalla chica eso confunde (se arrastra y se mueve la que no
+       era, y el botón de confirmar parece no aparecer nunca). En celular pasa
+       a ser una sola tira: productos, total, datos y confirmar, de un tirón.
+       El título "Tu pedido" y la X quedan pegados arriba. */
+    .drawer-footer { padding: 1rem 1.25rem; }
+    .drawer-action { padding: 10px 1.25rem; }
     /* Variantes en celular: nombre arriba y "Últimas X" debajo (evita que se superpongan) */
     .modal-variant-info { flex-direction: column; align-items: flex-start; gap: 0; }
     .modal-variant-row { gap: 6px; padding: 5px 6px; flex-wrap: wrap; }
@@ -516,7 +680,8 @@
           <span class="search-icon">⌕</span>
           <input type="text" id="search-input" placeholder="Buscar productos..." oninput="renderProductosDebounced()" />
         </div>
-        <button type="button" id="btn-por-modelo" class="btn-por-modelo" onclick="toggleModeloView()" title="Ver fundas agrupadas por modelo de iPhone">📱 Ver por modelo</button>
+        <button type="button" id="btn-por-modelo" class="btn-por-modelo" onclick="toggleModeloView()" title="Ver fundas agrupadas por modelo de iPhone">📱 <span class="txt-compu">Ver por modelo</span><span class="txt-celu">Por modelo</span></button>
+        <button type="button" id="btn-vista" class="btn-vista" onclick="alternarVista()" title="Cambiar cómo se ve el catálogo"></button>
         <select class="sort-select" id="sort-select" onchange="renderProductos()" style="display:none">
           <option value="custom">Orden personalizado</option>
           <option value="stock-desc">Stock: mayor a menor</option>
@@ -529,6 +694,7 @@
           <span class="view-label">Vista</span>
           <select class="sort-select" id="view-select" onchange="setViewMode(this.value)" style="padding:7px 10px;font-size:12px">
             <option value="variants">Variantes</option>
+            <option value="lista">Lista</option>
             <option value="product">Producto</option>
           </select>
         </div>
@@ -568,9 +734,15 @@
 </div>
 
 <div class="overlay" id="overlay" onclick="cerrarCarrito();cerrarCatNav()"></div>
-<div class="cart-drawer" id="cart-drawer">
+<div class="cart-drawer paso-1" id="cart-drawer">
   <div class="drawer-header">
-    <h2>Tu pedido</h2>
+    <div class="drawer-head-left">
+      <button class="drawer-back" id="drawer-back" onclick="irAPedido()" style="display:none" aria-label="Volver al pedido">‹</button>
+      <div class="drawer-head-txt">
+        <h2 id="drawer-title">Tu pedido</h2>
+        <div class="drawer-sub" id="drawer-sub" style="display:none"></div>
+      </div>
+    </div>
     <button class="close-btn" onclick="cerrarCarrito()">×</button>
   </div>
   <div class="drawer-body" id="drawer-body">
@@ -627,8 +799,18 @@
       <input type="text" id="client-obs" placeholder="Ej: Enviar el jueves" />
     </div>
     <p class="note-small">Una vez confirmado el pedido, nuestro vendedor se contactará con vos para coordinar el pago y la entrega.</p>
+  </div>
+  <!-- Barra pegada abajo. En la hoja 1 (el pedido) muestra el total y lleva a
+       cerrar la compra; en la hoja 2 (los datos) es el botón de confirmar. -->
+  <div class="drawer-action" id="drawer-action" style="display:none">
+    <div class="drawer-action-tot">
+      <span class="drawer-action-lbl">Total</span>
+      <span class="drawer-action-amt" id="action-total">$0</span>
+    </div>
+    <button class="btn btn-accent drawer-action-btn" onclick="irACerrar()">Continuar</button>
+  </div>
+  <div class="drawer-action drawer-action-fin" id="drawer-action-2" style="display:none">
     <button class="btn btn-accent" onclick="confirmarPedido()" id="btn-confirmar">Confirmar pedido</button>
-    <button type="button" onclick="vaciarCarrito()" style="width:100%;margin-top:8px;background:none;border:none;color:var(--text-hint);font-family:inherit;font-size:12px;text-decoration:underline;cursor:pointer;padding:6px">Vaciar carrito</button>
   </div>
 </div>
 
@@ -710,6 +892,22 @@ let cart = loadCart();
 let filtro = 'todos';
 let categoria = 'todas';
 let viewMode = 'variants';
+// Permite abrir el catálogo directo en una vista con ?vista=lista (o variants /
+// product). Sirve para comparar formas sin tocar nada; sin el parámetro, todo
+// queda como siempre.
+try {
+  // La vista de lista es una respuesta a la pantalla angosta del celular: en la
+  // compu entran las dos columnas con los modelos al lado, así que ahí se
+  // arranca en la grilla de siempre. Y la preferencia guardada es del teléfono:
+  // el botón que la graba solo existe ahí.
+  if (window.matchMedia('(max-width: 700px)').matches) {
+    const _guardada = localStorage.getItem('bdiVista');
+    viewMode = ['variants', 'lista2'].includes(_guardada) ? _guardada : 'lista2';
+  }
+  // ?vista=... manda por encima de todo: sirve para probar formas.
+  const _v = new URLSearchParams(location.search).get('vista');
+  if (['variants', 'lista', 'lista2', 'product'].includes(_v)) viewMode = _v;
+} catch (e) {}
 let prevViewMode = 'variants'; // modo al que volver al salir de "por modelo"
 let modeloSel = null;          // modelo de iPhone elegido en la vista "por modelo" (null = mostrar selector)
 let pmSort = 'nuevo';          // orden dentro de un modelo: 'nuevo' | 'viejo' | 'precio-asc' | 'precio-desc'
@@ -1227,12 +1425,54 @@ function renderBanners() {
     : '';
 
   section.innerHTML = '<div class="banners-track">' + slides + navs + dots + '</div>';
+  ajustarAltoBanner();
   bannerIdx = 0;
   if (bannerTimer) clearInterval(bannerTimer);
   if (banners.length > 1) {
     bannerTimer = setInterval(() => setBannerSlide(1, true), 5000);
   }
 }
+
+// En celular el marco del banner era 4:3 fijo, pero las imágenes son 2:1: la
+// foto se dibujaba en el medio y quedaban dos franjas grises, arriba y abajo.
+// En vez de adivinar una proporción, el marco toma la de la imagen de verdad.
+// En compu se deja como estaba (ahí el ancho manda y hay tope de alto).
+let bannerResizeListo = false;
+function ajustarAltoBanner() {
+  const track = document.querySelector('.banners-track');
+  const img = track && track.querySelector('img');
+  if (!track || !img) return;
+  const aplicar = () => {
+    if (!img.naturalWidth || !img.naturalHeight) return;
+    track.style.aspectRatio = window.matchMedia('(max-width: 700px)').matches
+      ? img.naturalWidth + ' / ' + img.naturalHeight : '';
+  };
+  if (img.complete) aplicar(); else img.addEventListener('load', aplicar, { once: true });
+  if (!bannerResizeListo) {   // una sola vez: si no, se apila un oyente por dibujado
+    bannerResizeListo = true;
+    window.addEventListener('resize', () => ajustarAltoBanner());
+  }
+}
+
+// Deslizar el banner con el dedo. En celular las flechitas están ocultas (no
+// entran), así que hasta ahora la única forma de ver los otros era esperar los
+// 5 segundos. Al deslizar cortamos el pase solo: si el cliente tomó el control,
+// que no se le mueva la foto en la mano.
+let bnTx = null, bnTy = null;
+document.addEventListener('touchstart', function (e) {
+  if (!e.target.closest || !e.target.closest('.banners-track') || e.touches.length !== 1) return;
+  bnTx = e.touches[0].clientX; bnTy = e.touches[0].clientY;
+}, { passive: true });
+document.addEventListener('touchend', function (e) {
+  if (bnTx === null) return;
+  const t = e.changedTouches[0];
+  const dx = t.clientX - bnTx, dy = t.clientY - bnTy;
+  bnTx = null;
+  if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+    if (bannerTimer) { clearInterval(bannerTimer); bannerTimer = null; }
+    setBannerSlide(dx < 0 ? 1 : -1, true);
+  }
+}, { passive: true });
 
 function setBannerSlide(target, isRelative) {
   const slides = document.querySelectorAll('#banners-section .banner-slide');
@@ -1989,6 +2229,7 @@ function renderProductosDebounced() {
 }
 
 function renderProductos() {
+  pintarBotonVista();
   const q = ($('search-input')?.value || '').toLowerCase();
   const sort = $('sort-select')?.value || 'custom';
   let prods = allProducts.filter(p => {
@@ -2039,11 +2280,13 @@ function renderProductos() {
     return;
   }
   grid.classList.toggle('variants-grid', viewMode === 'variants');
+  grid.classList.toggle('lista-grid', viewMode === 'lista' || viewMode === 'lista2');
+  grid.classList.toggle('lista-foto', viewMode === 'lista2');
   if (!prods.length) {
     grid.innerHTML = '<div class="state-msg"><div class="icon">⊘</div><h3>Sin resultados</h3><p>Probá con otro filtro o término de búsqueda.</p></div>';
     return;
   }
-  if (viewMode === 'variants') {
+  if (viewMode === 'variants' || viewMode === 'lista' || viewMode === 'lista2') {
     grid.innerHTML = renderVariantesGrid(prods);
     return;
   }
@@ -2077,10 +2320,30 @@ function renderProductos() {
   }).join('');
 }
 
+// El cliente elige cómo ver el catálogo y se lo recordamos para la próxima.
+// Arranca en la fila con foto grande: es la que deja ver los modelos sin abrir
+// nada. El que prefiere pasear mirando fotos vuelve a la grilla con un toque.
+function alternarVista() {
+  const nueva = viewMode === 'lista2' ? 'variants' : 'lista2';
+  try { localStorage.setItem('bdiVista', nueva); } catch (e) {}
+  setViewMode(nueva);
+}
+
+function pintarBotonVista() {
+  const b = $('btn-vista'); if (!b) return;
+  // En "Ver por modelo" no hay forma que elegir: el botón desaparece.
+  b.style.display = viewMode === 'modelo' ? 'none' : '';
+  const chico = window.matchMedia('(max-width: 700px)').matches;
+  const enLista = viewMode === 'lista2';
+  b.innerHTML = enLista ? (chico ? '▦' : '▦ Ver en grilla') : (chico ? '☰' : '☰ Ver en lista');
+  b.title = enLista ? 'Ver el catálogo en grilla' : 'Ver el catálogo en lista';
+}
+
 function setViewMode(mode) {
   viewMode = mode;
   const sel = $('view-select');
   if (sel) sel.value = mode;
+  pintarBotonVista();
   renderProductos();
 }
 
@@ -2378,30 +2641,47 @@ function renderVariantesGrid(prods) {
       '</div>';
     }
 
+    const precioHTML = especial
+      ? '<div class="product-price" style="margin-top:4px">' + formatPrecio(getPrecio(p)) + '</div>'
+      : pctDisc > 0
+      ? '<div class="product-price-wrap" style="margin-top:4px"><span class="product-price-old">' + formatPrecio(precioAnt) + '</span><span class="product-price">' + formatPrecio(precio) + '</span><span class="product-discount-badge">-' + pctDisc + '%</span></div>'
+      : '<div class="product-price" style="margin-top:4px">' + formatPrecio(precio) + '</div>';
+
     cards.push(
-      '<div class="product-card" style="cursor:default">' +
-        '<div class="product-img-wrap" style="cursor:pointer" onclick="abrirDesdeCard(' + id + ')">' +
+      '<div class="product-card' + (dims ? ' con-colores' : '') + '" style="cursor:default">' +
+        '<div class="product-img-wrap" style="cursor:pointer" onclick="abrirDesdeCard(' + id + ',this)">' +
           (esOferta(p) ? '<div class="product-img-badge oferta">OFERTA</div>' : pctDisc > 0 ? '<div class="product-img-badge">-' + pctDisc + '%</div>' : '') +
           nuevoBadge(id) +
           gridImgTag(img, nombre, 'card', 400) +
           imgsBadge(imgs) +
         '</div>' +
-        '<div class="product-body" style="cursor:pointer;flex:0 0 auto" onclick="abrirDesdeCard(' + id + ')">' +
+        '<div class="product-body" style="cursor:pointer;flex:0 0 auto" onclick="abrirDesdeCard(' + id + ',this)">' +
+          (nuevoBadge(id) ? '<span class="badge-nuevo-inline">NUEVO</span>' : '') +
           (cat ? '<div class="product-cat">' + cat + '</div>' : '') +
           '<div class="product-name">' + nombre + '</div>' +
           (cod ? '<div class="product-code">' + cod + '</div>' : '') +
-          (especial
-            ? '<div class="product-price" style="margin-top:4px">' + formatPrecio(getPrecio(p)) + '</div>'
-            : pctDisc > 0
-            ? '<div class="product-price-wrap" style="margin-top:4px"><span class="product-price-old">' + formatPrecio(precioAnt) + '</span><span class="product-price">' + formatPrecio(precio) + '</span><span class="product-discount-badge">-' + pctDisc + '%</span></div>'
-            : '<div class="product-price" style="margin-top:4px">' + formatPrecio(precio) + '</div>') +
+          precioHTML +
         '</div>' +
+        // El mismo precio, suelto: en la vista de lista va arriba a la derecha,
+        // encabezando la columna de los modelos. En las otras vistas no se ve.
+        '<div class="precio-lista">' + precioHTML + '</div>' +
         variantsHTML +
-        (variantes.length > 0 ? '<button class="vcard-mobile-btn" onclick="abrirModal(' + id + ');event.stopPropagation()">Ver y pedir</button>' : '') +
+        (variantes.length > 0 ? '<button class="vcard-mobile-btn" onclick="toggleCard(this);event.stopPropagation()">Ver modelos ▾</button>' : '') +
       '</div>'
     );
   }
   return cards.join('');
+}
+
+// Despliega los modelos de un diseño DENTRO de la grilla: la tarjeta pasa a
+// ocupar las dos columnas y muestra la lista que ya tenía escondida. Así el
+// cliente no necesita abrir el pop-up para ver si está su modelo.
+function toggleCard(btn) {
+  const card = btn.closest('.product-card');
+  if (!card) return;
+  const abierta = card.classList.toggle('abierta');
+  btn.textContent = abierta ? 'Ocultar modelos ▴' : 'Ver modelos ▾';
+  if (abierta) card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
 // Cambia la cantidad directamente en el carrito y actualiza el input
@@ -2492,7 +2772,29 @@ function lbGo(dir) {
   $('lb-img').src = imgs[lbIdx];
   $('lb-counter').textContent = imgs.length > 1 ? (lbIdx + 1) + ' / ' + imgs.length : '';
 }
+// --- Deslizar con el dedo para pasar de foto -------------------------------
+// Va sobre document (no sobre el visor) para no depender de cuándo se dibuja.
+// Solo cuenta si el gesto fue claramente horizontal: así deslizar en diagonal
+// o tocar para cerrar no cambian la foto sin querer.
+let lbTx = null, lbTy = null, lbSwiped = false;
+document.addEventListener('touchstart', function (e) {
+  const lb = $('lightbox');
+  if (!lb || !lb.classList.contains('open') || e.touches.length !== 1) return;
+  lbTx = e.touches[0].clientX; lbTy = e.touches[0].clientY; lbSwiped = false;
+}, { passive: true });
+document.addEventListener('touchend', function (e) {
+  if (lbTx === null) return;
+  const t = e.changedTouches[0];
+  const dx = t.clientX - lbTx, dy = t.clientY - lbTy;
+  lbTx = null;
+  if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+    lbSwiped = true;   // para que el toque no cierre el visor al soltar
+    lbGo(dx < 0 ? 1 : -1);
+  }
+}, { passive: true });
+
 function closeLightbox(e) {
+  if (lbSwiped) { lbSwiped = false; return; }
   if (e && e.target !== $('lightbox') && e.target !== $('lb-img')) return;
   $('lightbox').classList.remove('open');
   // Si el modal de producto sigue abierto detrás, mantener el scroll bloqueado;
@@ -2627,11 +2929,23 @@ function abrirModal(id) {
   document.body.style.overflow = 'hidden';
 }
 
-// Al tocar una tarjeta en la vista de variantes:
-// - En celular las variantes están ocultas → abrimos el pop-up de pedido completo.
-// - En compu las variantes ya se ven inline → abrimos solo la galería.
-function abrirDesdeCard(id) {
-  if (window.matchMedia('(max-width: 700px)').matches) abrirModal(id);
+// Al tocar una tarjeta: la pregunta NO es si estamos en celular, es si los
+// modelos ya están a la vista. Si lo están —vista de lista, o una tarjeta
+// desplegada en la grilla— el pop-up de pedido solo repetiría lo que el cliente
+// ya tiene delante: abrimos las fotos, que es lo que fue a buscar.
+function abrirDesdeCard(id, el) {
+  const card = el && el.closest ? el.closest('.product-card') : null;
+  const modelosALaVista = viewMode === 'lista' || viewMode === 'lista2'
+    || (card && card.classList.contains('abierta'));
+  const enCelular = window.matchMedia('(max-width: 700px)').matches;
+  const btnDesplegar = card && card.querySelector('.vcard-mobile-btn');
+  // En celular, tocar una tarjeta cerrada DESPLIEGA sus modelos ahí mismo, lo
+  // mismo que el botón. Antes abría el pop-up de pedido: dos caminos para lo
+  // mismo, con dos estilos distintos y dos lugares donde arreglar cada cambio.
+  if (enCelular && !modelosALaVista && btnDesplegar) { toggleCard(btnDesplegar); return; }
+  // Con los modelos delante, el pop-up intermedio no aporta: se va derecho a la
+  // foto lo más grande que da la pantalla, que es lo que el cliente fue a ver.
+  if (enCelular) abrirFotoModelo(id);
   else abrirModalSoloGaleria(id);
 }
 
@@ -2723,6 +3037,8 @@ function updateCartUI() {
   } catch (e) { console.error('updateCartUI: error en cupón/oferta (se ignora):', e); }
 
   if ($('total-amount')) $('total-amount').textContent = formatPrecio(total);
+  if ($('action-total')) $('action-total').textContent = formatPrecio(total);
+  actualizarCabeceraPedido();
 
   // Barra flotante — se actualiza SIEMPRE (no depende del bloque de arriba).
   const bar = $('summary-bar');
@@ -2775,12 +3091,19 @@ function renderCartItems() {
   const items = Object.values(cart);
   const body = $('drawer-body');
   const footer = $('drawer-footer');
+  const action = $('drawer-action'), action2 = $('drawer-action-2');
   if (!items.length) {
     body.innerHTML = '<div class="cart-empty">El pedido está vacío.</div>';
     footer.style.display = 'none';
+    if (action) action.style.display = 'none';
+    if (action2) action2.style.display = 'none';
+    irAPedido();  // sin pedido no hay nada que cerrar: se vuelve solo a la hoja 1
     return;
   }
   footer.style.display = 'block';
+  // Las dos se prenden; cuál se ve de verdad lo decide la clase paso-1/paso-2.
+  if (action) action.style.display = 'flex';
+  if (action2) action2.style.display = 'flex';
   // Interruptor de cupones: si están apagados, ocultamos la caja al abrir el
   // carrito (defensivo, por si updateCartUI aún no corrió y quedaría el CSS default).
   if (!adminConfig.mostrarCupones) {
@@ -2818,7 +3141,7 @@ function renderCartItems() {
         (g.variantes.length > 1 ? '<div class="cart-item-subtotal">' + formatPrecio(subtotal) + '</div>' : '') +
       '</div>' +
     '</div>';
-  }).join('');
+  }).join('') + '<button type="button" class="cart-vaciar" onclick="vaciarCarrito()">Vaciar carrito</button>';
 }
 
 function abrirWhatsApp() {
@@ -2835,13 +3158,62 @@ function cerrarConfirm() {
 function abrirCarrito() {
   $('overlay').classList.add('open');
   $('cart-drawer').classList.add('open');
+  irAPedido();  // se entra siempre por la hoja del pedido
   renderCartItems();
+  actualizarCabeceraPedido();
 }
 
 function cerrarCarrito() {
+  irAPedido();
   $('overlay').classList.remove('open');
   $('cart-drawer').classList.remove('open');
 }
+
+// --- Las dos hojas del carrito ---------------------------------------------
+// Hoja 1 = el pedido (la lista). Hoja 2 = cerrar la compra (cupón y datos).
+// Es el MISMO panel cambiando de contenido: no se navega a otra página, así
+// no hay recarga ni riesgo de perder el carrito a mitad de camino.
+function pasoActual() { return $('cart-drawer')?.classList.contains('paso-2') ? 2 : 1; }
+
+function actualizarCabeceraPedido() {
+  const paso = pasoActual();
+  const t = $('drawer-title'), sub = $('drawer-sub'), back = $('drawer-back');
+  if (t) t.textContent = paso === 2 ? 'Cerrar compra' : 'Tu pedido';
+  if (back) back.style.display = paso === 2 ? 'flex' : 'none';
+  if (sub) {
+    const units = Object.values(cart).reduce((n, i) => n + i.qty, 0);
+    const monto = $('total-amount') ? $('total-amount').textContent : '';
+    sub.textContent = units ? units + (units === 1 ? ' unidad · ' : ' unidades · ') + monto : '';
+    sub.style.display = (paso === 2 && units) ? 'block' : 'none';
+  }
+}
+
+function irACerrar() {
+  if (!Object.keys(cart).length) return;
+  const dr = $('cart-drawer');
+  dr.classList.remove('paso-1'); dr.classList.add('paso-2');
+  const f = $('drawer-footer'); if (f) f.scrollTop = 0;
+  actualizarCabeceraPedido();
+  // El "atrás" del teléfono debe volver al pedido, NO sacar al cliente del
+  // catálogo haciéndole creer que perdió todo. Por eso anotamos el paso.
+  try { history.pushState({ bdiPaso: 2 }, ''); } catch (e) {}
+}
+
+function irAPedido(desdeAtras) {
+  const dr = $('cart-drawer'); if (!dr) return;
+  const veniaDeCerrar = dr.classList.contains('paso-2');
+  dr.classList.remove('paso-2'); dr.classList.add('paso-1');
+  actualizarCabeceraPedido();
+  // Si volvió con la flecha (y no con el atrás del teléfono), sacamos la marca
+  // que habíamos dejado, para que el historial no quede con pasos fantasma.
+  if (veniaDeCerrar && !desdeAtras) {
+    try { if (history.state && history.state.bdiPaso === 2) history.back(); } catch (e) {}
+  }
+}
+
+window.addEventListener('popstate', function () {
+  if (pasoActual() === 2) irAPedido(true);
+});
 
 // Válvula de escape: si un carrito queda trabado (p. ej. guardado hace días),
 // vaciarlo de una en vez de tener que sacar producto por producto.
