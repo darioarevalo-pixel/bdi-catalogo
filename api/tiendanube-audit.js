@@ -178,6 +178,12 @@ function mapProduct(p, catMap, incluirVariantes) {
         valores: vals,                                                  // ej. ["iPhone 16 - Azul"] o ["Azul"]
         color: _colorDeVariante(v),                                     // color para agrupar/vincular
         image_url: v.image_id != null ? (imgById[v.image_id] || null) : null,  // foto PROPIA de la variante
+        // Desde cuándo existe ESTA variante. El `created_at` del producto no sirve para medir la
+        // espera de una foto: medido el 24-ago-2026, el 85% (Zattia) y el 94% (BDI) de la cola son
+        // productos que YA tienen fotos y a los que les falta la de un color — un color que puede
+        // haberse agregado ayer a un producto de dos anos. Con la fecha del producto, la
+        // antiguedad de esa espera es una cota superior, no la espera.
+        created_at: v.created_at || null,
         price: pr,
         stock: v.stock != null ? v.stock : null,                        // stock en TN (null = infinito/no gestionado)
       };
