@@ -83,6 +83,46 @@ function esLinkViejoTolerado(pedido) {
   return !(pedido && pedido.conClave);
 }
 
+// ---------------------------------------------------------------------------
+// LOS FALTANTES (qué se le cayó del carrito por stock)
+//
+// El catálogo verifica el stock recién al confirmar. Lo que no alcanza se le
+// borra del carrito al cliente y hasta ahora moría ahí: el pedido que llegaba
+// no tenía ninguna marca de que había pedido más. Ahora el navegador manda esa
+// lista pegada al pedido, y el panel la muestra.
+//
+// Dos recaudos, porque este POST no pide contraseña (lo hace el navegador del
+// cliente): se recorta a lo que se va a mostrar y nada más —campo por campo, sin
+// copiar el objeto entero— y se le pone un tope de renglones. Y no se le
+// devuelve a quien abre el pedido con el link: es información nuestra, no del
+// cliente, y en la página del pedido no pinta nada.
+// ---------------------------------------------------------------------------
+const MAX_FALTANTES = 100;
+
+function limpiarFaltantes(lista) {
+  if (!Array.isArray(lista)) return [];
+  const texto = (v, max) => String(v == null ? '' : v).slice(0, max);
+  const entero = (v) => {
+    const n = Math.round(Number(v));
+    return Number.isFinite(n) && n >= 0 ? Math.min(n, 999999) : 0;
+  };
+  return lista.slice(0, MAX_FALTANTES).map(f => ({
+    nombre: texto(f && f.nombre, 200),
+    variante: texto(f && f.variante, 120),
+    pedido: entero(f && f.pedido),
+    disponible: entero(f && f.disponible),
+    motivo: texto(f && f.motivo, 40),
+  })).filter(f => f.nombre || f.variante);
+}
+
+/** El pedido tal como se le puede mostrar al cliente: sin los faltantes. */
+function sinFaltantes(pedido) {
+  if (!pedido || !pedido.faltantes) return pedido;
+  const copia = Object.assign({}, pedido);
+  delete copia.faltantes;
+  return copia;
+}
+
 // Normaliza el id para que la clave en KV sea siempre segura.
 function clave(id) {
   return 'pedido:' + String(id).replace(/[^a-zA-Z0-9_-]/g, '');
@@ -110,6 +150,65 @@ async function gnGet(path) {
   } catch (e) { return null; }
 }
 
+// ---------------------------------------------------------------------------
+// LA FOTO DE UN PRODUCTO QUE SE AGREGÓ DESPUÉS
+//
+// El link del pedido se puede reusar: se agregan renglones a la venta en Gestión
+// Nube y al abrirlo con ?refresh=1 aparecen. Pero salían SIN FOTO, porque la
+// única fuente de fotos era el pedido guardado —lo que el cliente había puesto
+// en el carrito— y un producto que nunca estuvo en ese carrito no figuraba.
+//
+// Ahora se busca en tres escalones, del más barato al más caro:
+//   1. Por producto + variante, como antes (el mismo renglón de siempre).
+//   2. Por producto solo: si le agregaron OTRO color de algo que ya estaba,
+//      sirve la misma foto y no cuesta una consulta.
+//   3. Recién ahí se le pregunta a Gestión Nube, de a uno.
+//
+// El escalón 3 tiene freno doble —tope de productos y reloj— porque esta función
+// corre con 10 segundos de techo (vercel.json) y Gestión Nube corta si se le va
+// muy rápido. Lo que se trae queda GUARDADO en el pedido, así que el costo se
+// paga una sola vez por producto: si en un refresco quedan fotos afuera, el
+// siguiente las completa sin repetir las que ya tiene.
+// ---------------------------------------------------------------------------
+const MAX_FOTOS_NUEVAS = 6;      // productos nuevos a los que se les busca foto por vez
+const PRESUPUESTO_FOTOS_MS = 5000; // reloj: lo que queda de los 10 s es para lo demás
+const PAUSA_FOTOS_MS = 250;      // aire entre consultas, para no hacerle ráfaga a GN
+
+/** La primera foto utilizable de un producto de GN, mire donde mire la API. */
+function imagenDeProductoGN(p) {
+  if (!p) return '';
+  const directa = p.image_url || p.imagen_url || p.imagen || p.image || p.photo || p.foto;
+  if (typeof directa === 'string' && directa) return directa;
+  for (const lista of [p.images, p.imagenes, p.fotos]) {
+    if (!Array.isArray(lista) || !lista.length) continue;
+    const f = lista[0];
+    const url = typeof f === 'string' ? f : (f && (f.url || f.src || f.path || f.ruta));
+    if (url) return String(url);
+  }
+  return '';
+}
+
+const dormir = (ms) => new Promise(r => setTimeout(r, ms));
+
+/** Busca en GN la foto de cada id, de a uno y sin apurar. Devuelve id → url. */
+async function buscarFotos(ids) {
+  const fotos = {};
+  const hasta = Date.now() + PRESUPUESTO_FOTOS_MS;
+  let n = 0;
+  for (const id of ids) {
+    if (n >= MAX_FOTOS_NUEVAS || Date.now() > hasta) break;
+    n++;
+    // Si esta consulta falla, se sigue con la próxima: un producto sin foto no
+    // puede voltear el refresco entero del pedido.
+    const r = await gnGet('/productos/ver/' + encodeURIComponent(id) + '?include_images=1');
+    const prod = (r && r.data) ? r.data : r;
+    const url = imagenDeProductoGN(prod);
+    if (url) fotos[id] = url;
+    if (n < ids.length) await dormir(PAUSA_FOTOS_MS);
+  }
+  return fotos;
+}
+
 // Relee la venta desde GN y devuelve el pedido actualizado (o null si no se pudo).
 // Conserva los datos del cliente del snapshot (GN no los guarda igual) y reusa
 // la foto de cada ítem por (nombre|variante). El N° del pedido = number de GN;
@@ -128,21 +227,43 @@ async function refrescarDesdeGN(numero, snap) {
   // foto buena con un pedido en blanco si la venta se borró o quedó sin ítems).
   if (!venta || !Array.isArray(venta.items) || venta.items.length === 0) return null;
 
-  // Foto previa por (nombre|variante) para no perder las miniaturas.
-  const imgPrev = {};
-  ((snap && snap.items) || []).forEach(i => { imgPrev[(i.nombre || '') + '|' + (i.variante || '')] = i.img || ''; });
+  // Fotos que ya teníamos, indexadas de tres formas: por id de producto (lo más
+  // confiable, pero los pedidos viejos no lo guardan), por producto+variante y
+  // por producto solo.
+  const imgPorPid = {}, imgPrev = {}, imgPorNombre = {};
+  ((snap && snap.items) || []).forEach(i => {
+    if (!i.img) return;
+    if (i.pid) imgPorPid[i.pid] = i.img;
+    imgPrev[(i.nombre || '') + '|' + (i.variante || '')] = i.img;
+    if (!imgPorNombre[i.nombre || '']) imgPorNombre[i.nombre || ''] = i.img;
+  });
 
   const items = venta.items.map(it => {
     const nombre = it.product_name || (it.product && it.product.name) || '';
     const variante = it.size || (it.size_info && it.size_info.name) || '';
+    const pid = it.product_id || (it.product && it.product.id) || null;
     return {
       nombre,
       variante,
       cantidad: it.quantity || 0,
       precio: it.unit_price || 0,
-      img: imgPrev[nombre + '|' + variante] || '',
+      // `pid` se guarda para que el próximo refresco cruce por id y no por
+      // nombre: si en GN le corrigen el nombre al producto, por nombre se
+      // perdía la foto y había que ir a buscarla de nuevo.
+      pid,
+      img: (pid && imgPorPid[pid]) || imgPrev[nombre + '|' + variante] || imgPorNombre[nombre] || '',
     };
   });
+
+  // Los que quedaron sin foto: se le pregunta a GN, con freno. Se piden una sola
+  // vez por producto aunque tenga varios renglones (dos colores del mismo modelo).
+  const sinFoto = [...new Set(items.filter(i => !i.img && i.pid).map(i => i.pid))];
+  if (sinFoto.length) {
+    try {
+      const fotos = await buscarFotos(sinFoto);
+      items.forEach(i => { if (!i.img && fotos[i.pid]) i.img = fotos[i.pid]; });
+    } catch (e) { /* sin fotos nuevas, pero el pedido se actualiza igual */ }
+  }
   const subtotal = items.reduce((s, i) => s + (i.precio || 0) * (i.cantidad || 0), 0);
   // Total REAL de GN: respeta descuentos/ajustes cargados a nivel venta (el campo
   // `discount` de GN no baja los renglones, así que sumarlos ignoraría el descuento).
@@ -213,6 +334,9 @@ module.exports = async (req, res) => {
             total: p.total || 0,
             subtotal: p.subtotal || 0,
             nItems: Array.isArray(p.items) ? p.items.length : 0,
+            // Solo el número: alcanza para el aviso del listado. El detalle se
+            // pide con ?id= cuando el admin despliega ese pedido.
+            nFaltantes: Array.isArray(p.faltantes) ? p.faltantes.length : 0,
           });
         });
       }
@@ -247,11 +371,11 @@ module.exports = async (req, res) => {
             // Marca de "sincronizado ahora" SOLO en la respuesta (no se guarda),
             // para que la página muestre "Actualizado" únicamente si releyó de GN.
             fresco.sincronizado = true;
-            return res.json(fresco);
+            return res.json(esAdmin(req) ? fresco : sinFaltantes(fresco));
           }
         } catch (e) { /* cae al snapshot */ }
       }
-      return res.json(pedido);
+      return res.json(esAdmin(req) ? pedido : sinFaltantes(pedido));
     }
 
     // Guardar un pedido cuando el cliente confirma.
@@ -270,6 +394,11 @@ module.exports = async (req, res) => {
       // La marca que separa "de antes" de "de ahora". El link que se le entrega a
       // este cliente YA lleva la clave, así que a este pedido sí se le puede exigir.
       pedido.conClave = true;
+      // Lo manda el navegador sin contraseña: se guarda recortado o no se guarda.
+      if (pedido.faltantes) {
+        const f = limpiarFaltantes(pedido.faltantes);
+        if (f.length) pedido.faltantes = f; else delete pedido.faltantes;
+      }
       const cuerpo = JSON.stringify(pedido);
       if (cuerpo.length > 400_000) return res.status(400).json({ error: 'El detalle del pedido es demasiado grande' });
 

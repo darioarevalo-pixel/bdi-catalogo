@@ -920,6 +920,17 @@ let pmSort = 'nuevo';          // orden dentro de un modelo: 'nuevo' | 'viejo' |
 let references = null;
 let adminConfig = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, mostrarCupones: false, minPurchase: 0, referencePrices: {}, variantPrices: {}, newProducts: [], cupones: [], ofertaMargen: 0, descuentoBase: 15, excepciones: {}, apagados: [], codigosAcceso: [], topes: {}, descuentoMax: {}, descuentoMaxNota: '', avisarDescuentoMax: false };
 let cuponAplicado = null; // cupón aplicado en el carrito (objeto) o null
+
+// Lo que el stock le fue sacando del carrito mientras armaba ESTE pedido.
+//
+// Antes esto moría en la pantalla del cliente: el cartel de faltantes le
+// borraba el renglón, él confirmaba con lo que quedaba y del lado de acá
+// llegaba un pedido normal, sin ninguna marca de que había pedido más. La
+// pregunta "¿qué me quiso comprar y no le pude vender?" no tenía respuesta.
+//
+// Se acumula (no se pierde al cerrar el cartel, y aguanta dos recortes
+// seguidos) y viaja pegado al pedido cuando confirma. Se vacía recién ahí.
+let faltantesSesion = [];
 let codigoAplicado = null; // código de "lista mejor" aplicado: { codigo, cliente, descuentoBase, excepciones } o null
 const CODIGO_LS_KEY = 'bdi_codigo_lista_mejor';
 
@@ -3359,6 +3370,8 @@ async function confirmarPedido() {
         // lista. Se congela acá (no se recalcula al abrir el link) porque el
         // pedido tiene que mostrar lo que valía en el momento de confirmarlo.
         items: items.map(i => ({ nombre: i.nombre, variante: i.varNombre || '', cantidad: i.qty, precio: i.precio, img: i.img || '', nota: notaDescuentoTexto(i.id, i.sizeId) })),
+        // Lo que se le cayó por stock en el camino. Solo lo ve el panel.
+        faltantes: faltantesSesion,
       };
       try {
         // El servidor devuelve la clave del link. Sin ella el pedido no se abre:
@@ -3372,6 +3385,7 @@ async function confirmarPedido() {
 
     cart = {};
     cuponAplicado = null;
+    faltantesSesion = []; // ya quedaron guardados con el pedido
     if ($('cupon-input')) $('cupon-input').value = '';
     saveCart();
     $('client-name').value = '';
@@ -3432,6 +3446,28 @@ function mostrarAlertaStock(problemas) {
       if (!prob.variante) prob.variante = cart[key].varNombre || null;
     }
     if (!prob.nombre) prob.nombre = 'Producto #' + prob.product_id;
+  }
+
+  // Se anota ACÁ, entre los dos bucles, y no después: el de abajo ya borra
+  // renglones del carrito, y una vez borrados no queda forma de saber qué
+  // había. Arriba ya se les completó el nombre desde el carrito local, así
+  // que en este punto el dato está entero.
+  for (const prob of problemas) {
+    const idem = String(prob.product_id) + '|' + String(prob.size_id || '');
+    const reg = {
+      nombre: prob.nombre || '',
+      variante: prob.variante || '',
+      pedido: prob.pedido || 0,
+      disponible: prob.disponible || 0,
+      motivo: prob.motivo || 'sin_stock',
+      product_id: prob.product_id,
+      size_id: prob.size_id || null,
+    };
+    // Si el mismo renglón se recorta dos veces (lo vuelve a agregar y vuelve
+    // a faltar), vale el último dato: es el que refleja cómo terminó.
+    const yaEsta = faltantesSesion.findIndex(f =>
+      String(f.product_id) + '|' + String(f.size_id || '') === idem);
+    if (yaEsta >= 0) faltantesSesion[yaEsta] = reg; else faltantesSesion.push(reg);
   }
 
   // Ajustar carrito según lo que reportó el servidor

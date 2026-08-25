@@ -1141,6 +1141,14 @@ module.exports = async (req, res) => {
           const detalle = problemas.map(p =>
             `${p.nombre}${p.variante ? ' (' + p.variante + ')' : ''}: pedido ${p.pedido}, disponible ${p.disponible}`
           ).join('; ');
+          // Queda anotado también acá, y no solo en el pedido que se guarda
+          // después, por el caso que más duele: el cliente que ve el cartel de
+          // faltantes y se va sin confirmar. Ese pedido no existe en ningún lado
+          // —no hay número, no hay venta, no hay nada que abrir en el panel— así
+          // que esta línea del log es el único rastro de la venta que se perdió.
+          // Va sin teléfono ni nombre a propósito: el id de cliente alcanza para
+          // saber quién fue, y los logs no son lugar para datos de contacto.
+          console.warn(`[faltante] cliente ${req.body && req.body.client_id} — ${detalle}`);
           return res.status(409).json({
             error: 'Stock insuficiente al momento de confirmar el pedido',
             detalle,

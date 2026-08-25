@@ -455,6 +455,21 @@
   .pedido-total { font-weight: 700; color: var(--text); font-size: 15px; white-space: nowrap; }
   .pedido-ver { flex-shrink: 0; padding: 7px 16px; background: var(--accent); color: #fff; border-radius: var(--radius-sm); text-decoration: none; font-size: 13px; font-weight: 600; }
   .pedido-ver:hover { opacity: 0.9; }
+  /* Faltantes: lo que se le cayó del carrito por stock */
+  .pedido-item { margin-bottom: 8px; }
+  .pedido-item .pedido-row { margin-bottom: 0; }
+  .pedido-item.abierto .pedido-row { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+  .pedido-falt-chip { display: inline-block; margin-top: 4px; padding: 2px 8px; border-radius: 999px; border: 1px solid #FCA5A5;
+                      background: #FEF2F2; color: var(--danger); font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .pedido-falt-chip:hover { background: #FEE2E2; }
+  .pedido-falt-panel { border: 1px solid var(--border); border-top: none; border-radius: 0 0 var(--radius) var(--radius);
+                       background: var(--surface); padding: 4px 14px 12px; }
+  .pedido-falt-titulo { font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;
+                        letter-spacing: 0.04em; padding: 8px 0 6px; }
+  .pedido-falt-linea { padding: 7px 0 7px 10px; border-left: 3px solid var(--border-strong); margin-bottom: 6px; }
+  .pedido-falt-linea.eliminado { border-left-color: var(--danger); }
+  .pedido-falt-nombre { font-size: 14px; color: var(--text); font-weight: 600; }
+  .pedido-falt-detalle { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
   .load-more-btn { display: block; width: 100%; margin: 10px 0 4px; padding: 10px; background: var(--surface); border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); color: var(--text-muted); font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
   .load-more-btn:hover { background: var(--bg); }
 </style>
@@ -2797,17 +2812,87 @@ function renderPedidos() {
     return;
   }
   cont.innerHTML = lista.map(p => `
-    <div class="pedido-row">
-      <div class="pedido-main">
-        <div class="pedido-cliente">${p.cliente || 'Sin nombre'}</div>
-        <div class="pedido-meta">N° ${p.id} · ${fmtFechaPedido(p.fecha)}${p.telefono ? ' · ' + p.telefono : ''}</div>
-        <div class="pedido-meta">${p.nItems} ítem${p.nItems === 1 ? '' : 's'}${p.pago ? ' · ' + p.pago : ''}${p.entrega ? ' · ' + p.entrega : ''}</div>
+    <div class="pedido-item" id="pedido-item-${idFaltantes(p.id)}">
+      <div class="pedido-row">
+        <div class="pedido-main">
+          <div class="pedido-cliente">${notaEsc(p.cliente) || 'Sin nombre'}</div>
+          <div class="pedido-meta">N° ${notaEsc(p.id)} · ${fmtFechaPedido(p.fecha)}${p.telefono ? ' · ' + notaEsc(p.telefono) : ''}</div>
+          <div class="pedido-meta">${p.nItems} ítem${p.nItems === 1 ? '' : 's'}${p.pago ? ' · ' + notaEsc(p.pago) : ''}${p.entrega ? ' · ' + notaEsc(p.entrega) : ''}</div>
+          ${p.nFaltantes ? `<button class="pedido-falt-chip" onclick="verFaltantes('${encodeURIComponent(p.id)}')">⚠ ${p.nFaltantes} sin stock — ver qué se cayó</button>` : ''}
+        </div>
+        <div class="pedido-total">${fmtAR(p.total || 0)}</div>
+        <button class="pedido-ver" style="border:1px solid var(--border-strong);background:transparent;color:var(--text);cursor:pointer;font-family:inherit" onclick="copiarLinkPedido('${encodeURIComponent(p.id)}','${p.k ? encodeURIComponent(p.k) : ''}')">Copiar link</button>
+        <a class="pedido-ver" href="/pedido/${encodeURIComponent(p.id)}${p.k ? '?k=' + encodeURIComponent(p.k) : ''}" target="_blank" rel="noopener">Ver</a>
       </div>
-      <div class="pedido-total">${fmtAR(p.total || 0)}</div>
-      <button class="pedido-ver" style="border:1px solid var(--border-strong);background:transparent;cursor:pointer;font-family:inherit" onclick="copiarLinkPedido('${encodeURIComponent(p.id)}','${p.k ? encodeURIComponent(p.k) : ''}')">Copiar link</button>
-      <a class="pedido-ver" href="/pedido/${encodeURIComponent(p.id)}${p.k ? '?k=' + encodeURIComponent(p.k) : ''}" target="_blank" rel="noopener">Ver</a>
+      <div class="pedido-falt-panel" id="pedido-falt-${idFaltantes(p.id)}" style="display:none"></div>
     </div>
   `).join('');
+}
+
+// ---- Lo que se le cayó del carrito por falta de stock ----
+//
+// Cuando un cliente confirma, el servidor le chequea el stock: lo que no
+// alcanza se le borra del carrito (o se le baja la cantidad) y él confirma con
+// lo que quedó. Antes eso pasaba en silencio para nosotros. Ahora el pedido
+// guarda esa lista y acá se despliega: es "esto me quisieron comprar y no lo
+// tenía", que es exactamente lo que conviene reponer.
+//
+// El listado solo trae el número (`nFaltantes`); el detalle se pide al abrir,
+// para no arrastrar los renglones de 100 pedidos en cada carga del panel.
+
+const faltantesCache = {}; // id de pedido → lista de faltantes ya traída
+
+/** Un id de pedido convertido en algo que sirva como id de HTML. */
+function idFaltantes(id) { return String(id).replace(/[^a-zA-Z0-9_-]/g, ''); }
+
+async function verFaltantes(idEnc) {
+  const id = decodeURIComponent(idEnc);
+  const panel = $('pedido-falt-' + idFaltantes(id));
+  const item = $('pedido-item-' + idFaltantes(id));
+  if (!panel) return;
+
+  // Segundo toque: se cierra.
+  if (panel.style.display !== 'none') {
+    panel.style.display = 'none';
+    if (item) item.classList.remove('abierto');
+    return;
+  }
+  panel.style.display = 'block';
+  if (item) item.classList.add('abierto');
+
+  if (!faltantesCache[id]) {
+    panel.innerHTML = '<div class="pedido-falt-titulo">Buscando…</div>';
+    try {
+      // Con la contraseña del panel: sin ella el servidor no devuelve los faltantes.
+      const r = await fetch('/api/pedido?id=' + encodeURIComponent(id), { headers: { 'x-admin-password': adminPassword } });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+      faltantesCache[id] = Array.isArray(d.faltantes) ? d.faltantes : [];
+    } catch (e) {
+      panel.innerHTML = '<div class="pedido-falt-titulo">No se pudo abrir el detalle: ' + notaEsc(e.message) + '</div>';
+      return;
+    }
+  }
+  panel.innerHTML = renderFaltantes(faltantesCache[id]);
+}
+
+function renderFaltantes(lista) {
+  if (!lista || !lista.length) return '<div class="pedido-falt-titulo">Sin datos de faltantes para este pedido.</div>';
+  const linea = (f) => {
+    const eliminado = !f.disponible;
+    let detalle;
+    if (f.motivo === 'no_existe') detalle = 'Pidió ' + f.pedido + ' — el producto ya no estaba en Gestión Nube. Se le quitó del pedido.';
+    else if (f.motivo === 'variante_no_existe') detalle = 'Pidió ' + f.pedido + ' — esa variante ya no existía. Se le quitó del pedido.';
+    else if (eliminado) detalle = 'Pidió ' + f.pedido + ' y no había ninguna. Se le quitó del pedido.';
+    // No decimos "se le vendieron tantas": después del ajuste el cliente todavía
+    // podía sacar el renglón a mano. Lo único seguro es cuántas le faltaron.
+    else detalle = 'Pidió ' + f.pedido + ' y había ' + f.disponible + ' — se le bajó la cantidad. Le faltaron ' + (f.pedido - f.disponible) + '.';
+    return '<div class="pedido-falt-linea ' + (eliminado ? 'eliminado' : '') + '">' +
+             '<div class="pedido-falt-nombre">' + notaEsc(f.nombre) + (f.variante ? ' — ' + notaEsc(f.variante) : '') + '</div>' +
+             '<div class="pedido-falt-detalle">' + detalle + '</div>' +
+           '</div>';
+  };
+  return '<div class="pedido-falt-titulo">Se le cayó del pedido por stock</div>' + lista.map(linea).join('');
 }
 
 /**
