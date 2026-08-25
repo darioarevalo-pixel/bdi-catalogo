@@ -198,26 +198,36 @@ async function traerFuentesDeFotos(host, pids) {
   let mapaTN = {}, tnOk = false;
   if (!host || !buscados.size) return { productos, mapaTN, tnOk };
 
+  // ⏱️ Cada consulta lleva su propio cronómetro, además del presupuesto total.
+  //
+  // Medido justo después de un deploy, con las copias del CDN recién vaciadas:
+  // el mapa de Tienda Nube 5,1 s y el catálogo 2,0 s. Siete segundos, contra un
+  // techo de 10 para toda la función y con la venta ya leída antes. Sin corte
+  // por consulta, una sola fuente fría se come el presupuesto entero y el link
+  // del pedido muere por tiempo justo después de cada publicación —que es
+  // exactamente cuando más se lo mira.
   const hasta = Date.now() + PRESUPUESTO_FOTOS_MS;
+  const queda = () => hasta - Date.now();
   const traer = async (url) => {
+    const ms = queda();
+    if (ms <= 200) return null; // ya no hay tiempo: mejor no empezar
+    const corte = new AbortController();
+    const reloj = setTimeout(() => corte.abort(), ms);
     try {
-      const r = await fetch(url);
+      const r = await fetch(url, { signal: corte.signal });
       if (!r.ok) return null;
       return await r.json();
-    } catch (e) { return null; }
+    } catch (e) { return null; } finally { clearTimeout(reloj); }
   };
 
-  // Tienda Nube primero porque es la fuente que manda; si falla, el catálogo
-  // solo alcanza para poner algo.
-  const dTN = await traer(`https://${host}/api/tiendanube`);
-  if (dTN) { mapaTN = FOTOS.armarMapaTN(dTN); tnOk = true; }
-
-  // Idéntica a la de index.html y a la del robot de warming: si un solo
-  // parámetro cambia, es OTRA copia y el CDN no la tiene.
+  // El catálogo va PRIMERO aunque Tienda Nube sea la fuente que manda: sin los
+  // productos de Gestión Nube no hay contra qué cruzar, así que si el tiempo
+  // alcanza para una sola, tiene que ser esta.
+  // La URL es idéntica a la de index.html y a la del robot de warming: si un
+  // solo parámetro cambia, es OTRA copia y el CDN no la tiene.
   const qs = 'per_page=200&include_stock=1&include_images=1&include_variants=1';
   let ultima = MAX_PAGINAS_CATALOGO;
   for (let page = 1; page <= Math.min(ultima, MAX_PAGINAS_CATALOGO); page++) {
-    if (Date.now() > hasta) break;
     const data = await traer(`https://${host}/api/proxy?_path=` +
       encodeURIComponent('/productos/obtener') + `&${qs}&page=${page}`);
     if (!data) break;
@@ -234,6 +244,10 @@ async function traerFuentesDeFotos(host, pids) {
     // Si ya están todos, no se bajan las páginas que faltan.
     if (buscados.size === Object.keys(productos).length) break;
   }
+
+  const dTN = await traer(`https://${host}/api/tiendanube`);
+  if (dTN) { mapaTN = FOTOS.armarMapaTN(dTN); tnOk = true; }
+
   return { productos, mapaTN, tnOk };
 }
 
@@ -301,10 +315,16 @@ async function refrescarDesdeGN(numero, snap, host) {
         const prod = productos[String(i.pid)];
         if (!prod) return;
         const r = FOTOS.fotoDeProducto(prod, i.variante, buscarTN);
-        // Solo se pisa si encontramos algo. Si el producto se borró del catálogo
-        // y no vino nada, se conserva la foto que el pedido ya tenía: quedarse
-        // sin foto sería peor que tener una vieja.
-        if (r.url) { i.img = r.url; i.imgDe = r.de; }
+        if (!r.url) return; // el producto ya no está: se conserva la que había
+        // Sin Tienda Nube, lo único que se puede ofrecer es la foto de Gestión
+        // Nube, que es justamente la que puede estar mal. Entonces se usa para
+        // COMPLETAR un renglón sin foto, pero nunca para pisar una que ya está:
+        // así una caída momentánea de Tienda Nube no empeora un pedido que hoy
+        // se ve bien. La marca de versión tampoco se pone, así que el próximo
+        // refresco vuelve a intentarlo con la fuente buena.
+        if (!tnOk && i.img) return;
+        i.img = r.url;
+        i.imgDe = r.de;
       });
       // Se marca solo si Tienda Nube CONTESTÓ. Si estaba caída, las fotos que
       // se pusieron son las de Gestión Nube —el respaldo—, y marcar acá las
