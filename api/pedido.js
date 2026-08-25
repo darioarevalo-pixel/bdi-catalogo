@@ -170,9 +170,8 @@ async function gnGet(path) {
 // paga una sola vez por producto: si en un refresco quedan fotos afuera, el
 // siguiente las completa sin repetir las que ya tiene.
 // ---------------------------------------------------------------------------
-const MAX_FOTOS_NUEVAS = 6;      // productos nuevos a los que se les busca foto por vez
-const PRESUPUESTO_FOTOS_MS = 5000; // reloj: lo que queda de los 10 s es para lo demás
-const PAUSA_FOTOS_MS = 250;      // aire entre consultas, para no hacerle ráfaga a GN
+const MAX_PAGINAS_CATALOGO = 5;    // el catálogo son 2 páginas; 5 es un tope de seguridad
+const PRESUPUESTO_FOTOS_MS = 5000; // reloj: esta función tiene 10 s de techo (vercel.json)
 
 /** La primera foto utilizable de un producto de GN, mire donde mire la API. */
 function imagenDeProductoGN(p) {
@@ -188,32 +187,72 @@ function imagenDeProductoGN(p) {
   return '';
 }
 
-const dormir = (ms) => new Promise(r => setTimeout(r, ms));
+/**
+ * Las fotos salen de LA MISMA COPIA DEL CATÁLOGO que mira el cliente.
+ *
+ * La primera versión de esto le preguntaba a Gestión Nube producto por producto
+ * (`/productos/ver/<id>`) y no traía ninguna foto. Medido contra producción el
+ * 25-ago-2026, la puerta que sí las trae es la del catálogo:
+ *
+ *     GET /productos/obtener?...&include_images=1
+ *       → 263 productos, 218 con `image_url` (83%)
+ *       → 2.915 variantes, 1.019 con foto propia por color
+ *
+ * Y va por nuestro propio `/api/proxy`, no derecho a Gestión Nube, por una razón
+ * concreta: esa URL —la misma, carácter por carácter, que pide el catálogo— está
+ * guardada en el CDN y la mantiene caliente un robot cada 5 minutos. O sea que
+ * buscar fotos sale GRATIS de cupo, que es el recurso escaso acá (60 consultas
+ * por minuto para toda la cuenta). De paso desaparece el tope de "6 productos
+ * por vez": en dos páginas viene el catálogo entero.
+ */
+async function fotosDelCatalogo(host, pids) {
+  const buscados = new Set(pids.map(String));
+  const porPid = {}, porVariante = {};
+  if (!host || !buscados.size) return { porPid, porVariante };
 
-/** Busca en GN la foto de cada id, de a uno y sin apurar. Devuelve id → url. */
-async function buscarFotos(ids) {
-  const fotos = {};
   const hasta = Date.now() + PRESUPUESTO_FOTOS_MS;
-  let n = 0;
-  for (const id of ids) {
-    if (n >= MAX_FOTOS_NUEVAS || Date.now() > hasta) break;
-    n++;
-    // Si esta consulta falla, se sigue con la próxima: un producto sin foto no
-    // puede voltear el refresco entero del pedido.
-    const r = await gnGet('/productos/ver/' + encodeURIComponent(id) + '?include_images=1');
-    const prod = (r && r.data) ? r.data : r;
-    const url = imagenDeProductoGN(prod);
-    if (url) fotos[id] = url;
-    if (n < ids.length) await dormir(PAUSA_FOTOS_MS);
+  // Idéntica a la de index.html y a la del robot de warming: si un solo
+  // parámetro cambia, es OTRA copia y el CDN no la tiene.
+  const qs = 'per_page=200&include_stock=1&include_images=1&include_variants=1';
+  let ultima = MAX_PAGINAS_CATALOGO;
+
+  for (let page = 1; page <= Math.min(ultima, MAX_PAGINAS_CATALOGO); page++) {
+    if (Date.now() > hasta) break;
+    let data;
+    try {
+      const r = await fetch(`https://${host}/api/proxy?_path=` +
+        encodeURIComponent('/productos/obtener') + `&${qs}&page=${page}`);
+      if (!r.ok) break;
+      data = await r.json();
+    } catch (e) { break; }
+
+    const meta = data && data.meta;
+    if (page === 1 && meta) {
+      const n = parseInt(meta.last_page || meta.total_pages, 10);
+      if (n > 0) ultima = n;
+    }
+    const lista = Array.isArray(data) ? data : ((data && data.data) || []);
+    for (const prod of lista) {
+      const pid = String(prod.id);
+      if (!buscados.has(pid)) continue;
+      const foto = imagenDeProductoGN(prod);
+      if (foto) porPid[pid] = foto;
+      // La foto del color exacto, cuando la hay: es mejor que la del producto.
+      for (const v of (prod.variantes || [])) {
+        if (v && v.image_url) porVariante[pid + '|' + v.size_id] = v.image_url;
+      }
+    }
+    // Si ya se encontraron todos, no se bajan las páginas que faltan.
+    if (buscados.size === Object.keys(porPid).length) break;
   }
-  return fotos;
+  return { porPid, porVariante };
 }
 
 // Relee la venta desde GN y devuelve el pedido actualizado (o null si no se pudo).
 // Conserva los datos del cliente del snapshot (GN no los guarda igual) y reusa
 // la foto de cada ítem por (nombre|variante). El N° del pedido = number de GN;
 // el endpoint /ventas/<id> usa el id INTERNO, así que primero lo buscamos por número.
-async function refrescarDesdeGN(numero, snap) {
+async function refrescarDesdeGN(numero, snap, host) {
   let gnId = snap && snap.gnId;
   if (!gnId) {
     const busq = await gnGet('/ventas?q=' + encodeURIComponent(numero));
@@ -245,6 +284,7 @@ async function refrescarDesdeGN(numero, snap) {
     return {
       nombre,
       variante,
+      sizeId: it.size_id || (it.size_info && it.size_info.id) || null,
       cantidad: it.quantity || 0,
       precio: it.unit_price || 0,
       // `pid` se guarda para que el próximo refresco cruce por id y no por
@@ -260,8 +300,11 @@ async function refrescarDesdeGN(numero, snap) {
   const sinFoto = [...new Set(items.filter(i => !i.img && i.pid).map(i => i.pid))];
   if (sinFoto.length) {
     try {
-      const fotos = await buscarFotos(sinFoto);
-      items.forEach(i => { if (!i.img && fotos[i.pid]) i.img = fotos[i.pid]; });
+      const { porPid, porVariante } = await fotosDelCatalogo(host, sinFoto);
+      items.forEach(i => {
+        if (i.img) return;
+        i.img = porVariante[i.pid + '|' + i.sizeId] || porPid[String(i.pid)] || '';
+      });
     } catch (e) { /* sin fotos nuevas, pero el pedido se actualiza igual */ }
   }
   const subtotal = items.reduce((s, i) => s + (i.precio || 0) * (i.cantidad || 0), 0);
@@ -365,7 +408,7 @@ module.exports = async (req, res) => {
       // la foto guardada. Si GN falla, devuelve el snapshot tal cual (no rompe).
       if (req.query.refresh) {
         try {
-          const fresco = await refrescarDesdeGN(id, pedido);
+          const fresco = await refrescarDesdeGN(id, pedido, req.headers['x-forwarded-host'] || req.headers.host);
           if (fresco) {
             await kvCmd(['SET', clave(id), JSON.stringify(fresco), 'EX', String(TTL_SECONDS)]);
             // Marca de "sincronizado ahora" SOLO en la respuesta (no se guarda),
