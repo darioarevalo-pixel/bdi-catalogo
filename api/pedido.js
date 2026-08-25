@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const FOTOS = require('./_fotos.js');
 
 const KV_URL = process.env.KV_REST_API_URL || process.env.STORAGE_KV_REST_API_URL;
 const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.STORAGE_KV_REST_API_TOKEN;
@@ -171,61 +172,55 @@ async function gnGet(path) {
 // siguiente las completa sin repetir las que ya tiene.
 // ---------------------------------------------------------------------------
 const MAX_PAGINAS_CATALOGO = 5;    // el catálogo son 2 páginas; 5 es un tope de seguridad
-const PRESUPUESTO_FOTOS_MS = 5000; // reloj: esta función tiene 10 s de techo (vercel.json)
+const PRESUPUESTO_FOTOS_MS = 6000; // reloj: esta función tiene 10 s de techo (vercel.json)
 
-/** La primera foto utilizable de un producto de GN, mire donde mire la API. */
-function imagenDeProductoGN(p) {
-  if (!p) return '';
-  const directa = p.image_url || p.imagen_url || p.imagen || p.image || p.photo || p.foto;
-  if (typeof directa === 'string' && directa) return directa;
-  for (const lista of [p.images, p.imagenes, p.fotos]) {
-    if (!Array.isArray(lista) || !lista.length) continue;
-    const f = lista[0];
-    const url = typeof f === 'string' ? f : (f && (f.url || f.src || f.path || f.ruta));
-    if (url) return String(url);
-  }
-  return '';
-}
+// La versión de la regla con la que se resolvieron las fotos de un pedido.
+// Sirve para volver a resolverlas cuando la regla cambia: un pedido guardado con
+// una versión vieja se re-hace solo la próxima vez que se abre el link, sin que
+// haya que tocar nada a mano.
+//   v1 (no marcada) → Gestión Nube primero. Traía fotos equivocadas.
+//   v2              → Tienda Nube primero, Gestión Nube de respaldo.
+const FOTOS_VERSION = 2;
 
 /**
- * Las fotos salen de LA MISMA COPIA DEL CATÁLOGO que mira el cliente.
+ * Baja las dos fuentes de fotos, las mismas que mira el navegador del cliente.
  *
- * La primera versión de esto le preguntaba a Gestión Nube producto por producto
- * (`/productos/ver/<id>`) y no traía ninguna foto. Medido contra producción el
- * 25-ago-2026, la puerta que sí las trae es la del catálogo:
- *
- *     GET /productos/obtener?...&include_images=1
- *       → 263 productos, 218 con `image_url` (83%)
- *       → 2.915 variantes, 1.019 con foto propia por color
- *
- * Y va por nuestro propio `/api/proxy`, no derecho a Gestión Nube, por una razón
- * concreta: esa URL —la misma, carácter por carácter, que pide el catálogo— está
- * guardada en el CDN y la mantiene caliente un robot cada 5 minutos. O sea que
- * buscar fotos sale GRATIS de cupo, que es el recurso escaso acá (60 consultas
- * por minuto para toda la cuenta). De paso desaparece el tope de "6 productos
- * por vez": en dos páginas viene el catálogo entero.
+ * Las dos salen por nuestro propio dominio y no derecho a Gestión Nube o Tienda
+ * Nube: son las URLs que ya pide el catálogo, así que están guardadas en el CDN
+ * y las mantiene calientes el robot de warming. Medido el 25-ago-2026:
+ * el catálogo 0,65 s (2 páginas, 1,1 MB) y el mapa de Tienda Nube 0,26 s
+ * (367 KB) — contra un techo de 10 s. Y no gastan del cupo de Gestión Nube,
+ * que es el recurso escaso (60 consultas por minuto para toda la cuenta).
  */
-async function fotosDelCatalogo(host, pids) {
+async function traerFuentesDeFotos(host, pids) {
   const buscados = new Set(pids.map(String));
-  const porPid = {}, porVariante = {};
-  if (!host || !buscados.size) return { porPid, porVariante };
+  const productos = {};
+  let mapaTN = {}, tnOk = false;
+  if (!host || !buscados.size) return { productos, mapaTN, tnOk };
 
   const hasta = Date.now() + PRESUPUESTO_FOTOS_MS;
+  const traer = async (url) => {
+    try {
+      const r = await fetch(url);
+      if (!r.ok) return null;
+      return await r.json();
+    } catch (e) { return null; }
+  };
+
+  // Tienda Nube primero porque es la fuente que manda; si falla, el catálogo
+  // solo alcanza para poner algo.
+  const dTN = await traer(`https://${host}/api/tiendanube`);
+  if (dTN) { mapaTN = FOTOS.armarMapaTN(dTN); tnOk = true; }
+
   // Idéntica a la de index.html y a la del robot de warming: si un solo
   // parámetro cambia, es OTRA copia y el CDN no la tiene.
   const qs = 'per_page=200&include_stock=1&include_images=1&include_variants=1';
   let ultima = MAX_PAGINAS_CATALOGO;
-
   for (let page = 1; page <= Math.min(ultima, MAX_PAGINAS_CATALOGO); page++) {
     if (Date.now() > hasta) break;
-    let data;
-    try {
-      const r = await fetch(`https://${host}/api/proxy?_path=` +
-        encodeURIComponent('/productos/obtener') + `&${qs}&page=${page}`);
-      if (!r.ok) break;
-      data = await r.json();
-    } catch (e) { break; }
-
+    const data = await traer(`https://${host}/api/proxy?_path=` +
+      encodeURIComponent('/productos/obtener') + `&${qs}&page=${page}`);
+    if (!data) break;
     const meta = data && data.meta;
     if (page === 1 && meta) {
       const n = parseInt(meta.last_page || meta.total_pages, 10);
@@ -234,18 +229,12 @@ async function fotosDelCatalogo(host, pids) {
     const lista = Array.isArray(data) ? data : ((data && data.data) || []);
     for (const prod of lista) {
       const pid = String(prod.id);
-      if (!buscados.has(pid)) continue;
-      const foto = imagenDeProductoGN(prod);
-      if (foto) porPid[pid] = foto;
-      // La foto del color exacto, cuando la hay: es mejor que la del producto.
-      for (const v of (prod.variantes || [])) {
-        if (v && v.image_url) porVariante[pid + '|' + v.size_id] = v.image_url;
-      }
+      if (buscados.has(pid)) productos[pid] = prod;
     }
-    // Si ya se encontraron todos, no se bajan las páginas que faltan.
-    if (buscados.size === Object.keys(porPid).length) break;
+    // Si ya están todos, no se bajan las páginas que faltan.
+    if (buscados.size === Object.keys(productos).length) break;
   }
-  return { porPid, porVariante };
+  return { productos, mapaTN, tnOk };
 }
 
 // Relee la venta desde GN y devuelve el pedido actualizado (o null si no se pudo).
@@ -277,6 +266,8 @@ async function refrescarDesdeGN(numero, snap, host) {
     if (!imgPorNombre[i.nombre || '']) imgPorNombre[i.nombre || ''] = i.img;
   });
 
+  let fotosV = (snap && snap.fotosV) || 0;
+
   const items = venta.items.map(it => {
     const nombre = it.product_name || (it.product && it.product.name) || '';
     const variante = it.size || (it.size_info && it.size_info.name) || '';
@@ -295,16 +286,31 @@ async function refrescarDesdeGN(numero, snap, host) {
     };
   });
 
-  // Los que quedaron sin foto: se le pregunta a GN, con freno. Se piden una sola
-  // vez por producto aunque tenga varios renglones (dos colores del mismo modelo).
-  const sinFoto = [...new Set(items.filter(i => !i.img && i.pid).map(i => i.pid))];
-  if (sinFoto.length) {
+  // ¿Hay que salir a buscar fotos? Sí cuando falta alguna, y también cuando el
+  // pedido se guardó con una versión vieja de la regla: así el que quedó con las
+  // fotos equivocadas de Gestión Nube se arregla solo al abrirlo, sin tener que
+  // ir a corregirlo a mano.
+  const faltaAlguna = items.some(i => !i.img && i.pid);
+  const reglaVieja = (snap && snap.fotosV) !== FOTOS_VERSION;
+  if (faltaAlguna || reglaVieja) {
     try {
-      const { porPid, porVariante } = await fotosDelCatalogo(host, sinFoto);
+      const pids = [...new Set(items.filter(i => i.pid).map(i => i.pid))];
+      const { productos, mapaTN, tnOk } = await traerFuentesDeFotos(host, pids);
+      const buscarTN = FOTOS.crearBuscadorTN(mapaTN);
       items.forEach(i => {
-        if (i.img) return;
-        i.img = porVariante[i.pid + '|' + i.sizeId] || porPid[String(i.pid)] || '';
+        const prod = productos[String(i.pid)];
+        if (!prod) return;
+        const r = FOTOS.fotoDeProducto(prod, i.variante, buscarTN);
+        // Solo se pisa si encontramos algo. Si el producto se borró del catálogo
+        // y no vino nada, se conserva la foto que el pedido ya tenía: quedarse
+        // sin foto sería peor que tener una vieja.
+        if (r.url) { i.img = r.url; i.imgDe = r.de; }
       });
+      // Se marca solo si Tienda Nube CONTESTÓ. Si estaba caída, las fotos que
+      // se pusieron son las de Gestión Nube —el respaldo—, y marcar acá las
+      // dejaría así para siempre: sin la marca, el próximo refresco vuelve a
+      // intentar con la fuente buena.
+      if (tnOk && Object.keys(productos).length) fotosV = FOTOS_VERSION;
     } catch (e) { /* sin fotos nuevas, pero el pedido se actualiza igual */ }
   }
   const subtotal = items.reduce((s, i) => s + (i.precio || 0) * (i.cantidad || 0), 0);
@@ -318,6 +324,7 @@ async function refrescarDesdeGN(numero, snap, host) {
   // El descuento/ajuste de GN se muestra por la diferencia subtotal - total (cupon: null).
   return Object.assign({}, snap, {
     gnId,
+    fotosV,
     items,
     subtotal,
     total,
