@@ -59,7 +59,14 @@ async function leerCfg() {
 // `apodo` y `cumple` son los dos campos humanos: el Monitor recibe a cada uno por su nombre
 // («Hola, Mari!») y `name` no sirve para eso —es el usuario de login, y en los puestos
 // compartidos es `bdilocal`—. `cumple` va como `MM-DD`, sin año: no hace falta la edad.
-const perfilDe = u => ({ name: u.name, admin: !!u.admin, cuenta: u.cuenta || null, acceso: u.acceso || { bdi: {}, zattia: {} }, funcion: Array.isArray(u.funcion) ? u.funcion : [], email: u.email || null, apodo: u.apodo || null, cumple: u.cumple || null });
+//
+// `horasExtras` y `horasLink` son el interruptor de las horas extras: el tilde decide a quién le
+// llega la rutina de fin de mes (destino `{tipo:'horas-extras'}` en la Agenda del Monitor) y el
+// link es el `/horas/<token>` del dashboard, que se pega a mano porque son dos bases distintas y
+// los empleados no tienen usuario allá. ⚠️ El link es de UNA persona y viaja SÓLO en su propio
+// perfil: el GET del padrón (`config`) lo devuelve junto al resto, pero el recorte para no-admins
+// del Monitor (`Companero`) se queda con el booleano y NUNCA con el link.
+const perfilDe = u => ({ name: u.name, admin: !!u.admin, cuenta: u.cuenta || null, acceso: u.acceso || { bdi: {}, zattia: {} }, funcion: Array.isArray(u.funcion) ? u.funcion : [], email: u.email || null, apodo: u.apodo || null, cumple: u.cumple || null, horasExtras: !!u.horasExtras, horasLink: u.horasLink || null });
 
 /**
  * Los cumpleaños del equipo, para que el Monitor pueda saludar. Sale con el login porque el
