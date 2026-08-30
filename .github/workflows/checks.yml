@@ -1,0 +1,34 @@
+# Los arneses del repo, en cada push.
+#
+# 🔴 Este repo NO tiene package.json ni dependencias: los arneses son scripts de node pelado
+# (`node:assert`) y su oráculo es el CÓDIGO DE SALIDA, no la última línea. Por eso acá no hay
+# `npm ci` ni caché: se clona y se corre.
+#
+# Existe porque `scripts/check-verificacion-orden.mjs` cuida quién puede ver el pedido de otra
+# persona, y un invariante que nadie corre es un invariante escrito: se rompe igual, y en verde.
+
+name: Arneses
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Uno por paso: si cae, el nombre del paso dice cuál, sin leer el log.
+      - name: La llave del alta pública (la regla)
+        run: node scripts/check-verificacion-orden.mjs
+      - name: La llave del alta pública (el cable — corre el handler de verdad)
+        run: node scripts/check-orden-verificada.mjs
+      - name: Descripciones en prosa
+        run: node scripts/check-desc-prosa.mjs
+      - name: Bloque de talles
+        run: node scripts/check-desc-talles.mjs

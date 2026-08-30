@@ -1,4 +1,7 @@
 const { exigirUsuario } = require('./_auth');
+// La llave del alta pública de Reclamos: orden + mail. La regla vive aparte y tiene su arnés
+// (`node scripts/check-verificacion-orden.mjs`) — acá sólo se la llama en el orden correcto.
+const { puedeVerLaOrden, ordenParaElCliente, diagnosticoDeMail } = require('./_verificacion-orden');
 
 const KV_URL   = process.env.KV_REST_API_URL   || process.env.STORAGE_KV_REST_API_URL;
 const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.STORAGE_KV_REST_API_TOKEN;
@@ -212,7 +215,7 @@ async function tnFetchCanceladas(cfg, from, to) {
 }
 // ── Leer una orden de TN por número, con sus líneas (para Cambios/Devoluciones del Monitor) ──
 // Reusa el mismo token/scope que ya lee órdenes (View Orders). Devuelve la orden con products[].
-async function tnFetchOrden(cfg, numero, perPage) {
+async function tnFetchOrden(cfg, numero, perPage, mailPedido, soloDiagnostico) {
   const base = `https://api.tiendanube.com/v1/${cfg.storeId}/orders`;
   const target = String(numero);
   const objetivo = Number(numero);
@@ -236,7 +239,37 @@ async function tnFetchOrden(cfg, numero, perPage) {
   // La orden completa por id (acá sí vienen los products). Sin ?fields (con fields el GET por id da 404).
   const rd = await fetch(`${base}/${orderId}`, { headers: tnHeaders(cfg.token) });
   if (!rd.ok) return { error: `TN ${rd.status} en GET /orders/${orderId}: ${(await rd.text()).slice(0, 150)}` };
-  return { orden: mapOrdenTN(await rd.json()) };
+  const cruda = await rd.json();
+
+  // ── El modo verificado: sólo si vino un mail que comparar ────────────────────
+  //
+  // 🔴 **La comparación va ACÁ y ⛔ no afuera, porque `mapOrdenTN` TIRA EL MAIL.** Y la orden
+  // cruda ⛔ no sale nunca de esta función: si se devolviera para que el llamador compare, el mail
+  // del comprador —y todo lo demás que TN manda y este repo nunca miró— quedaría a un `return` de
+  // distancia de la respuesta.
+  //
+  // ⚠️ Una orden que ⛔ no se encontró ya salió arriba con `orden: null`, o sea **por la misma
+  // puerta** que una que no verifica. Desde afuera son indistinguibles, que es la idea.
+  // ── El diagnóstico: ¿esta orden trae mail? ───────────────────────────────────
+  //
+  // 🔑 Contesta **sí o no, ⛔ nunca el mail**, y sólo para quien esté en el padrón. Existe porque
+  // toda la llave del alta pública se apoya en que Tienda Nube mande `contact_email`, y eso ⛔ no
+  // se puede saber leyendo el código: el mapper lo tiraba, así que nadie lo había mirado nunca.
+  // Es la misma costumbre que `?probe=1` y `?campos=1` — preguntarle a TN en vez de suponerle.
+  if (soloDiagnostico) return diagnosticoDeMail(cruda);
+
+  if (mailPedido !== undefined) {
+    const v = puedeVerLaOrden(cruda, mailPedido);
+    if (!v.ok) {
+      // El motivo queda en el log del servidor y ⛔ NUNCA en la respuesta: contestar «el mail no
+      // coincide» convierte esto en un oráculo de «¿existe la orden N?» sobre una numeración
+      // correlativa.
+      console.warn(`[orden ${numero}] no verificada: ${v.motivo}`);
+      return { orden: null };
+    }
+    return { orden: ordenParaElCliente(mapOrdenTN(cruda)), verificada: true };
+  }
+  return { orden: mapOrdenTN(cruda) };
 }
 // La forma canónica de una orden de TN para el Monitor. Vive aparte porque la leen DOS caminos
 // —`?orden=N` (Cambios/Devoluciones) y `?ordenes=1` (el sync de ventas de Stunned)— y si cada uno
@@ -726,11 +759,45 @@ module.exports = async (req, res) => {
   // Modo catálogo: productos GN + fotos TN cruzados (admin interno por marca).
   if (req.query?.catalogo === '1') return _catHandle(cfg, res);
 
-  // ── Leer una orden de TN por número (Cambios/Devoluciones del Monitor) ──
+  // ── Leer una orden de TN por número ──
+  //
+  // Dos caminos, y **el método es el que los separa**:
+  //
+  //  - `GET  ?orden=N`                     → como siempre: la orden entera para Cambios y
+  //                                          Devoluciones del Monitor, que ya saben de quién es.
+  //  - `POST ?orden=N`  body `{ mail }`    → **el alta pública**: contesta sólo si el mail es el de
+  //                                          esa orden, y contesta **mucho menos** (ni un monto).
+  //
+  // 🔴 **El mail entra SÓLO por el body, y la URL con `mail` se RECHAZA.** Una query string viaja
+  // al log de acceso, al historial del navegador y al `Referer` de cualquier cosa que la página
+  // cargue después. El día que alguien "arregle" el formulario mandándolo por GET, esto tiene que
+  // fallar ruidoso — ⛔ no verificar en silencio contra un dato que quedó escrito en un log.
   if (req.query?.orden) {
+    if (req.query.mail != null) {
+      return res.status(400).json({ error: 'El mail no va en la URL: mandalo por POST en el body.' });
+    }
+    // `?mail_diag=1` — ¿TN manda el mail en esta orden? Sí o no, y **con usuario del padrón**:
+    // saber que una orden existe ya es más de lo que le toca a cualquiera.
+    if (req.query?.mail_diag === '1') {
+      if (!(await exigirUsuario(req, res, 'diagnostico de mail'))) return;
+      try {
+        const d = await tnFetchOrden(cfg, String(req.query.orden), req.query?.pp, undefined, true);
+        if (d.error) return res.status(502).json({ error: d.error });
+        return res.status(200).json({ ok: true, store: storeKey, ...d });
+      } catch (e) {
+        return res.status(500).json({ error: e.message });
+      }
+    }
+    // `undefined` = modo de siempre. Un POST sin mail entra al modo verificado y **no pasa**, que
+    // es lo correcto: quien postea está diciendo que viene de afuera.
+    const mailPedido = req.method === 'POST' ? String((req.body || {}).mail || '') : undefined;
     try {
-      const r = await tnFetchOrden(cfg, String(req.query.orden), req.query?.pp);
+      const r = await tnFetchOrden(cfg, String(req.query.orden), req.query?.pp, mailPedido);
       if (r.error) return res.status(502).json({ error: r.error });
+      // ⚠️ El mismo 404 para «no existe», «sin mail» y «no coincide». Ver `_verificacion-orden.js`.
+      if (mailPedido !== undefined && !r.orden) {
+        return res.status(404).json({ error: 'No encontramos ese pedido con ese mail.' });
+      }
       return res.status(200).json({ ok: true, store: storeKey, orden: r.orden });
     } catch (e) {
       return res.status(500).json({ error: e.message });
