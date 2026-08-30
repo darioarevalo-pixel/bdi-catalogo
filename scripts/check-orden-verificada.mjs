@@ -18,6 +18,9 @@ process.env.TIENDANUBE_TOKEN = 'token-de-mentira';
 // producción está `AUTH_MODO_AVISO=0` y el guard rechaza de verdad. Sin esta línea, el arnés medía
 // el modo aviso y un `exigirUsuario` que faltara habría salido **verde**.
 process.env.AUTH_MODO_AVISO = '0';
+// El padrón vive en el KV, y `_admin.js` lo lee por `fetch` — que acá está intervenido.
+process.env.KV_REST_API_URL = 'https://kv-de-mentira.local';
+process.env.KV_REST_API_TOKEN = 'token-de-mentira';
 
 const require = createRequire(import.meta.url);
 
@@ -35,10 +38,19 @@ let sinMail = false;
 globalThis.fetch = async (url) => {
   const u = String(url);
   const ok = (body) => ({ ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body) });
+  // El KV con el padrón: un solo usuario, con la pass en el formato viejo (sin hashear), que
+  // `verificarPass` acepta comparando texto.
+  if (u.includes('kv-de-mentira')) return ok({ result: JSON.stringify({ users: [{ name: 'Bruno Arevalo', pass: 'la-pass' }] }) });
   if (/\/orders\/88(\?|$)/.test(u)) return ok(sinMail ? { ...ORDEN_CRUDA, contact_email: null } : ORDEN_CRUDA);
   if (/\/orders\?/.test(u)) return u.includes('page=1') ? ok([{ id: 88, number: 21033 }]) : ok([]);
   return { ok: false, status: 404, json: async () => ({}), text: async () => 'no' };
 };
+
+/**
+ * El padrón de mentira. `_auth.js` lo lee del KV por `fetch`, que acá ya está intervenido: se le
+ * suma la ruta del KV al stub de arriba. La pass se compara como la compara `_admin.js`.
+ */
+const DEL_PADRON = Buffer.from(JSON.stringify({ user: 'Bruno Arevalo', pass: 'la-pass' })).toString('base64');
 
 const handler = require('../api/tiendanube-audit.js');
 
@@ -58,12 +70,32 @@ const caso = async (nombre, fn) => {
 
 // ── El camino de siempre: el Monitor interno ─────────────────────────────────
 
-await caso('GET ?orden=21033 sigue contestando la orden entera, como siempre', async () => {
+/**
+ * 🔴 **El camino interno pide usuario del padrón desde el 30-ago-2026.** Antes contestaba a
+ * cualquiera con un número de orden —correlativo, y con este repo público en GitHub— el nombre del
+ * comprador, lo que pagó, la forma de pago y el seguimiento.
+ *
+ * Se prueba con las DOS puntas: sin credencial rechaza, con credencial contesta lo de siempre. Una
+ * sola punta ⛔ no defiende la regla — un guard que rechaza a todo el mundo también pasa el primer
+ * test, y rompe Reclamos, Cambios y Canjes.
+ */
+await caso('🔴 GET ?orden=21033 SIN credencial ya no contesta', async () => {
   const r = await pedir({ method: 'GET', query: { orden: '21033', store: 'bdi' } });
+  assert.notEqual(r.code, 200);
+  assert.equal(JSON.stringify(r.body || {}).includes('Victoria'), false);
+});
+
+await caso('🔴 GET ?orden=21033 CON credencial del padrón contesta la orden entera, como siempre', async () => {
+  const r = await pedir({ method: 'GET', query: { orden: '21033', store: 'bdi' }, headers: { 'x-monitor-auth': DEL_PADRON } });
   assert.equal(r.code, 200);
   assert.equal(r.body.orden.number, 21033);
   assert.equal(r.body.orden.cliente, 'Victoria Singh');
   assert.equal(r.body.orden.total, '90000.00'); // el interno SÍ ve la plata
+});
+
+await caso('🔑 el POST verificado ⛔ NO pide padrón: su llave es el mail del comprador', async () => {
+  const r = await pedir({ method: 'POST', query: { orden: '21033', store: 'bdi' }, body: { mail: 'victoria@gmail.com' } });
+  assert.equal(r.code, 200); // sin un solo header de sesión
 });
 
 // ── El camino nuevo: el alta pública ─────────────────────────────────────────

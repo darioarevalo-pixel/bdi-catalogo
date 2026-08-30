@@ -766,6 +766,23 @@ module.exports = async (req, res) => {
 
   // ── Leer una orden de TN por número ──
   //
+  // 🔴 **El `GET` PIDE USUARIO DEL PADRÓN desde el 30-ago-2026.** Estuvo abierto a internet, y lo
+  // que salía por ahí era: **nombre del comprador, lo que pagó, la forma de pago, el cupón que usó,
+  // lo que nos cuesta el envío y el número de seguimiento**, más cada producto con SKU y precio.
+  // El número de orden es **correlativo** —van por el 21.100— y este repo es **público en GitHub**,
+  // así que la URL y la forma de la respuesta estaban publicadas: el historial de compras de la
+  // tienda entera a un `for` de distancia.
+  //
+  // ⚠️ **No era una decisión, era un olvido**: la migración a `apiFetch` ya se había hecho para los
+  // otros llamadores del monitor y quedaban dos —`buscarOrden` (Reclamos y Cambios) y
+  // `verificarOrden` (Canjes)—, los dos migrados el mismo día. Y el `MODO_AVISO` de `_auth.js`, que
+  // existe justo para esa transición, hacía que una llamada sin credencial **avisara y pasara** ⇒
+  // ⛔ nada se ponía rojo. Verificado antes de cerrar: ninguna página de este repo usa `?orden=`, y
+  // el portal público de canjes ⛔ no monta la pantalla que lo llama.
+  //
+  // 🔑 **El `POST` verificado ⛔ NO pide usuario, a propósito**: ahí la llave es el mail del
+  // comprador, que es de quien reclama y ⛔ no del padrón. Son dos puertas con dos llaves distintas.
+  //
   // Dos caminos, y **el método es el que los separa**:
   //
   //  - `GET  ?orden=N`                     → como siempre: la orden entera para Cambios y
@@ -796,6 +813,8 @@ module.exports = async (req, res) => {
     // `undefined` = modo de siempre. Un POST sin mail entra al modo verificado y **no pasa**, que
     // es lo correcto: quien postea está diciendo que viene de afuera.
     const mailPedido = req.method === 'POST' ? String((req.body || {}).mail || '') : undefined;
+    // El camino de siempre es el INTERNO: ahora se identifica. Ver el 🔴 de arriba.
+    if (mailPedido === undefined && !(await exigirUsuario(req, res, 'orden TN'))) return;
     try {
       const r = await tnFetchOrden(cfg, String(req.query.orden), req.query?.pp, mailPedido);
       if (r.error) return res.status(502).json({ error: r.error });
