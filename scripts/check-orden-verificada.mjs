@@ -114,6 +114,17 @@ await caso('🔴 el mail en la URL se RECHAZA: una query string queda escrita en
   assert.equal(g.code, 400);
 });
 
+// ── CORS: lo único de acá que sólo rompe en un navegador ─────────────────────
+
+await caso('🔴 el preflight permite POST — sin esto el alta pública no anda en NINGÚN navegador', async () => {
+  // node ⛔ no valida CORS, así que este endpoint contesta perfecto por curl y por script aunque la
+  // cabecera diga que no. El navegador corta el POST en el preflight **antes** de salir, y el
+  // servidor ni se entera. Es la única aserción de este archivo que mira una CABECERA y no un body.
+  const r = await pedir({ method: 'OPTIONS', query: {} });
+  assert.match(String(r.headers['Access-Control-Allow-Methods']), /POST/);
+  assert.match(String(r.headers['Access-Control-Allow-Headers']), /Content-Type/);
+});
+
 // ── El diagnóstico ───────────────────────────────────────────────────────────
 
 await caso('🔴 `?mail_diag=1` PIDE USUARIO: saber que una orden existe ya es demasiado', async () => {

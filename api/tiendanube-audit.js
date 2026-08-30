@@ -38,9 +38,14 @@ const STORES = {
 // lugares leyendo de acá (Márgenes, Comisiones, Reposición, Productos, Gerencial, las cards de
 // Tienda Nube, Etiquetas, Canjes, Verificación de ventas) mostrando datos incompletos en
 // silencio. Los demás endpoints que el Monitor consume ya lo declaraban.
+// 🔴 **`POST` entró acá el 30-ago-2026 y sin esta línea el alta pública no habría andado NUNCA.**
+// El navegador manda un preflight `OPTIONS` antes de un POST con `Content-Type: application/json`,
+// y si el método no está en esta lista lo corta **del lado del cliente**: el servidor ⛔ ni se
+// entera, así que el endpoint contesta perfecto por curl y por node, y falla sólo en un navegador.
+// Ni el arnés ni la caminata contra producción lo pueden ver — **eso lo prueba un teléfono**.
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, x-monitor-auth',
 };
 
