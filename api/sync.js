@@ -35,14 +35,33 @@ module.exports = async (req, res) => {
   // datos, pero abierto se lo puede pedir a repetición hasta saturar.
   if (!(await exigirUsuario(req, res, 'sync'))) return;
 
-  // GET → estado del último run del workflow (para que el monitor sepa cuándo terminó).
+  // GET → estado del último run del workflow PARA ESA MARCA (para que el monitor sepa cuándo terminó).
+  //
+  // 🔑 **`store` no se puede ignorar acá.** Esto pedía `per_page=1` y devolvía el último run del
+  // workflow fuera de la marca que fuera, mientras el POST sí despachaba con la marca. Los dos
+  // syncs corren el MISMO workflow con distinto input, así que un sync de Zattia le contestaba
+  // «terminó» a quien estaba esperando BDI, y el monitor daba por bueno un stock que nadie trajo.
+  //
+  // 🔑 **La marca se lee del título del run, porque la API no devuelve los `inputs`.** Por eso los
+  // workflows llevan `run-name: … — ${{ inputs.store }}`. Se piden 20 runs porque los dos stores se
+  // intercalan y el candado `gestion-nube` los encola: el último de BDI puede estar varios atrás.
+  //
+  // 📌 Si ninguno trae marca en el título, se cae al más reciente — son los runs viejos, de antes
+  // del `run-name`. Es el comportamiento de siempre y se apaga solo a medida que corren los nuevos.
   if (req.method === 'GET') {
     try {
       const WORKFLOW = resolverWorkflow(req.query && req.query.kind);
-      const r = await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/${WORKFLOW}/runs?per_page=1`, { headers: ghHeaders() });
+      const store = ((req.query && req.query.store) || 'bdi').toLowerCase() === 'zattia' ? 'zattia' : 'bdi';
+      const r = await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/${WORKFLOW}/runs?per_page=20`, { headers: ghHeaders() });
       const d = await r.json();
-      const run = (d.workflow_runs && d.workflow_runs[0]) || null;
-      return res.status(200).json({ ok: true, run: run ? { id: run.id, status: run.status, conclusion: run.conclusion, created_at: run.created_at } : null });
+      const runs = d.workflow_runs || [];
+      const marcaDe = run => {
+        const m = /—\s*(bdi|zattia)\s*$/i.exec(String(run.display_title || run.name || ''));
+        return m ? m[1].toLowerCase() : null;
+      };
+      const conMarca = runs.filter(run => marcaDe(run) !== null);
+      const run = (conMarca.length ? conMarca.find(x => marcaDe(x) === store) : runs[0]) || null;
+      return res.status(200).json({ ok: true, store, run: run ? { id: run.id, status: run.status, conclusion: run.conclusion, created_at: run.created_at } : null });
     } catch (e) { return res.status(500).json({ error: e.message }); }
   }
 
