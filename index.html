@@ -1197,7 +1197,47 @@ function detectDimLabel(values) {
 // para que todo lo que cae en el mismo modelo muestre SIEMPRE el mismo nombre
 // (evita que un texto raro tipo "iPhone 12/ 12 Pro" pise el label del grupo).
 const PM_TIER = { 4: ' Pro Max', 3: ' Pro', 2: ' Plus', 1: '', 0: ' Mini' };
+
+// --- Modelos que llevan EXACTAMENTE la misma funda --------------------------
+// El iPhone 18 Pro Max tiene el mismo cuerpo que el 17 Pro Max, así que le entra
+// la misma funda; lo mismo el 18 Pro con el 17 Pro (comprobado por nosotros,
+// sep-2026). En Gestión Nube hay UNA SOLA variante —la del 17— con UNA SOLA pila
+// de mercadería: acá no se duplica ni se reparte stock, solo se cambia el NOMBRE
+// que se muestra para que el cliente del 18 la encuentre.
+//
+// La venta NO se toca: el POST a /ventas viaja con size_id, nunca con este texto
+// (ver el armado del body en confirmarPedido). En GN sigue entrando como
+// "iPhone 17 Pro Max", y el depósito sigue leyendo lo que dice la caja.
+//
+// Las claves son las de variantSortKey (modelo*10 + línea): 174 = 17 Pro Max.
+// Se aplica SOLO A FUNDAS: en los vidrios templados la compatibilidad depende de
+// la medida de la pantalla y del bloque de cámara, y eso no está comprobado.
+// Si un modelo deja de ser compatible, se borra su renglón de acá y listo.
+const MISMA_FUNDA = {
+  174: 'iPhone 17/18 Pro Max',
+  173: 'iPhone 17/18 Pro',
+};
+
+function esFundaId(id) {
+  const p = allProducts.find(x => (x.id || x.product_id) == id);
+  return !!p && /funda/i.test(p.category || '');
+}
+
+// Reescribe la parte del MODELO dentro del texto de una variante y deja el resto
+// intacto ("iPhone 17 Pro Max - MARRON" → "iPhone 17/18 Pro Max - MARRON"). Si el
+// modelo no tiene equivalencia, o el producto no es funda, devuelve el texto tal
+// cual. `id` es opcional: sin él no se filtra por categoría, porque los grupos de
+// "Ver por modelo" ya salen de una lista que es solo de fundas.
+function nombreCompat(txt, id) {
+  const s = String(txt || '');
+  const label = MISMA_FUNDA[variantSortKey(s)];
+  if (!label) return s;
+  if (id != null && !esFundaId(id)) return s;
+  return s.replace(/iphone\s*\d+\s*(?:pro\s*max|pro|plus|mini)?/i, label);
+}
+
 function labelDeClaveNum(key) {
+  if (MISMA_FUNDA[key]) return MISMA_FUNDA[key];
   if (key === 170) return 'iPhone 17 Air';
   if (key === 90) return 'iPhone SE';
   if (key === 101) return 'iPhone X';
@@ -1320,7 +1360,7 @@ function renderVariantRowsHTML(productId, dims, selectedDim1, nomEsc, precio, im
     const chArgs = '\'' + cartKey + '\',' + productId + ',\'' + nomEsc + '\',' + vPrecio + ',' + v.size_id + ',\'' + fullVnEsc + '\',\'' + imgEsc + '\'';
     return '<div class="modal-variant-row">' +
       '<div class="modal-variant-info">' +
-        '<div class="modal-variant-name">' + modeloCorto(v.dim2) + '</div>' +
+        '<div class="modal-variant-name">' + modeloCorto(v.dim2, productId) + '</div>' +
         sTxt +
       '</div>' +
       (vPrecio !== precio ? '<div class="modal-variant-price dif">' + formatPrecio(vPrecio) + '</div>' : '') +
@@ -2146,10 +2186,12 @@ function nuevoBadge(id) {
 }
 
 // Nombre de modelo acortado para mostrar en la lista de variantes: saca la palabra
-// "iPhone" del inicio (se sobreentiende). Solo afecta lo visible; el carrito y lo
-// que se envía a Gestión Nube siguen usando el nombre completo (v.size).
-function modeloCorto(txt) {
-  return (txt || '').replace(/^\s*iphone\s+/i, '');
+// "iPhone" del inicio (se sobreentiende) y, si el modelo comparte funda con otro,
+// muestra los dos (ver MISMA_FUNDA). Solo afecta lo visible y el nombre que se
+// guarda en el carrito: lo que se le envía a Gestión Nube es el size_id, que no
+// depende de este texto.
+function modeloCorto(txt, id) {
+  return nombreCompat(txt, id).replace(/^\s*iphone\s+/i, '');
 }
 
 function getImagenGN(p) {
@@ -2551,7 +2593,7 @@ function renderCardVariantRows(id, dims, selectedColor, nomEsc, precio, imgEsc) 
     const sTxt = pocas ? '<div class="modal-variant-stock low">Últimas ' + vs + '</div>' : '';
     return '<div class="modal-variant-row">' +
       '<div class="modal-variant-info">' +
-        '<div class="modal-variant-name" style="font-size:12px">' + modeloCorto(v.dim2) + '</div>' +
+        '<div class="modal-variant-name" style="font-size:12px">' + modeloCorto(v.dim2, id) + '</div>' +
         sTxt +
       '</div>' +
       (vPrecio !== precio ? '<div class="modal-variant-price dif">' + formatPrecio(vPrecio) + '</div>' : '') +
@@ -2633,7 +2675,7 @@ function renderVariantesGrid(prods) {
           const chArgs = '\'' + cartKey + '\',' + id + ',\'' + nomEsc + '\',' + vPrecio + ',' + v.size_id + ',\'' + vnEsc + '\',\'' + imgEsc + '\'';
           return '<div class="modal-variant-row">' +
             '<div class="modal-variant-info">' +
-              '<div class="modal-variant-name" style="font-size:12px">' + modeloCorto(v.size) + '</div>' +
+              '<div class="modal-variant-name" style="font-size:12px">' + modeloCorto(v.size, id) + '</div>' +
               sTxt +
             '</div>' +
             (vPrecio !== precio ? '<div class="modal-variant-price dif">' + formatPrecio(vPrecio) + '</div>' : '') +
@@ -2703,6 +2745,10 @@ function toggleCard(btn) {
 
 // Cambia la cantidad directamente en el carrito y actualiza el input
 function chQty(cartKey, productId, nombre, precio, sizeId, varNombre, img, d) {
+  // Única puerta de entrada al carrito: traducir acá alcanza para que el nombre
+  // del modelo sea el mismo en la ficha, el carrito, el pedido guardado y el
+  // cartel de faltantes, sin tocar los llamadores uno por uno.
+  varNombre = nombreCompat(varNombre, productId);
   const current = cart[cartKey]?.qty || 0;
   // Puede haber MÁS DE UN input con este id: el de la tarjeta (oculto en mobile)
   // y el del modal (visible). getElementById devolvía solo el primero (el de la
@@ -2917,7 +2963,7 @@ function abrirModal(id) {
           const chArgs = '\'' + cartKey + '\',' + id + ',\'' + nomEsc + '\',' + vPrecio + ',' + v.size_id + ',\'' + vnEsc + '\',\'' + imgEsc + '\'';
           return '<div class="modal-variant-row">' +
             '<div class="modal-variant-info">' +
-              '<div class="modal-variant-name">' + modeloCorto(v.size) + '</div>' +
+              '<div class="modal-variant-name">' + modeloCorto(v.size, id) + '</div>' +
               sTxt +
             '</div>' +
             (vPrecio !== precio ? '<div class="modal-variant-price dif">' + formatPrecio(vPrecio) + '</div>' : '') +
