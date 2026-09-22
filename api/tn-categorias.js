@@ -207,7 +207,7 @@ module.exports = async (req, res) => {
   // tiene la tabla. Este endpoint asume que ya está — por eso pide `hashPrevio` y no lo
   // calcula solo: mandarlo es la prueba de que alguien leyó y guardó esa versión.
   if (req.method === 'POST' && req.body && req.body.accion === 'descripcion-prosa') {
-    const { productId, nuevo, hashPrevio } = req.body;
+    const { productId, nuevo, hashPrevio, htmlTalles } = req.body;
     if (!productId) return res.status(400).json({ error: 'Falta productId' });
     if (!nuevo || typeof nuevo !== 'string') return res.status(400).json({ error: 'Falta el html nuevo' });
     if (!hashPrevio || typeof hashPrevio !== 'string') return res.status(400).json({ error: 'Falta hashPrevio (el respaldo va ANTES de escribir)' });
@@ -228,7 +228,7 @@ module.exports = async (req, res) => {
         });
       }
       // 2. ¿Esto se comió la tabla de talles?
-      if (!conservaLaTabla(actual, nuevo)) {
+      if (!conservaLaTabla(actual, nuevo, htmlTalles)) {
         return res.status(400).json({ error: 'El texto nuevo se come la tabla de talles. No se escribió nada.' });
       }
 

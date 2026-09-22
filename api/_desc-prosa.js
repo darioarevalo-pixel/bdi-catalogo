@@ -38,10 +38,20 @@ function hashDesc(html) {
  * ⛔ No dice nada de los `<img>` sueltos: descartar el residuo es una decisión de quien
  * revisa, que la toma en pantalla y viaja en el texto compuesto. Acá no se adivina.
  */
-function conservaLaTabla(actual, nuevo) {
+function conservaLaTabla(actual, nuevo, htmlTalles) {
   const a = String(actual || ''), n = String(nuevo || '');
   const m = RE_BLOQUE.exec(a);
-  if (m) return n.includes(m[0]);
+  if (m) {
+    if (n.includes(m[0])) return true;
+    // 🆕 22-sep-2026: REEMPLAZAR la tabla a propósito ⛔ no es comérsela. El monitor compone
+    // una tabla nueva cuando se cargaron medidas, y este guard exigía la vieja byte a byte:
+    // TOP MERY rebotó con «se come la tabla» teniendo la tabla nueva adentro. Es la misma
+    // regla que `conservaLaTabla` del monitor (`lib/tn-desc/bloques.core.js`): el reemplazo
+    // vale sólo si la nueva es un bloque FIRMADO entero y está ENTERA en el texto.
+    const t = String(htmlTalles || '');
+    const firmado = RE_BLOQUE.exec(t);
+    return !!firmado && firmado[0] === t && n.includes(t);
+  }
   if (/<table\b/i.test(a)) return /<table\b/i.test(n);
   return true;
 }

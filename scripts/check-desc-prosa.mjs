@@ -42,6 +42,22 @@ caso('el bloque de talles FIRMADO tiene que viajar byte a byte', () => {
   assert.equal(conservaLaTabla(actual, otra), false);
 });
 
+caso('🆕 REEMPLAZAR la tabla firmada a propósito pasa, sólo si la nueva viene firmada y entera (TOP MERY, 22-sep)', () => {
+  const actual = armarDescripcion('<h5>Top de red.</h5>', TABLA).nuevo;
+  const bloqueNuevo = /<!--AREBEN-TALLES-INI-->[\s\S]*?<!--AREBEN-TALLES-FIN-->/.exec(
+    armarDescripcion('', TABLA.replace('<td>S</td>', '<td>M</td>')).nuevo,
+  )[0];
+  const nuevo = PROSA + bloqueNuevo;
+  assert.equal(conservaLaTabla(actual, nuevo), false, 'sin decir que es un reemplazo, sigue frenando');
+  assert.equal(conservaLaTabla(actual, nuevo, bloqueNuevo), true);
+  // ⛔ Declarar un reemplazo que no está en el texto es comérsela igual.
+  assert.equal(conservaLaTabla(actual, PROSA, bloqueNuevo), false);
+  // ⛔ Y un «reemplazo» sin firma no vale: el día siguiente nadie lo reconocería como tabla.
+  assert.equal(conservaLaTabla(actual, PROSA + '<table></table>', '<table></table>'), false);
+  // ⛔ Ni uno recortado: tiene que ser el bloque firmado ENTERO.
+  assert.equal(conservaLaTabla(actual, nuevo, bloqueNuevo.slice(0, -5)), false);
+});
+
 caso('una <table> legacy sin firma: alcanza con que siga habiendo una', () => {
   const legacy = '<div dir="ltr"><table border="1pt"><tr><td>TALLE</td></tr></table></div>';
   assert.equal(conservaLaTabla(legacy, PROSA + legacy), true);
