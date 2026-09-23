@@ -153,7 +153,7 @@ module.exports = async (req, res) => {
   // barato uno termina dando por hecho que entró — que es justo lo que falló el 13-ago. Acá
   // un `GET ?accion=loquesea` contesta 400 sin escribir nada y sin loguearse. No se filtra
   // nada: los nombres de las acciones ya están en este repo, que es público.
-  const ACCIONES_POST = new Set(['descripcion-talles', 'descripcion-prosa', 'publicar', 'ocultar', 'stock', 'asignar', 'desasignar', 'auto-modelos']);
+  const ACCIONES_POST = new Set(['descripcion-talles', 'descripcion-prosa', 'publicar', 'ocultar', 'stock', 'asignar', 'desasignar', 'auto-modelos', 'nota-cobro']);
   const ACCIONES_GET = new Set(['variantes', 'cats', 'descripcion']);
   const accionBody = req.body && req.body.accion;
   const accionQuery = req.query && req.query.accion;
@@ -191,6 +191,46 @@ module.exports = async (req, res) => {
       const lang = idiomaDe(descObj);
       const html = typeof descObj[lang] === 'string' ? descObj[lang] : '';
       return res.status(200).json({ ok: true, store: storeKey, productId: String(productId), lang, html, hash: hashDesc(html) });
+    } catch (e) { return res.status(500).json({ error: e.message }); }
+  }
+
+  // --- Anotar un COBRO en la nota interna de una orden (Cobranzas del Monitor) ---
+  // POST { accion:'nota-cobro', orderId, linea } → { ok, verificado, yaEstaba }
+  //
+  // 🔴 TiendaNube ⛔ NO deja marcar una orden como pagada por API: «there is no action to pay an
+  // order», sólo una app de MEDIO DE PAGO puede mandar la transacción. `PUT /orders/{id}` acepta
+  // `owner_note` y nada más de la plata ⇒ el Monitor registra el cobro en su base, deja esta línea
+  // en la orden para quien la mire en el admin, y el «pagado» lo aprieta una persona allá.
+  //
+  // 🔑 La línea se AGREGA, ⛔ nunca pisa: la nota la escribe también el equipo. Se lee la actual,
+  // se suma abajo y se relee. Si la línea ya está (un reintento), ⛔ no se escribe dos veces.
+  // La línea llega armada por el Monitor (`lineaDeNota`, con sus tests): acá ⛔ se compone nada.
+  if (req.method === 'POST' && req.body && req.body.accion === 'nota-cobro') {
+    const orderId = String(req.body.orderId || '');
+    const linea = typeof req.body.linea === 'string' ? req.body.linea.trim() : '';
+    if (!/^\d+$/.test(orderId)) return res.status(400).json({ error: 'Falta orderId (el id interno de la orden, no el número).' });
+    if (!linea || linea.length > 300) return res.status(400).json({ error: 'Falta la línea de la nota (hasta 300 caracteres).' });
+    try {
+      const base = `https://api.tiendanube.com/v1/${cfg.storeId}/orders/${orderId}`;
+      const g = await fetch(base, { headers: tnHeaders(cfg.token) });
+      if (!g.ok) return res.status(g.status).json({ error: `No se pudo leer la orden en TN (${g.status})`, detalle: (await g.text()).slice(0, 200) });
+      const previa = String((await g.json()).owner_note || '');
+      if (previa.includes(linea)) return res.status(200).json({ ok: true, verificado: true, yaEstaba: true });
+
+      const nueva = previa ? `${previa}\n${linea}` : linea;
+      const r = await fetch(base, { method: 'PUT', headers: tnHeaders(cfg.token), body: JSON.stringify({ owner_note: nueva }) });
+      if (!r.ok) {
+        // 401/403 = el token ⛔ tiene `write_orders`. Se dice con su nombre: el cobro igual quedó
+        // registrado del lado del Monitor, lo que falta es el permiso de la app, ⛔ no un reintento.
+        const sinPermiso = r.status === 401 || r.status === 403;
+        return res.status(r.status).json({ error: sinPermiso ? 'La app de TiendaNube no tiene permiso para escribir órdenes (write_orders).' : 'No se pudo guardar la nota en TN', sinPermiso, detalle: (await r.text()).slice(0, 200) });
+      }
+      let verificado = false;
+      try {
+        const g2 = await fetch(base, { headers: tnHeaders(cfg.token) });
+        verificado = g2.ok && String((await g2.json()).owner_note || '').includes(linea);
+      } catch (_) { /* verificado queda en false y el Monitor lo marca */ }
+      return res.status(200).json({ ok: true, verificado, yaEstaba: false });
     } catch (e) { return res.status(500).json({ error: e.message }); }
   }
 

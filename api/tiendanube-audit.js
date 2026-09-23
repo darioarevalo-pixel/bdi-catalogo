@@ -433,6 +433,13 @@ const CAMPOS_LISTA_TN = [
   // así que el probe compara `cliente` para que la diferencia, si aparece, se vea.
 ];
 
+// Los de `?cobros=1`: un subconjunto de `CAMPOS_LISTA_TN` (todos ya probados contra el listado),
+// sin `shipping_address` a propósito — Cobranzas no tiene por qué ver el domicilio.
+const CAMPOS_COBROS_TN = [
+  'id', 'number', 'status', 'payment_status', 'created_at', 'total', 'contact_name',
+  'gateway', 'payment_details', 'paid_at', 'shipping_cost_customer',
+];
+
 async function tnOrdenesLista(cfg, from, to, limite) {
   const [a, b] = await Promise.all([
     // El bloque de envío viaja en esta pasada. Si TN volviera a hacer la maña de esconder un campo
@@ -823,6 +830,27 @@ module.exports = async (req, res) => {
         return res.status(404).json({ error: 'No encontramos ese pedido con ese mail.' });
       }
       return res.status(200).json({ ok: true, store: storeKey, orden: r.orden });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
+  // ── Órdenes de TN por rango, LIVIANAS, para Cobranzas del Monitor ──
+  // `?cobros=1&from&to` → { ordenes } sin líneas, sin dirección y sin las ventas de GN.
+  //
+  // Existe aparte de `?ordenes=1` porque Cobranzas sólo pregunta «¿quién pagó y quién no?»: ⛔ no
+  // necesita el domicilio del comprador ni los renglones, y `?ordenes=1` baja además todas las
+  // ventas de GN del rango. Una sola pasada por la lista de TN, con los campos de la plata.
+  // 🔑 Qué orden es «de pago manual» ⛔ se decide acá: viaja `pago_gateway` y lo decide el núcleo
+  // del Monitor (`lib/cobranzas/core.core.js`), que es donde están los tests.
+  if (req.query?.cobros === '1') {
+    if (!(await exigirUsuario(req, res, 'cobros TN'))) return;
+    const from = req.query.from, to = req.query.to;
+    if (!from || !to) return res.status(400).json({ error: 'Faltan from/to (YYYY-MM-DD)' });
+    try {
+      const r = await tnListaRango(cfg, from, to, CAMPOS_COBROS_TN.join(','));
+      if (r.error) return res.status(502).json({ error: r.error });
+      return res.status(200).json({ ok: true, store: storeKey, from, to, ordenes: r.lista.map(o => mapOrdenTN(o)) });
     } catch (e) {
       return res.status(500).json({ error: e.message });
     }
