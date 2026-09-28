@@ -322,6 +322,66 @@ async function guardarCostos(productos) {
   return { guardados: Object.keys(mapa).length };
 }
 
+// Los costos para la libretita, leídos DIRECTO de Gestión Nube. Hasta el 28-9-2026
+// el robot los sacaba de la lista pública que él mismo calienta, pero esa lista ya
+// no trae el costo (ver `sinCostos`). Son 2 consultas livianas cada 5 minutos
+// —sin stock ni variantes— sobre un techo de 60 por minuto.
+async function leerCostosDeGN(token) {
+  const todos = [];
+  for (let page = 1; page <= 20; page++) {
+    const r = await gnFetchRetry(`/productos/obtener?per_page=200&page=${page}`, token);
+    if (!r.ok) return { completo: false, productos: todos };
+    const lista = Array.isArray(r.data) ? r.data : (r.data?.data || []);
+    todos.push(...lista);
+    const meta = r.data?.meta;
+    if (!lista.length || meta?.has_more_pages === false || lista.length < 200) break;
+  }
+  return { completo: true, productos: todos };
+}
+
+// ---------------------------------------------------------------------------
+// EL COSTO NO SALE A LA CALLE
+//
+// Hasta el 28-9-2026 la lista de productos viajaba tal cual la da Gestión Nube,
+// con `unit_cost`, al navegador de CUALQUIERA que abriera el catálogo. No se veía
+// en pantalla, pero con F12 se leía el margen de cada producto.
+//
+// Ahora el costo solo viaja a quien lo pide con `con_costo=1` Y trae llave:
+//   · el panel y /revision → la contraseña del panel (`x-admin-password`);
+//   · bdi-mercadolibre     → `x-costos-clave`, igual a COSTOS_CLAVE en Vercel.
+// Los clientes con código de "lista mejor" lo reciben por otro lado: al validar
+// el código (api/config.js, `?accion=codigo`).
+//
+// Lo único que el catálogo público necesitaba del costo sin código es saber qué
+// es OFERTA (margen menor a `ofertaMargen`: no acepta cupones). Eso se calcula
+// acá y viaja como sí/no: `_oferta` para el producto y `_ofertaVar[size_id]` para
+// las variantes con precio especial, que tienen su propio margen.
+//
+// `con_costo=1` va en la URL y no solo en la cabecera a propósito: el CDN guarda
+// la copia por URL, y así la versión con costo nunca comparte copia con la pública.
+const COSTOS_CLAVE = process.env.COSTOS_CLAVE || '';
+
+function sinCostos(d, cfg) {
+  const lista = Array.isArray(d) ? d : (d && (d.data || d.products || d.items)) || [];
+  const umbral = parseFloat(cfg.ofertaMargen) || 0;
+  const vps = cfg.variantPrices || {};
+  const bajoMargen = (precio, costo) => precio > 0 && ((precio - costo) / precio * 100) < umbral;
+  for (const p of lista) {
+    if (!p || typeof p !== 'object') continue;
+    const costo = positivo(p.unit_cost);
+    if (umbral > 0 && costo > 0) {
+      if (bajoMargen(positivo(p.wholesaler_price), costo)) p._oferta = true;
+      for (const v of (p.variantes || [])) {
+        const vp = positivo(vps[p.id + '-' + v.size_id]);
+        if (vp > 0 && bajoMargen(vp, costo)) (p._ofertaVar = p._ofertaVar || {})[v.size_id] = true;
+      }
+    }
+    delete p.unit_cost;
+    delete p.provider;
+  }
+  return d;
+}
+
 function topeDe(topes, productId, sizeId) {
   const t = topes[productId] || topes[String(productId)];
   if (!t || !t.porVariante) return 0;
@@ -1004,7 +1064,12 @@ module.exports = async (req, res) => {
         // Aparte: si el KV falla, la libretita no se pudo anotar pero el CDN SÍ
         // quedó caliente, que es el trabajo principal del robot. Se informa el
         // problema sin dar por fallada la corrida entera.
-        try { costos = await guardarCostos(todos); }
+        try {
+          const gn = await leerCostosDeGN(process.env.GESTIONNUBE_TOKEN);
+          costos = gn.completo && gn.productos.length
+            ? await guardarCostos(gn.productos)
+            : { guardados: 0, motivo: 'no se pudieron leer los costos de Gestión Nube' };
+        }
         catch (e) { costos = { guardados: 0, motivo: (e && e.message) || String(e) }; }
       }
       // ⚠️ `ok` tiene que decir la VERDAD. Estaba clavado en `true` y el 12-8-2026
@@ -1043,7 +1108,7 @@ module.exports = async (req, res) => {
     });
   }
 
-  const qsObj = Object.fromEntries(Object.entries(req.query).filter(([k]) => k !== '_path'));
+  const qsObj = Object.fromEntries(Object.entries(req.query).filter(([k]) => k !== '_path' && k !== 'con_costo'));
   const qs = new URLSearchParams(qsObj);
   const url = API_BASE + apiPath + (qs.toString() ? '?' + qs.toString() : '');
 
@@ -1077,6 +1142,8 @@ module.exports = async (req, res) => {
   // El admin (pestaña "Cargar pedido") vende SIN tope a propósito: el dueño
   // decide caso por caso, y allá el aviso se muestra antes de confirmar.
   const esAdmin = !!ADMIN_PASSWORD && req.headers['x-admin-password'] === ADMIN_PASSWORD;
+  const pideCosto = req.query.con_costo === '1';
+  const conCosto = pideCosto && (esAdmin || (!!COSTOS_CLAVE && req.headers['x-costos-clave'] === COSTOS_CLAVE));
 
   // ESTAS TRES COSAS NO DEPENDEN DEL TURNO, así que se piden MIENTRAS se espera:
   //   · el freno (¿esta conexión ya mandó demasiados pedidos?)
@@ -1228,7 +1295,17 @@ module.exports = async (req, res) => {
     // y refresca por detrás (nadie espera). El stock REAL se re-verifica aparte
     // al confirmar el pedido (POST /ventas, sin caché), así que una copia de
     // hasta 60s es segura: nunca deja pasar una venta sin stock.
-    if (req.method === 'GET' && apiPath === '/productos/obtener' && r.status === 200) {
+    if (req.method === 'GET' && ruta === '/productos/obtener' && r.status === 200 && !conCosto) {
+      let cuerpo = null;
+      try { cuerpo = JSON.parse(data); } catch { /* abajo */ }
+      if (cuerpo) data = JSON.stringify(sinCostos(cuerpo, await leerConfigKV()));
+      else if (/unit_cost/.test(data)) {
+        // No se pudo leer y trae costo adentro: antes que dejarlo pasar, error.
+        return res.status(502).json({ error: 'Respuesta inesperada de Gestión Nube' });
+      }
+    }
+    if (pideCosto) res.setHeader('Cache-Control', 'private, no-store');
+    else if (req.method === 'GET' && apiPath === '/productos/obtener' && r.status === 200) {
       // s-maxage=300: copia "fresca" 5 min. stale-while-revalidate=86400: durante
       // las 24 h siguientes se sigue sirviendo AL INSTANTE mientras se refresca por
       // detrás (nadie espera). Clave: mientras alguien entre al menos una vez por

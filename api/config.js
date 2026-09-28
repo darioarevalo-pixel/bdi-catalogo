@@ -1,4 +1,4 @@
-const { kvGet, kvSet } = require('./_kv');
+const { kvGet, kvSet, kvCmd } = require('./_kv');
 
 // Sin respaldo a propósito. Antes había acá una contraseña por defecto escrita en
 // el código: como el repo es público, estaba a la vista de cualquiera y entraba al
@@ -19,6 +19,19 @@ function passwordOk(req) {
     return false;
   }
   return req.headers['x-admin-password'] === ADMIN_PASSWORD;
+}
+
+const COSTOS_KEY = process.env.COSTOS_KEY || 'catalog-costos';
+async function costosDeLaLibretita() {
+  try {
+    const r = await kvCmd(['GET', COSTOS_KEY]);
+    const d = r && r.result ? JSON.parse(r.result) : null;
+    if (d && d.productos) return d.productos;
+    console.error('[costos] la libretita está vacía: el código va sin costos');
+  } catch (e) {
+    console.error('[costos] no se pudo leer la libretita:', (e && e.message) || e);
+  }
+  return {};
 }
 
 const CORS = {
@@ -113,6 +126,12 @@ module.exports = async (req, res) => {
         // config pública) porque es información de precios, igual que el resto.
         descuentoMax: cfg.descuentoMax || {},
         descuentoMaxNota: cfg.descuentoMaxNota || '',
+        // El costo de cada producto. Desde el 28-9-2026 la lista pública ya no lo
+        // trae (ver `sinCostos` en api/proxy.js), pero la lista mejor lo necesita:
+        // el descuento nunca baja del costo. Solo lo recibe quien tiene un código
+        // válido. Sale de la libretita que el robot renueva cada 5 minutos; acá no
+        // se descarta por vieja porque un costo cambia muy de vez en cuando.
+        costos: await costosDeLaLibretita(),
       });
     }
     // Con ?verify=1 valida la contraseña y devuelve la config (para el login del admin)

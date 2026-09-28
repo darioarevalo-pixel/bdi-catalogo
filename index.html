@@ -1067,6 +1067,7 @@ async function aplicarCodigo() {
     }
     codigoAplicado = { codigo: code.toUpperCase(), cliente: data.cliente || '', descuentoBase: data.descuentoBase, excepciones: data.excepciones || {}, descuentoMax: data.descuentoMax || {}, descuentoMaxNota: data.descuentoMaxNota || '' };
     cuponAplicado = null; // los cupones no se combinan con el código de precios especiales
+    ponerCostos(data.costos);
     try { localStorage.setItem(CODIGO_LS_KEY, JSON.stringify(codigoAplicado)); } catch (e) {}
     renderCodigoBar();
     if (allProducts.length) renderProductos();
@@ -1096,6 +1097,7 @@ async function restaurarCodigo() {
     if (r.ok && data.ok) {
       codigoAplicado = { codigo: saved.codigo, cliente: data.cliente || '', descuentoBase: data.descuentoBase, excepciones: data.excepciones || {}, descuentoMax: data.descuentoMax || {}, descuentoMaxNota: data.descuentoMaxNota || '' };
       cuponAplicado = null; // no se combinan cupones con el código
+      ponerCostos(data.costos);
       try { localStorage.setItem(CODIGO_LS_KEY, JSON.stringify(codigoAplicado)); } catch (e) {}
     } else {
       codigoAplicado = null;
@@ -1105,6 +1107,20 @@ async function restaurarCodigo() {
   renderCodigoBar();
   if (allProducts.length) renderProductos();
   updateCartUI();
+}
+
+// El costo llega con el código (la lista pública ya no lo trae) y se le pega a
+// cada producto: la lista mejor nunca baja del costo. Ver api/config.js.
+// Se guardan también sueltos: si el código se valida antes de que termine de
+// cargar el catálogo, cargarProductos los pega al llegar.
+let costosDelCodigo = null;
+function ponerCostos(costos) {
+  if (!costos) return;
+  costosDelCodigo = costos;
+  for (const p of allProducts) {
+    const c = costos[p.id || p.product_id];
+    if (c !== undefined && c !== null) p.unit_cost = c;
+  }
 }
 
 let variantDimsCache = {};
@@ -1803,6 +1819,7 @@ async function cargarProductos(paginas) {
     return true;
   });
   allProducts = all;
+  if (costosDelCodigo) ponerCostos(costosDelCodigo);
   renderCatPills();
   renderProductos();
 }
@@ -2226,9 +2243,13 @@ function getPrecioAnterior(p) {
 // "Oferta" automática por margen: si el margen del producto es menor al umbral
 // (adminConfig.ofertaMargen, en %), se considera oferta → muestra etiqueta OFERTA
 // y NO recibe el descuento de los cupones. Umbral 0 = función desactivada.
+// Sin código, la lista ya no trae el costo (28-9-2026): el servidor manda la
+// cuenta hecha como sí/no en `_oferta` (y `_ofertaVar` por variante con precio
+// especial). Con código sí llega el costo, y el cálculo es el de siempre.
 function esOferta(p) {
   const umbral = parseFloat(adminConfig.ofertaMargen) || 0;
   if (umbral <= 0) return false;
+  if (p.unit_cost === undefined) return !!p._oferta;
   const costo = parseFloat(p.unit_cost || 0);
   const precio = getPrecio(p);
   if (costo <= 0 || precio <= 0) return false;
@@ -2242,6 +2263,10 @@ function cartItemOferta(i) {
   const umbral = parseFloat(adminConfig.ofertaMargen) || 0;
   if (umbral <= 0) return false;
   const p = allProducts.find(x => (x.id || x.product_id) == i.id);
+  if (p && p.unit_cost === undefined) {
+    const especial = i.sizeId && precioVarianteOverride(i.id, i.sizeId) !== null;
+    return especial ? !!(p._ofertaVar && p._ofertaVar[i.sizeId]) : !!p._oferta;
+  }
   const costo = p ? parseFloat(p.unit_cost || 0) : 0;
   const precio = parseFloat(i.precio || 0);
   if (costo <= 0 || precio <= 0) return false;

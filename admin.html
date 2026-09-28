@@ -1017,7 +1017,10 @@ async function cargarProductos() {
 
   // Página 1: nos dice cuántas hay. Las demás se piden EN PARALELO (antes era
   // secuencial y tardaba varios segundos).
-  const first = await (await fetch('/api/proxy?_path=/productos/obtener&' + baseQs + '&page=1')).json();
+  // Con costo: la lista pública ya no lo trae (28-9-2026), el panel lo pide con
+  // su contraseña. Ver `sinCostos` en api/proxy.js.
+  const conCosto = { headers: { 'x-admin-password': adminPassword } };
+  const first = await (await fetch('/api/proxy?_path=/productos/obtener&con_costo=1&' + baseQs + '&page=1', conCosto)).json();
   const firstRaw = extraer(first);
   let lastPage = first.meta ? (first.meta.last_page || 1) : 1;
   if (lastPage > 20) lastPage = 20;
@@ -1026,7 +1029,7 @@ async function cargarProductos() {
   if (lastPage > 1) {
     const rest = await Promise.all(
       Array.from({ length: lastPage - 1 }, (_, i) =>
-        fetch('/api/proxy?_path=/productos/obtener&' + baseQs + '&page=' + (i + 2))
+        fetch('/api/proxy?_path=/productos/obtener&con_costo=1&' + baseQs + '&page=' + (i + 2), conCosto)
           .then(r => r.json()).then(extraer).catch(() => [])
       )
     );

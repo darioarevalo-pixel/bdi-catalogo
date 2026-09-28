@@ -220,7 +220,10 @@ async function login() {
 
 // ── Datos ──────────────────────────────────────────────────────────────────
 async function fetchProxy(path, qs) {
-  const r = await fetch('/api/proxy?_path=' + encodeURIComponent(path) + (qs ? '&' + qs : ''));
+  // Con costo (avisa "el mayorista no cubre el costo"): la lista pública ya no lo
+  // trae desde el 28-9-2026, así que se pide con la contraseña del panel.
+  const r = await fetch('/api/proxy?_path=' + encodeURIComponent(path) + '&con_costo=1' + (qs ? '&' + qs : ''),
+    { headers: { 'x-admin-password': adminPassword } });
   if (!r.ok) throw new Error('HTTP ' + r.status);
   return r.json();
 }
