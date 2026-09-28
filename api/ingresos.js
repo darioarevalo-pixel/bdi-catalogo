@@ -106,6 +106,44 @@ module.exports = async (req, res) => {
       return res.status(405).json({ error: 'método no permitido' });
     }
 
+    // --- Quién está en la comunidad de WhatsApp (lista de teléfonos que manda la extensión del panel) ---
+    // Es una foto de la comunidad, no un dato que se edite a mano: la extensión la lee de WhatsApp Web
+    // y la reemplaza entera. Vive aparte de `crm:seg` a propósito: así el cruce no pisa las marcas
+    // "en difusión" puestas a mano, y un error acá no puede tocar el seguimiento de nadie.
+    //
+    // 🔴 La guarda de encogimiento es del SERVIDOR y no del navegador: la comunidad se lee de la
+    // memoria de WhatsApp, que puede venir a medio cargar (el grupo se ve pero sus participantes
+    // todavía no). Una foto a medias dejaría a cientos de clientes marcados "no está" sin que nadie
+    // lo note. Nadie se va de golpe de a un tercio de la comunidad en un día.
+    if (req.query?.kind === 'crmcomunidad') {
+      const comKey = `crm:comunidad:${store === 'zattia' ? 'zattia' : 'bdi'}`;
+      if (req.method === 'GET') {
+        const raw = await kvCmd(['GET', comKey]);
+        return res.status(200).json({ ok: true, comunidad: raw ? JSON.parse(raw) : null });
+      }
+      if (req.method === 'POST') {
+        const { comunidad, forzar } = req.body || {};
+        const crudos = comunidad && Array.isArray(comunidad.tels) ? comunidad.tels : null;
+        if (!crudos) return res.status(400).json({ error: 'comunidad inválida' });
+        const tels = [...new Set(crudos.map((t) => String(t).replace(/\D/g, '')).filter((t) => t.length >= 8 && t.length <= 15))];
+        if (!tels.length || tels.length > 10000) return res.status(400).json({ error: 'comunidad inválida' });
+        const previo = await kvCmd(['GET', comKey]);
+        const antes = previo ? (JSON.parse(previo).tels || []).length : 0;
+        if (!forzar && antes >= 50 && tels.length < antes * 0.7) {
+          return res.status(409).json({ error: `la comunidad bajó de ${antes} a ${tels.length} de golpe; no se guardó` });
+        }
+        const foto = {
+          tels,
+          grupo: String(comunidad.grupo || '').slice(0, 120),
+          participantes: Number(comunidad.participantes) || tels.length,
+          actualizado: new Date().toISOString(),
+        };
+        await kvCmd(['SET', comKey, JSON.stringify(foto)]);
+        return res.status(200).json({ ok: true, total: tels.length, actualizado: foto.actualizado });
+      }
+      return res.status(405).json({ error: 'método no permitido' });
+    }
+
     // --- Banco de mensajes del CRM (array de grupos {grupo, mensajes:[...]}) ---
     if (req.query?.kind === 'mensajes') {
       const msgKey = `mensajes:${store === 'zattia' ? 'zattia' : 'bdi'}`;
