@@ -46,7 +46,7 @@ const STORES = {
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, x-monitor-auth, x-admin-password',
+  'Access-Control-Allow-Headers': 'Content-Type, x-monitor-auth',
 };
 
 async function kvGet(key) {
@@ -665,96 +665,6 @@ async function gnFetchVentas(gnToken, from, to, incluirDetalles) {
   return out;
 }
 
-// ── Modo "catalogo": productos de GN + fotos de TN, cruzados (admin interno por marca) ──
-// Devuelve cada producto con costo/precio/variantes (GN) + sus fotos (TN). NO usa
-// caché ni toca las otras rutas de este endpoint (return temprano en el handler).
-function _catNormWords(s) {
-  return (s == null ? '' : String(s)).toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, ' ').trim().split(/\s+/).filter(Boolean);
-}
-async function _catGNProductos(token) {
-  const baseQs = 'per_page=100&include_stock=1&include_variants=1';
-  const extraer = d => (Array.isArray(d) ? d : (d.data || d.products || d.items || []));
-  const get = async page => {
-    const r = await fetch(`${GN_BASE}/productos/obtener?${baseQs}&page=${page}`, {
-      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-    });
-    if (!r.ok) throw new Error('GN ' + r.status);
-    return r.json();
-  };
-  const first = await get(1);
-  let lastPage = first.meta ? (first.meta.last_page || 1) : 1;
-  if (lastPage > 30) lastPage = 30;
-  let pages = [extraer(first)];
-  if (lastPage > 1) {
-    const rest = await Promise.all(Array.from({ length: lastPage - 1 }, (_, i) => get(i + 2).then(extraer).catch(() => [])));
-    pages = pages.concat(rest);
-  }
-  const seen = new Set(); const out = [];
-  for (const raw of pages) for (const p of raw) { const id = p.id || p.product_id; if (seen.has(id) || p.active === 0) continue; seen.add(id); out.push(p); }
-  return out;
-}
-// Reusa fetchPage (mismo User-Agent/headers que ya funciona para Zattia).
-async function _catTNImageMap(storeId, token) {
-  const map = {};
-  const first = await fetchPage(storeId, token, 1);
-  const total = first.total || first.data.length;
-  const totalPages = Math.min(10, Math.max(1, Math.ceil(total / 200)));
-  const pages = [first.data];
-  if (totalPages > 1) {
-    const rest = await Promise.all(
-      Array.from({ length: totalPages - 1 }, (_, i) => fetchPage(storeId, token, i + 2).then(r => r.data).catch(() => []))
-    );
-    pages.push(...rest);
-  }
-  // Prefiere fotos: una entrada VACÍA nunca pisa una que ya tiene fotos (evita que
-  // un duplicado tipo "... MAYORISTA" con 0 fotos borre las del producto bueno).
-  const setKey = (k, imgs) => { if (k && (!map[k] || (!map[k].length && imgs.length))) map[k] = imgs; };
-  for (const data of pages) {
-    for (const p of data) {
-      const imgs = (p.images || []).map(i => i.src).filter(Boolean);
-      const nombre = (p.name?.es || p.name?.pt || Object.values(p.name || {})[0] || '').trim().toLowerCase();
-      setKey(nombre, imgs);
-      if (Array.isArray(p.variants)) for (const v of p.variants) { if (v.sku) setKey(String(v.sku).trim().toLowerCase(), imgs); }
-    }
-  }
-  return map;
-}
-function _catImgsDe(p, tnMap, tnIndex) {
-  const sku = String(p.code || p.sku || p.codigo || '').trim().toLowerCase();
-  if (sku && tnMap[sku]) return tnMap[sku];
-  const gn = _catNormWords(p.name || p.nombre || p.product_name || '');
-  if (!gn.length) return [];
-  let best = null, bestLen = 0;
-  for (const e of tnIndex) { const tw = e.words; if (tw.length && tw.length <= gn.length && tw.length > bestLen && tw.every((w, i) => w === gn[i])) { best = e.key; bestLen = tw.length; } }
-  return best ? tnMap[best] : [];
-}
-async function _catHandle(cfg, res) {
-  if (!cfg.gnToken) return res.status(500).json({ error: 'Falta el token de Gestión Nube para esta tienda' });
-  try {
-    const [productos, tnMap] = await Promise.all([
-      _catGNProductos(cfg.gnToken),
-      _catTNImageMap(cfg.storeId, cfg.token).catch(() => ({})),
-    ]);
-    const tnIndex = Object.keys(tnMap).map(k => ({ key: k, words: _catNormWords(k) }));
-    const out = productos.map(p => ({
-      id: p.id || p.product_id,
-      name: p.name || p.nombre || p.product_name || 'Sin nombre',
-      code: p.code || p.sku || p.codigo || '',
-      category: p.category || '',
-      unit_cost: parseFloat(p.unit_cost || 0) || 0,
-      wholesaler_price: parseFloat(p.wholesaler_price || p.precio_mayorista || 0) || 0,
-      retailer_price: parseFloat(p.retailer_price || p.price || 0) || 0,
-      variantes: (p.variantes || []).map(v => ({ size: v.size, size_id: v.size_id, stock_por_tienda: v.stock_por_tienda || [] })),
-      imgs: _catImgsDe(p, tnMap, tnIndex),
-    }));
-    return res.status(200).json({ ok: true, total: out.length, productos: out });
-  } catch (e) {
-    return res.status(500).json({ error: e.message });
-  }
-}
-
 module.exports = async (req, res) => {
   Object.entries(CORS).forEach(([k, v]) => res.setHeader(k, v));
   // Evitar caché del navegador: el caché real vive en KV del servidor (1h),
@@ -769,18 +679,6 @@ module.exports = async (req, res) => {
   if (!cfg.storeId || !cfg.token) return res.status(500).json({ error: `Tienda Nube no configurado para ${storeKey}` });
 
   // Modo catálogo: productos GN + fotos TN cruzados (admin interno por marca).
-  // El modo catálogo devuelve el COSTO de cada producto, y estuvo abierto a
-  // cualquiera hasta el 28-9-2026: una sola llamada bajaba 289 productos de BDI y
-  // 200 de Zattia con costo, mayorista y minorista. Lo usa solo admin-zattia.html,
-  // que ya tiene la contraseña del panel. Misma regla que config.js: sin
-  // ADMIN_PASSWORD cargada no entra nadie (si no, undefined === undefined).
-  if (req.query?.catalogo === '1') {
-    const clave = process.env.ADMIN_PASSWORD || '';
-    if (!clave || req.headers['x-admin-password'] !== clave) {
-      return res.status(403).json({ error: 'Hace falta la contraseña del panel.' });
-    }
-    return _catHandle(cfg, res);
-  }
 
   // ── Leer una orden de TN por número ──
   //

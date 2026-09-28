@@ -18,7 +18,7 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 //
 // Estas 3 rutas son las ÚNICAS que se usan de verdad. Censo hecho sobre todos
 // los repos, los workflows de n8n y el robot de warming:
-//   GET  /productos/obtener   → catálogo público, admin, admin-zattia y bdi-mercadolibre
+//   GET  /productos/obtener   → catálogo público, admin y bdi-mercadolibre
 //   GET  /ventas/referencias  → formas de pago al armar el pedido (catálogo y admin)
 //   POST /ventas              → confirmar el pedido (único que escribe, ya valida stock)
 //
