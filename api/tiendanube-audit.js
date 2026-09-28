@@ -46,7 +46,7 @@ const STORES = {
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, x-monitor-auth',
+  'Access-Control-Allow-Headers': 'Content-Type, x-monitor-auth, x-admin-password',
 };
 
 async function kvGet(key) {
@@ -769,7 +769,18 @@ module.exports = async (req, res) => {
   if (!cfg.storeId || !cfg.token) return res.status(500).json({ error: `Tienda Nube no configurado para ${storeKey}` });
 
   // Modo catálogo: productos GN + fotos TN cruzados (admin interno por marca).
-  if (req.query?.catalogo === '1') return _catHandle(cfg, res);
+  // El modo catálogo devuelve el COSTO de cada producto, y estuvo abierto a
+  // cualquiera hasta el 28-9-2026: una sola llamada bajaba 289 productos de BDI y
+  // 200 de Zattia con costo, mayorista y minorista. Lo usa solo admin-zattia.html,
+  // que ya tiene la contraseña del panel. Misma regla que config.js: sin
+  // ADMIN_PASSWORD cargada no entra nadie (si no, undefined === undefined).
+  if (req.query?.catalogo === '1') {
+    const clave = process.env.ADMIN_PASSWORD || '';
+    if (!clave || req.headers['x-admin-password'] !== clave) {
+      return res.status(403).json({ error: 'Hace falta la contraseña del panel.' });
+    }
+    return _catHandle(cfg, res);
+  }
 
   // ── Leer una orden de TN por número ──
   //
