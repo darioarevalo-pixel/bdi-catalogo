@@ -306,6 +306,10 @@ function mapOrdenTN(o, opts) {
     // Forma de pago
     pago_metodo: pago.method || null,          // 'credit_card' | 'bank_transfer' | ...
     pago_gateway: o.gateway || null,           // 'mercadopago' | 'offline' | ...
+    // El nombre del medio tal como lo ve la clienta. Es lo ÚNICO que separa los medios
+    // personalizados: "Personalizado Transferencia" y "Personalizado Efectivo" llegan los dos como
+    // `custom`/`offline`, y sólo difieren acá. Logística lo necesita para saber si hay que cobrar.
+    pago_nombre: txt(o.gateway_name),
     pago_cuotas: pago.installments || null,
     // Plata: lo que hace falta para prorratear los descuentos entre los ítems
     subtotal: num(o.subtotal),
@@ -422,7 +426,7 @@ async function tnOrdenesDetalle(cfg, from, to, limite) {
 // y entonces el diagnóstico daría verde sobre campos que el modo real ya no pide.
 const CAMPOS_LISTA_TN = [
   'id', 'number', 'status', 'payment_status', 'created_at', 'total', 'contact_name',
-  'gateway', 'payment_details', 'subtotal', 'discount', 'promotional_discount',
+  'gateway', 'gateway_name', 'payment_details', 'subtotal', 'discount', 'promotional_discount',
   'discount_gateway', 'coupon', 'shipping_option', 'shipping_cost_customer',
   'shipping_cost_owner', 'shipping_pickup_type', 'shipping_store_branch_name',
   'shipping_status', 'shipping_tracking_number', 'shipped_at', 'paid_at',
