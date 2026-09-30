@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const FOTOS = require('./_fotos.js');
+const MAIL = require('./_mail-pedido.js');
 
 const KV_URL = process.env.KV_REST_API_URL || process.env.STORAGE_KV_REST_API_URL;
 const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.STORAGE_KV_REST_API_TOKEN;
@@ -399,6 +400,7 @@ module.exports = async (req, res) => {
             fecha: p.fecha || null,
             cliente: p.cliente || '',
             telefono: p.telefono || '',
+            email: p.email || '',
             pago: p.pago || '',
             entrega: p.entrega || '',
             total: p.total || 0,
@@ -446,6 +448,44 @@ module.exports = async (req, res) => {
         } catch (e) { /* cae al snapshot */ }
       }
       return res.json(esAdmin(req) ? pedido : sinFaltantes(pedido));
+    }
+
+    // Mandar el mail de "recibimos tu pedido": POST /api/pedido?accion=mail {id, k}
+    //
+    // Lo pide el navegador del cliente después de guardar el pedido, sin
+    // contraseña. Para que nadie lo use para mandarle mails a cualquiera con
+    // nuestra firma, tres frenos:
+    //   · la clave del link (solo la tiene quien acaba de confirmar),
+    //   · UN mail por pedido (marca `mail:<id>` con NX; si falla se borra y se
+    //     puede reintentar),
+    //   · el mail tiene que estar escrito en la venta de Gestión Nube, que se
+    //     crea antes: sin venta real con ese mail, no sale nada.
+    // El contenido sale del pedido guardado, nunca de este request.
+    if (req.method === 'POST' && req.query.accion === 'mail') {
+      const { id, k } = req.body || {};
+      if (!id || !claveOk(id, k)) return res.status(401).json({ error: 'Clave inválida' });
+      const raw = await kvCmd(['GET', clave(id)]);
+      const pedido = raw && raw.result ? JSON.parse(raw.result) : null;
+      if (!pedido || !MAIL.mailValido(pedido.email)) return res.status(400).json({ error: 'El pedido no tiene un mail válido' });
+
+      const busq = await gnGet('/ventas?q=' + encodeURIComponent(id));
+      const venta = ((busq && busq.data) || []).find(v => String(v.number) === String(id));
+      const enGN = venta && String(venta.comments || '').toLowerCase().includes(pedido.email.toLowerCase());
+      if (!enGN) return res.status(409).json({ error: 'El mail no coincide con la venta' });
+
+      const marca = 'mail:' + clave(id);
+      const tomada = await kvCmd(['SET', marca, new Date().toISOString(), 'NX', 'EX', String(TTL_SECONDS)]);
+      if (tomada && tomada.result === null) return res.json({ ok: true, yaEnviado: true });
+
+      const link = 'https://' + req.headers.host + '/pedido/' + encodeURIComponent(id) + '?k=' + claveDe(id);
+      const r = await MAIL.mandarMailPedido(pedido, link);
+      if (!r.ok) {
+        await kvCmd(['DEL', marca]);
+        // El motivo va al log, no al navegador: puede traer detalles del proveedor.
+        console.error('mail pedido', id, r.motivo);
+        return res.status(502).json({ error: 'No se pudo mandar el mail' });
+      }
+      return res.json({ ok: true });
     }
 
     // Guardar un pedido cuando el cliente confirma.

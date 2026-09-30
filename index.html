@@ -785,6 +785,11 @@
       <div id="phone-hint" style="font-size:11px;color:var(--text-hint);margin-top:3px">Ingresá solo números, sin guiones ni espacios.</div>
     </div>
     <div class="form-group">
+      <label>Email *</label>
+      <input type="email" id="client-email" placeholder="Ej: juan@gmail.com" autocomplete="email" />
+      <div style="font-size:11px;color:var(--text-hint);margin-top:3px">Te mandamos el detalle de tu pedido.</div>
+    </div>
+    <div class="form-group">
       <label>Forma de pago *</label>
       <select id="client-payment" style="width:100%;padding:8px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font-family:inherit;font-size:13px;color:var(--text);background:var(--bg);outline:none">
         <option value="">— Seleccioná una opción —</option>
@@ -3349,6 +3354,12 @@ async function confirmarPedido() {
     return;
   }
 
+  const email = $('client-email').value.trim().toLowerCase();
+  if (!email) { showToast('Ingresá tu email', 'error'); $('client-email').focus(); return; }
+  if (!/^[^\s@<>()",;:]+@[^\s@<>()",;:]+\.[a-z]{2,}$/i.test(email)) {
+    showToast('El email parece incorrecto', 'error'); $('client-email').focus(); return;
+  }
+
   const payment = $('client-payment').value;
   if (!payment) { showToast('Seleccioná una forma de pago', 'error'); $('client-payment').focus(); return; }
 
@@ -3413,7 +3424,7 @@ async function confirmarPedido() {
       store_id: storeId,
       sale_state_id: 1,
       discount_inventory: true,
-      comments: [clientName, contact, 'Pago: ' + payment, 'Entrega: ' + delivery, cuponNota, obs].filter(Boolean).join(' — '),
+      comments: [clientName, contact, email, 'Pago: ' + payment, 'Entrega: ' + delivery, cuponNota, obs].filter(Boolean).join(' — '),
       items: items.map(i => ({ product_id: i.id, ...(i.sizeId ? { size_id: i.sizeId } : {}), quantity: i.qty, unit_price: cartItemOferta(i) ? i.precio : Math.round(i.precio * factorCupon * 100) / 100 }))
     };
 
@@ -3431,6 +3442,7 @@ async function confirmarPedido() {
         fecha: new Date().toISOString(),
         cliente: clientName,
         telefono: phone,
+        email: email,
         pago: payment,
         entrega: delivery,
         obs: obs,
@@ -3451,6 +3463,9 @@ async function confirmarPedido() {
         const rp = await fetch('/api/pedido', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(pedidoDetalle) });
         const dp = await rp.json().catch(() => ({}));
         pedidoUrl = location.origin + '/pedido/' + pedidoId + (dp.k ? '?k=' + dp.k : '');
+        // El mail de "recibimos tu pedido". No se espera: si falla, el pedido
+        // ya está y el cliente tiene el link en pantalla y por WhatsApp.
+        if (dp.k) fetch('/api/pedido?accion=mail', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: pedidoId, k: dp.k }) }).catch(() => {});
       } catch (e) { /* el link es opcional; si falla seguimos igual */ }
     }
 
@@ -3461,6 +3476,7 @@ async function confirmarPedido() {
     saveCart();
     $('client-name').value = '';
     $('client-phone').value = '';
+    $('client-email').value = '';
     $('client-payment').value = '';
     $('client-delivery').value = '';
     $('client-obs').value = '';
@@ -3472,6 +3488,7 @@ async function confirmarPedido() {
       (pedidoId ? '\n\nPedido N°: ' + pedidoId : '') +
       '\nNombre: ' + clientName +
       '\nTeléfono: ' + phone +
+      '\nEmail: ' + email +
       '\nPago: ' + payment +
       '\nEntrega: ' + delivery +
       (cupon ? '\nCupón: ' + cupon.codigo + (cupon.tipo === 'envio' ? ' (ENVÍO BONIFICADO' + (cupon.detalle ? ' - ' + cupon.detalle : '') + ')' : ' (-' + formatPrecio(descuento) + ')') : '') +
