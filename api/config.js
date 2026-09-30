@@ -153,6 +153,8 @@ module.exports = async (req, res) => {
         delete config.excepciones;
         delete config.descuentoMax;
         delete config.descuentoMaxNota;
+        // A quién le llega el aviso de pedido nuevo: direcciones nuestras.
+        delete config.mailAvisoA;
         // Solo se comparte la respuesta BUENA. Si el KV no contestó, esto es una
         // config de emergencia (catálogo vacío, sin precios especiales): guardarla
         // 60 s la repartiría a todos los que entren en ese minuto.

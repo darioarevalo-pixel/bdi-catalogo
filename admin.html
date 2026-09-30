@@ -841,6 +841,23 @@
     <div id="tab-settings" style="display:none">
       <div class="setting-row">
         <div class="setting-info">
+          <div class="setting-label">Mail al cliente con su pedido</div>
+          <div class="setting-desc">Al confirmar, al cliente le llega "Recibimos tu pedido" con el detalle y el link. El mail se le pide igual aunque esto esté apagado.</div>
+        </div>
+        <button class="toggle" id="toggle-mail-cliente" onclick="toggleSetting('mailCliente')"></button>
+      </div>
+      <div class="setting-row" style="flex-wrap:wrap;gap:8px">
+        <div class="setting-info">
+          <div class="setting-label">Aviso de pedido nuevo</div>
+          <div class="setting-desc">Nos llega un mail "Nuevo pedido" con el cliente, el total, su WhatsApp y lo que se le cayó por stock. Varias direcciones, separadas por coma.</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap">
+          <input type="text" id="input-mail-aviso-a" placeholder="nombre@empresa.com, otro@empresa.com" style="width:280px;max-width:100%;padding:8px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font-family:inherit;font-size:14px;outline:none" oninput="config.mailAvisoA=this.value" />
+          <button class="toggle" id="toggle-mail-aviso" onclick="toggleSetting('mailAviso')"></button>
+        </div>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
           <div class="setting-label">Ocultar productos sin stock</div>
           <div class="setting-desc">Los productos sin stock disponible no se muestran en el catálogo.</div>
         </div>
@@ -913,7 +930,7 @@
 <script>
 let allAdminProducts = [];
 const ALL_KEY = '__todas__';
-let config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, mostrarCupones: false, minPurchase: 0, referencePrices: {}, variantPrices: {}, banners: [], newProducts: [], cupones: [], ofertaMargen: 0, descuentoBase: 15, excepciones: {}, apagados: [], codigosAcceso: [], topes: {}, descuentoMax: {}, descuentoMaxNota: '', avisarDescuentoMax: false };
+let config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, mostrarCupones: false, minPurchase: 0, referencePrices: {}, variantPrices: {}, banners: [], newProducts: [], cupones: [], ofertaMargen: 0, descuentoBase: 15, excepciones: {}, apagados: [], codigosAcceso: [], topes: {}, descuentoMax: {}, descuentoMaxNota: '', avisarDescuentoMax: false, mailCliente: true, mailAviso: true, mailAvisoA: '' };
 let isDistribuidor = false; // catálogo unificado: siempre mayorista
 let tnImageMap = {}; // imágenes de TiendaNube (para mostrar la foto en el listado del admin)
 let tnImageMapKeys = []; // claves del mapa, cacheadas (evita recalcularlas en cada cruce)
@@ -944,7 +961,7 @@ async function verificarYEntrar(pwd) {
   if (r.status === 401) return false;
   const loaded = await r.json();
   configBaseUpdatedAt = loaded.updatedAt || '';
-  config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, mostrarCupones: false, minPurchase: 0, referencePrices: {}, variantPrices: {}, banners: [], newProducts: [], cupones: [], ofertaMargen: 0, descuentoBase: 15, excepciones: {}, apagados: [], codigosAcceso: [], topes: {}, descuentoMax: {}, descuentoMaxNota: '', avisarDescuentoMax: false, ...loaded };
+  config = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, mostrarCupones: false, minPurchase: 0, referencePrices: {}, variantPrices: {}, banners: [], newProducts: [], cupones: [], ofertaMargen: 0, descuentoBase: 15, excepciones: {}, apagados: [], codigosAcceso: [], topes: {}, descuentoMax: {}, descuentoMaxNota: '', avisarDescuentoMax: false, mailCliente: true, mailAviso: true, mailAvisoA: '', ...loaded };
   if (!config.referencePrices) config.referencePrices = {};
   if (!config.variantPrices) config.variantPrices = {};
   if (!Array.isArray(config.banners)) config.banners = [];
@@ -3905,6 +3922,12 @@ function setRefPrice(productId, value) {
 }
 
 function renderSettings() {
+  const togMailCli = $('toggle-mail-cliente');
+  if (togMailCli) togMailCli.classList.toggle('on', config.mailCliente !== false);
+  const togMailAv = $('toggle-mail-aviso');
+  if (togMailAv) togMailAv.classList.toggle('on', config.mailAviso !== false);
+  const avisoA = $('input-mail-aviso-a');
+  if (avisoA && document.activeElement !== avisoA) avisoA.value = config.mailAvisoA || '';
   const tog = $('toggle-hide-no-stock');
   if (tog) tog.classList.toggle('on', !!(config.hideNoStock));
   const togCup = $('toggle-mostrar-cupones');

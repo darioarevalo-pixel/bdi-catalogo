@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const FOTOS = require('./_fotos.js');
 const MAIL = require('./_mail-pedido.js');
+const { kvGet } = require('./_kv');
 
 const KV_URL = process.env.KV_REST_API_URL || process.env.STORAGE_KV_REST_API_URL;
 const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.STORAGE_KV_REST_API_TOKEN;
@@ -473,19 +474,35 @@ module.exports = async (req, res) => {
       const enGN = venta && String(venta.comments || '').toLowerCase().includes(pedido.email.toLowerCase());
       if (!enGN) return res.status(409).json({ error: 'El mail no coincide con la venta' });
 
-      const marca = 'mail:' + clave(id);
-      const tomada = await kvCmd(['SET', marca, new Date().toISOString(), 'NX', 'EX', String(TTL_SECONDS)]);
-      if (tomada && tomada.result === null) return res.json({ ok: true, yaEnviado: true });
+      const base = 'https://' + req.headers.host;
+      const link = base + '/pedido/' + encodeURIComponent(id) + '?k=' + claveDe(id);
+      const logo = base + '/logo.png';
 
-      const link = 'https://' + req.headers.host + '/pedido/' + encodeURIComponent(id) + '?k=' + claveDe(id);
-      const r = await MAIL.mandarMailPedido(pedido, link);
-      if (!r.ok) {
-        await kvCmd(['DEL', marca]);
-        // El motivo va al log, no al navegador: puede traer detalles del proveedor.
-        console.error('mail pedido', id, r.motivo);
-        return res.status(502).json({ error: 'No se pudo mandar el mail' });
-      }
-      return res.json({ ok: true });
+      // Cada mail con su propia marca de "ya salió": si el del cliente falla y
+      // se reintenta, el aviso interno no vuelve a salir (y al revés).
+      const unaVez = async (tipo, mandar) => {
+        const marca = tipo + ':' + clave(id);
+        const tomada = await kvCmd(['SET', marca, new Date().toISOString(), 'NX', 'EX', String(TTL_SECONDS)]);
+        if (tomada && tomada.result === null) return { ok: true, yaEnviado: true };
+        const r = await mandar();
+        if (!r.ok) {
+          await kvCmd(['DEL', marca]);
+          // El motivo va al log, no al navegador: puede traer detalles del proveedor.
+          console.error(tipo + ' pedido', id, r.motivo);
+        }
+        return r;
+      };
+      // Los interruptores del panel (Configuración). Si la config no se puede
+      // leer, se manda: apagado es una decisión, y tiene que estar escrita.
+      let cfg = {};
+      try { cfg = (await kvGet()) || {}; } catch (e) { /* sigue con los valores de siempre */ }
+      const apagado = { ok: true, apagado: true };
+      const [cliente, aviso] = await Promise.all([
+        cfg.mailCliente === false ? apagado : unaVez('mail', () => MAIL.mandarMailPedido(pedido, link, logo)),
+        cfg.mailAviso === false ? apagado : unaVez('aviso', () => MAIL.mandarAvisoPedido(pedido, link, logo, cfg.mailAvisoA)),
+      ]);
+      if (!cliente.ok) return res.status(502).json({ error: 'No se pudo mandar el mail', aviso: !!aviso.ok });
+      return res.json({ ok: true, aviso: !!aviso.ok });
     }
 
     // Guardar un pedido cuando el cliente confirma.
