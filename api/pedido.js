@@ -414,7 +414,17 @@ module.exports = async (req, res) => {
         });
       }
 
-      // 3) Más nuevos primero (fecha ISO → orden lexicográfico sirve).
+      // 3) ¿Salió el mail? La marca `mail:`/`aviso:` la pone el envío cuando le
+      //    sale bien (y la borra si falla), así que es el registro de lo enviado.
+      //    Los registros de Vercel duran una hora en este plan: esto queda 90 días.
+      for (let i = 0; i < pedidos.length; i += 50) {
+        const tramo = pedidos.slice(i, i + 50);
+        const m = await kvCmd(['MGET', ...tramo.flatMap(p => ['mail:' + clave(p.id), 'aviso:' + clave(p.id)])]);
+        const vals = (m && m.result) || [];
+        tramo.forEach((p, j) => { p.mailEnviado = vals[2 * j] || null; p.avisoEnviado = vals[2 * j + 1] || null; });
+      }
+
+      // 4) Más nuevos primero (fecha ISO → orden lexicográfico sirve).
       pedidos.sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')));
       return res.json({ pedidos });
     }

@@ -2838,6 +2838,7 @@ function renderPedidos() {
           <div class="pedido-cliente">${notaEsc(p.cliente) || 'Sin nombre'}</div>
           <div class="pedido-meta">N° ${notaEsc(p.id)} · ${fmtFechaPedido(p.fecha)}${p.telefono ? ' · ' + notaEsc(p.telefono) : ''}</div>
           <div class="pedido-meta">${p.nItems} ítem${p.nItems === 1 ? '' : 's'}${p.pago ? ' · ' + notaEsc(p.pago) : ''}${p.entrega ? ' · ' + notaEsc(p.entrega) : ''}</div>
+          ${p.email ? `<div class="pedido-meta">${p.mailEnviado ? '✉️ Mail enviado a ' + notaEsc(p.email) + ' · ' + fmtFechaPedido(p.mailEnviado) : '✉️ Mail SIN enviar · ' + notaEsc(p.email)}${p.avisoEnviado ? ' · aviso ✓' : ''}</div>` : ''}
           ${p.nFaltantes ? `<button class="pedido-falt-chip" onclick="verFaltantes('${encodeURIComponent(p.id)}')">⚠ ${p.nFaltantes} sin stock — ver qué se cayó</button>` : ''}
         </div>
         <div class="pedido-total">${fmtAR(p.total || 0)}</div>
