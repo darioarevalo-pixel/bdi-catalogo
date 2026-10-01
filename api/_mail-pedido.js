@@ -59,13 +59,14 @@ function agrupar(items) {
   const porNombre = {};
   items.forEach(i => {
     const n = String(i.nombre || '');
-    if (!porNombre[n]) { porNombre[n] = { nombre: n, img: '', variantes: [], unidades: 0, importe: 0 }; grupos.push(porNombre[n]); }
+    if (!porNombre[n]) { porNombre[n] = { nombre: n, img: '', variantes: [], unidades: 0, importe: 0, precios: new Set() }; grupos.push(porNombre[n]); }
     const g = porNombre[n];
     const cant = Number(i.cantidad) || 0;
     if (!g.img && i.img) g.img = i.img;
     g.variantes.push({ nombre: i.variante || '', cantidad: cant });
     g.unidades += cant;
     g.importe += (Number(i.precio) || 0) * cant;
+    if (cant > 0) g.precios.add(Math.round(Number(i.precio) || 0));
   });
   return grupos;
 }
@@ -89,7 +90,10 @@ function filaProducto(g) {
     '</td>' +
     '<td valign="top" align="right" style="padding:12px 0 12px 12px;border-bottom:1px solid ' + C.linea + ';font-size:14px;color:' + C.tinta + ';white-space:nowrap">' +
       '<div style="font-weight:bold">' + pesos(g.importe) + '</div>' +
-      '<div style="color:' + C.gris + ';font-size:12px">' + g.unidades + ' u.</div>' +
+      '<div style="color:' + C.gris + ';font-size:12px">' + g.unidades + ' u.' +
+        // El mayorista compara por unidad. Si el mismo producto quedó a dos
+        // precios (por ejemplo, un modelo en oferta), no hay UN precio que mostrar.
+        (g.precios.size === 1 ? ' × ' + pesos([...g.precios][0]) : '') + '</div>' +
     '</td>' +
   '</tr>';
 }
@@ -166,7 +170,14 @@ function armarCuerpo(pedido, link, logo, interno) {
     ? ''
     : '<p style="margin:24px 0 0;font-size:12px;line-height:1.5;color:' + C.gris + '">Si hay que corregir algo del pedido (por ejemplo, por stock), el link se actualiza solo. Guardalo: está disponible durante 90 días.</p>';
 
+  // La línea que muestra la bandeja de entrada al lado del asunto. Sin esto,
+  // Gmail mostraba el texto alternativo del logo («BDI Accesorios»).
+  const vistaPrevia = 'Pedido N° ' + pedido.id + ' · ' + unidades + ' unidades · ' + pesos(pedido.total) +
+    (interno ? ' · ' + (pedido.cliente || '') : ' · Te escribimos por WhatsApp para coordinar');
+
   return '<!doctype html><html><body style="margin:0;padding:0;background:' + C.fondo + '">' +
+    '<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;font-size:1px;line-height:1px">' +
+      esc(vistaPrevia) + '&#8199;&#65279;&#847;'.repeat(40) + '</div>' +
     '<table width="100%" cellpadding="0" cellspacing="0" style="background:' + C.fondo + '"><tr><td align="center" style="padding:24px 12px">' +
     '<table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:10px;font-family:Arial,Helvetica,sans-serif">' +
       '<tr><td align="center" style="padding:24px 24px 8px">' +
