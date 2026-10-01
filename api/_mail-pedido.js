@@ -170,7 +170,7 @@ function armarCuerpo(pedido, link, logo, interno) {
     '<table width="100%" cellpadding="0" cellspacing="0" style="background:' + C.fondo + '"><tr><td align="center" style="padding:24px 12px">' +
     '<table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:10px;font-family:Arial,Helvetica,sans-serif">' +
       '<tr><td align="center" style="padding:24px 24px 8px">' +
-        (logo ? '<img src="' + esc(logo) + '" alt="BDI Accesorios" height="44" style="display:block;height:44px;width:auto">' : '<b>BDI Accesorios</b>') +
+        (logo ? '<img src="' + esc(logo) + '" alt="BDI Accesorios" width="120" height="72" style="display:block;width:120px;height:72px">' : '<b>BDI Accesorios</b>') +
       '</td></tr>' +
       '<tr><td style="padding:16px 24px 28px">' +
         '<h1 style="margin:0 0 6px;font-size:22px;color:' + C.tinta + '">' + titulo + '</h1>' +

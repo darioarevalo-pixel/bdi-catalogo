@@ -486,7 +486,9 @@ module.exports = async (req, res) => {
 
       const base = 'https://' + req.headers.host;
       const link = base + '/pedido/' + encodeURIComponent(id) + '?k=' + claveDe(id);
-      const logo = base + '/logo.png';
+      // logo-mail.png: el logo recortado (logo.png es 7500×7500 con el dibujo en
+      // el centro: en el mail se veía diminuto y pesaba 300 KB).
+      const logo = base + '/logo-mail.png';
 
       // Cada mail con su propia marca de "ya salió": si el del cliente falla y
       // se reintenta, el aviso interno no vuelve a salir (y al revés).
