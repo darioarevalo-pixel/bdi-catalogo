@@ -373,6 +373,15 @@
   .gen-preview { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; font-family: inherit; font-size: 13px; color: var(--text); white-space: pre-wrap; margin: 0; }
   .pm-builder { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 6px; }
   .pm-builder .admin-select { min-width: 180px; }
+  .pm-buscador { position: relative; width: 100%; max-width: 480px; }
+  .pm-buscador .admin-search { width: 100%; box-sizing: border-box; }
+  .pm-desplegable { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 50; background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); box-shadow: 0 8px 24px rgba(0,0,0,.12); max-height: 340px; overflow-y: auto; }
+  .pm-opcion { display: block; width: 100%; text-align: left; background: none; border: none; border-bottom: 1px solid var(--border, #eee); padding: 9px 12px; font-family: inherit; font-size: 13px; color: var(--text); cursor: pointer; }
+  .pm-opcion:last-child { border-bottom: none; }
+  .pm-opcion:hover, .pm-opcion.activa { background: var(--bg); }
+  .pm-opcion.elegida { font-weight: 600; }
+  .pm-opcion-cat { display: block; font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .pm-desplegable-nota { padding: 9px 12px; font-size: 12px; color: var(--text-muted); }
   .pm-cant { width: 70px; padding: 8px 9px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; text-align: right; outline: none; }
   .pm-precio-wrap { display: flex; align-items: center; gap: 3px; }
   .pm-precio-wrap span { font-size: 13px; color: var(--text-muted); }
@@ -667,9 +676,11 @@
       <p class="section-note">Cargá un pedido mayorista negociado: elegís productos, cantidades y el <strong>precio acordado</strong>, y se crea la venta <strong>directo en Gestión Nube</strong> (descuenta stock). Después en GN la vinculás al cliente. Te genera el link del pedido para mandarle.</p>
       <div class="pm-builder">
         <input type="hidden" id="pm-producto" value="" />
-        <input class="admin-search" type="text" id="pm-buscar" placeholder="Buscar producto (ej. cable bdi, vidrio, soft case)" oninput="pmBuscar()" autocomplete="off" style="max-width:480px" />
+        <div class="pm-buscador">
+          <input class="admin-search" type="text" id="pm-buscar" placeholder="Buscar producto (ej. cable bdi, vidrio, soft case)" oninput="pmBuscar()" onfocus="pmBuscar()" onkeydown="pmBuscarTecla(event)" autocomplete="off" />
+          <div id="pm-resultados" class="pm-desplegable" style="display:none"></div>
+        </div>
       </div>
-      <div id="pm-resultados" class="fotos-resultados"></div>
       <div id="pm-elegido" class="pm-hint" style="display:none;margin-bottom:8px"></div>
       <div id="pm-matriz" style="display:none">
         <div class="pm-matriz-top">
@@ -3248,32 +3259,62 @@ function pmFetchReferences() {
 }
 function populatePedidoManual() {
   pmFetchReferences();
-  pmBuscar();
   pmRender();
 }
 // Buscador de productos del pedido: escribís y aparecen solo los que coinciden.
+// Se muestra como un desplegable debajo de la caja (una opción por renglón).
+let pmOpcionActiva = -1;
+function pmCerrarDesplegable() {
+  const cont = $('pm-resultados');
+  if (cont) cont.style.display = 'none';
+  pmOpcionActiva = -1;
+}
 function pmBuscar() {
   const cont = $('pm-resultados');
   if (!cont) return;
+  pmOpcionActiva = -1;
   const q = ($('pm-buscar')?.value || '').trim();
-  if (!q) { cont.innerHTML = ''; return; }
+  if (!q) { cont.innerHTML = ''; cont.style.display = 'none'; return; }
   const matches = buscarProductos(allAdminProducts, q);
-  if (!matches.length) { cont.innerHTML = '<div class="fotos-res-vacio">Sin coincidencias para "' + q.replace(/</g, '&lt;') + '".</div>'; return; }
+  cont.style.display = 'block';
+  if (!matches.length) { cont.innerHTML = '<div class="pm-desplegable-nota">Sin coincidencias para "' + q.replace(/</g, '&lt;') + '".</div>'; return; }
   const lista = matches.slice(0, 40);
-  cont.innerHTML = '<div class="fotos-res-list">' + lista.map(p => {
+  cont.innerHTML = lista.map(p => {
     const id = p.id || p.product_id;
     const elegido = String(id) === String($('pm-producto').value);
-    return '<button class="fotos-res-item"' + (elegido ? ' style="border-color:var(--accent);background:var(--bg)"' : '') +
-      ' onclick="pmElegir(\'' + id + '\')">' + (p.name || p.nombre || 'Sin nombre').replace(/</g, '&lt;') + '</button>';
-  }).join('') + '</div>' +
-    (matches.length > lista.length ? '<div class="fotos-res-vacio">…y ' + (matches.length - lista.length) + ' más. Escribí otra palabra para achicar la lista.</div>' : '');
+    return '<button type="button" class="pm-opcion' + (elegido ? ' elegida' : '') + '" data-id="' + id + '"' +
+      ' onmousedown="event.preventDefault()" onclick="pmElegir(\'' + id + '\')">' +
+      (p.name || p.nombre || 'Sin nombre').replace(/</g, '&lt;') +
+      (p.category ? '<span class="pm-opcion-cat">' + String(p.category).replace(/</g, '&lt;') + '</span>' : '') +
+    '</button>';
+  }).join('') +
+    (matches.length > lista.length ? '<div class="pm-desplegable-nota">…y ' + (matches.length - lista.length) + ' más. Escribí otra palabra para achicar la lista.</div>' : '');
 }
+// Flechas para moverse, Enter para elegir, Esc para cerrar.
+function pmBuscarTecla(e) {
+  const cont = $('pm-resultados');
+  const ops = cont ? [...cont.querySelectorAll('.pm-opcion')] : [];
+  if (e.key === 'Escape') { pmCerrarDesplegable(); return; }
+  if (!ops.length || cont.style.display === 'none') return;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    pmOpcionActiva = e.key === 'ArrowDown' ? Math.min(ops.length - 1, pmOpcionActiva + 1) : Math.max(0, pmOpcionActiva - 1);
+    ops.forEach((o, i) => o.classList.toggle('activa', i === pmOpcionActiva));
+    ops[pmOpcionActiva].scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    pmElegir(ops[Math.max(0, pmOpcionActiva)].dataset.id);
+  }
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest || !e.target.closest('.pm-buscador')) pmCerrarDesplegable();
+});
 function pmElegir(id) {
   $('pm-producto').value = id;
   const p = pmProdSel();
   $('pm-elegido').style.display = p ? 'block' : 'none';
   $('pm-elegido').innerHTML = p ? 'Producto elegido: <strong>' + (p.name || p.nombre || '').replace(/</g, '&lt;') + '</strong>' : '';
-  pmBuscar();
+  pmCerrarDesplegable();
   pmSelectProducto();
 }
 function pmProdSel() { return allAdminProducts.find(x => (x.id || x.product_id) == $('pm-producto').value); }
