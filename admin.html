@@ -666,8 +666,11 @@
     <div id="tab-pedido" style="display:none">
       <p class="section-note">Cargá un pedido mayorista negociado: elegís productos, cantidades y el <strong>precio acordado</strong>, y se crea la venta <strong>directo en Gestión Nube</strong> (descuenta stock). Después en GN la vinculás al cliente. Te genera el link del pedido para mandarle.</p>
       <div class="pm-builder">
-        <select id="pm-producto" class="admin-select" onchange="pmSelectProducto()"><option value="">— Elegí un producto —</option></select>
+        <input type="hidden" id="pm-producto" value="" />
+        <input class="admin-search" type="text" id="pm-buscar" placeholder="Buscar producto (ej. cable bdi, vidrio, soft case)" oninput="pmBuscar()" autocomplete="off" style="max-width:480px" />
       </div>
+      <div id="pm-resultados" class="fotos-resultados"></div>
+      <div id="pm-elegido" class="pm-hint" style="display:none;margin-bottom:8px"></div>
       <div id="pm-matriz" style="display:none">
         <div class="pm-matriz-top">
           <label class="pm-precio-label">Precio c/u (el negociado)
@@ -1304,6 +1307,49 @@ function normWords(s) {
     .filter(Boolean);
 }
 
+// ===== Buscador de productos (el mismo para todas las pestañas) =====
+// Antes cada buscador comparaba la frase entera contra el nombre: "cables" no
+// encontraba "CABLE ..." y "cable bdi" no encontraba "CABLE BDI USB-C".
+// Ahora: cada palabra buscada tiene que aparecer (en cualquier orden) en el
+// nombre, el código o la categoría; sin importar acentos ni mayúsculas; y una
+// palabra en plural también encuentra el singular ("cables" → "cable").
+function buscarPalabraVariantes(w) {
+  const vs = [w];
+  if (w.length > 4 && w.endsWith('es')) vs.push(w.slice(0, -2));
+  if (w.length > 3 && w.endsWith('s')) vs.push(w.slice(0, -1));
+  return vs;
+}
+// Devuelve 0 si no coincide; si coincide, un puntaje (más alto = más arriba).
+function buscarPuntaje(p, q) {
+  const qw = normWords(q);
+  if (!qw.length) return 1;
+  const nameW = normWords(p.name || p.nombre || '');
+  const catW = normWords(p.category || '');
+  const codeW = normWords(p.code || p.sku || '');
+  let puntaje = 1;
+  for (const w of qw) {
+    const vs = buscarPalabraVariantes(w);
+    const en = arr => arr.some(x => vs.some(v => x.startsWith(v)));
+    const enNombre = en(nameW), enCat = en(catW), enCod = en(codeW);
+    if (!enNombre && !enCat && !enCod) return 0;
+    // Lo que arranca con la palabra buscada ("CABLE ...") va antes que lo que
+    // solo la menciona ("AURICULAR CON CABLE").
+    if (nameW[0] && vs.some(v => nameW[0].startsWith(v))) puntaje += 3;
+    if (enCat) puntaje += 2;
+    if (enNombre) puntaje += 1;
+  }
+  return puntaje;
+}
+function coincideBusqueda(p, q) { return buscarPuntaje(p, q) > 0; }
+// Filtra y ordena por relevancia (empate: alfabético).
+function buscarProductos(lista, q) {
+  return lista
+    .map(p => ({ p, s: buscarPuntaje(p, q) }))
+    .filter(x => x.s > 0)
+    .sort((a, b) => b.s - a.s || (a.p.name || a.p.nombre || '').localeCompare(b.p.name || b.p.nombre || '', 'es'))
+    .map(x => x.p);
+}
+
 function tnLookupAdmin(p) {
   const sku = (p.code || p.sku || p.codigo || '').trim().toLowerCase();
   if (sku && tnImageMap[sku]) return tnImageMap[sku];
@@ -1437,7 +1483,7 @@ function renderProductList() {
     const name = (p.name || p.nombre || '').toLowerCase();
     const code = (p.code || p.sku || '').toLowerCase();
     const pcat = p.category || '';
-    return (!q || name.includes(q) || code.includes(q)) && (!cat || pcat === cat);
+    return (!q || coincideBusqueda(p, q)) && (!cat || pcat === cat);
   });
   // Productos ocultos siempre al final
   prods.sort((a, b) => {
@@ -2231,7 +2277,7 @@ function renderRecargosList() {
     const name = (p.name || p.nombre || '').toLowerCase();
     const code = (p.code || p.sku || '').toLowerCase();
     const pcat = p.category || '';
-    if (q && !name.includes(q) && !code.includes(q)) return false;
+    if (q && !coincideBusqueda(p, q)) return false;
     if (cat && pcat !== cat) return false;
     const cost = parseFloat(p.unit_cost || 0);
     const exc = excepcionDe(id);
@@ -2973,7 +3019,7 @@ function renderMargenes() {
     const name = (p.name || p.nombre || '').toLowerCase();
     const code = (p.code || p.sku || '').toLowerCase();
     const pcat = p.category || '';
-    return (!q || name.includes(q) || code.includes(q)) && (!cat || pcat === cat);
+    return (!q || coincideBusqueda(p, q)) && (!cat || pcat === cat);
   });
 
   // Resumen
@@ -3059,7 +3105,7 @@ function renderPendientes() {
     const name = (p.name || p.nombre || '').toLowerCase();
     const code = (p.code || p.sku || '').toLowerCase();
     const pcat = p.category || '';
-    return (!q || name.includes(q) || code.includes(q)) && (!cat || pcat === cat);
+    return (!q || coincideBusqueda(p, q)) && (!cat || pcat === cat);
   });
   if (!prods.length) {
     container.innerHTML = '<div class="loading-state">🎉 No hay productos pendientes — todos los visibles tienen precio mayorista.</div>';
@@ -3201,16 +3247,34 @@ function pmFetchReferences() {
   return fetch('/api/proxy?_path=/ventas/referencias').then(r => r.json()).then(d => { pmReferences = d; return d; }).catch(() => ({}));
 }
 function populatePedidoManual() {
-  const sel = $('pm-producto');
-  if (sel && sel.options.length <= 1) {
-    [...allAdminProducts].sort((a, b) => (a.name || a.nombre || '').localeCompare(b.name || b.nombre || '')).forEach(p => {
-      const opt = document.createElement('option');
-      opt.value = p.id || p.product_id; opt.textContent = p.name || p.nombre || 'Sin nombre';
-      sel.appendChild(opt);
-    });
-  }
   pmFetchReferences();
+  pmBuscar();
   pmRender();
+}
+// Buscador de productos del pedido: escribís y aparecen solo los que coinciden.
+function pmBuscar() {
+  const cont = $('pm-resultados');
+  if (!cont) return;
+  const q = ($('pm-buscar')?.value || '').trim();
+  if (!q) { cont.innerHTML = ''; return; }
+  const matches = buscarProductos(allAdminProducts, q);
+  if (!matches.length) { cont.innerHTML = '<div class="fotos-res-vacio">Sin coincidencias para "' + q.replace(/</g, '&lt;') + '".</div>'; return; }
+  const lista = matches.slice(0, 40);
+  cont.innerHTML = '<div class="fotos-res-list">' + lista.map(p => {
+    const id = p.id || p.product_id;
+    const elegido = String(id) === String($('pm-producto').value);
+    return '<button class="fotos-res-item"' + (elegido ? ' style="border-color:var(--accent);background:var(--bg)"' : '') +
+      ' onclick="pmElegir(\'' + id + '\')">' + (p.name || p.nombre || 'Sin nombre').replace(/</g, '&lt;') + '</button>';
+  }).join('') + '</div>' +
+    (matches.length > lista.length ? '<div class="fotos-res-vacio">…y ' + (matches.length - lista.length) + ' más. Escribí otra palabra para achicar la lista.</div>' : '');
+}
+function pmElegir(id) {
+  $('pm-producto').value = id;
+  const p = pmProdSel();
+  $('pm-elegido').style.display = p ? 'block' : 'none';
+  $('pm-elegido').innerHTML = p ? 'Producto elegido: <strong>' + (p.name || p.nombre || '').replace(/</g, '&lt;') + '</strong>' : '';
+  pmBuscar();
+  pmSelectProducto();
 }
 function pmProdSel() { return allAdminProducts.find(x => (x.id || x.product_id) == $('pm-producto').value); }
 function pmSelectProducto() {
@@ -3301,6 +3365,10 @@ function pmAgregarMatriz() {
   if (!agregados) { alert('Cargá la cantidad de al menos un color/modelo.'); return; }
   $('pm-producto').value = '';
   $('pm-matriz').style.display = 'none';
+  $('pm-elegido').style.display = 'none';
+  $('pm-buscar').value = '';
+  pmBuscar();
+  $('pm-buscar').focus();
   pmRender();
 }
 function pmQuitar(idx) { pmLineas.splice(idx, 1); pmRender(); }
@@ -3600,12 +3668,9 @@ let fotosImgSel = {}; // productId -> array de índices de foto marcados (todas 
 function fotosCoincidencias() {
   const q = ($('fotos-buscar')?.value || '').trim().toLowerCase();
   if (!q) return [];
-  return allAdminProducts.filter(p => {
+  return buscarProductos(allAdminProducts, q).filter(p => {
     const id = p.id || p.product_id;
-    if (fotosSel.some(x => x == id)) return false; // ya seleccionado
-    const name = (p.name || p.nombre || '').toLowerCase();
-    const code = (p.code || p.sku || '').toLowerCase();
-    return name.includes(q) || code.includes(q);
+    return !fotosSel.some(x => x == id); // ya seleccionado
   });
 }
 function fotosBuscar() {
@@ -3843,7 +3908,7 @@ function renderPriceList() {
     const name = (p.name || p.nombre || '').toLowerCase();
     const code = (p.code || p.sku || '').toLowerCase();
     const pcat = p.category || '';
-    if (q && !name.includes(q) && !code.includes(q)) return false;
+    if (q && !coincideBusqueda(p, q)) return false;
     if (cat && pcat !== cat) return false;
     const ref = parseFloat(refs[id] || 0);
     const cur = getCurrentPrice(p);
