@@ -2900,6 +2900,7 @@ function renderPedidos() {
         </div>
         <div class="pedido-total">${fmtAR(p.total || 0)}</div>
         <button class="pedido-ver" style="border:1px solid var(--border-strong);background:transparent;color:var(--text);cursor:pointer;font-family:inherit" onclick="copiarLinkPedido('${encodeURIComponent(p.id)}','${p.k ? encodeURIComponent(p.k) : ''}')">Copiar link</button>
+        <button class="pedido-ver" style="border:1px solid var(--border-strong);background:transparent;color:var(--text);cursor:pointer;font-family:inherit" onclick="copiarLinkPedido('${encodeURIComponent(p.id)}','${p.k ? encodeURIComponent(p.k) : ''}',${Number(p.total) || 0})">Copiar con total</button>
         <a class="pedido-ver" href="/pedido/${encodeURIComponent(p.id)}${p.k ? '?k=' + encodeURIComponent(p.k) : ''}" target="_blank" rel="noopener">Ver</a>
       </div>
       <div class="pedido-falt-panel" id="pedido-falt-${idFaltantes(p.id)}" style="display:none"></div>
@@ -2980,10 +2981,14 @@ function renderFaltantes(lista) {
  * desde acá se le reenvía sin que tenga que volver a pedir nada. Sin la clave el
  * link no abre, así que copiarlo a mano de la barra del navegador no alcanza.
  */
-function copiarLinkPedido(id, k) {
+function copiarLinkPedido(id, k, total) {
   const url = location.origin + '/pedido/' + id + (k ? '?k=' + k : '');
-  navigator.clipboard.writeText(url)
-    .then(() => showToast('Link copiado — ya se lo podés mandar al cliente', 'success'))
+  // Con total: el mensaje ya armado, para que el cliente vea cuánto es sin abrir el link.
+  const texto = total != null
+    ? 'Pedido N° ' + decodeURIComponent(id) + '\nTotal: ' + fmtAR(total) + '\n' + url
+    : url;
+  navigator.clipboard.writeText(texto)
+    .then(() => showToast((total != null ? 'Link y total copiados' : 'Link copiado') + ' — ya se lo podés mandar al cliente', 'success'))
     .catch(() => showToast('No se pudo copiar. El link es: ' + url, 'error', 8000));
 }
 
