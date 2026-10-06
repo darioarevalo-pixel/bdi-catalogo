@@ -15,7 +15,8 @@ const MODELO_PARENT = 36220324; // categoría padre "Modelo de iPhone" (BDI)
 // Alias: nombres de variante que en realidad refieren a una categoría con otro nombre (normalizado)
 const MODEL_ALIAS = { 'iphone17air': 'iphoneair' };
 
-const { exigirUsuario } = require('./_auth');
+const { exigirUsuario, usuarioValido } = require('./_auth');
+const tnEliminar = require('./_tn-eliminar');
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -153,7 +154,7 @@ module.exports = async (req, res) => {
   // barato uno termina dando por hecho que entró — que es justo lo que falló el 13-ago. Acá
   // un `GET ?accion=loquesea` contesta 400 sin escribir nada y sin loguearse. No se filtra
   // nada: los nombres de las acciones ya están en este repo, que es público.
-  const ACCIONES_POST = new Set(['descripcion-talles', 'descripcion-prosa', 'publicar', 'ocultar', 'stock', 'asignar', 'desasignar', 'auto-modelos', 'nota-cobro']);
+  const ACCIONES_POST = new Set(['descripcion-talles', 'descripcion-prosa', 'publicar', 'ocultar', 'stock', 'asignar', 'desasignar', 'auto-modelos', 'nota-cobro', 'eliminar']);
   const ACCIONES_GET = new Set(['variantes', 'cats', 'descripcion']);
   const accionBody = req.body && req.body.accion;
   const accionQuery = req.query && req.query.accion;
@@ -360,6 +361,40 @@ module.exports = async (req, res) => {
         if (r.ok) publicados++; else { const t = await r.text(); errores.push({ id, status: r.status, msg: t.slice(0, 120) }); }
       }
       return res.status(200).json({ ok: true, publicados, errores });
+    } catch (e) { return res.status(500).json({ error: e.message }); }
+  }
+
+  // --- ELIMINAR productos de TiendaNube (sección «Productos caducados» del monitor) ---
+  // POST { accion:'eliminar', items:[{id, nombre}] } → { ok, resultados:[{id, resultado, motivo}] }
+  // 🔴 SIN VUELTA ATRÁS. Los cuatro frenos y el respaldo están en `_tn-eliminar.js`.
+  // ⛔ No usa el `exigirUsuario` de arriba: con AUTH_MODO_AVISO prendido ése deja pasar a quien
+  // no manda credencial. Acá se pide el usuario de verdad, y que sea Darío o Bruno.
+  if (req.method === 'POST' && req.body && req.body.accion === 'eliminar') {
+    try {
+      const items = Array.isArray(req.body.items) ? req.body.items : [];
+      if (!items.length) return res.status(400).json({ error: 'Faltan los productos a eliminar.' });
+      if (items.length > tnEliminar.MAX_POR_PEDIDO) return res.status(400).json({ error: `Como máximo ${tnEliminar.MAX_POR_PEDIDO} por pedido.` });
+      if (items.some((x) => !x || !x.id || !x.nombre)) return res.status(400).json({ error: 'Cada producto lleva id y nombre.' });
+      const u = await usuarioValido(req);
+      if (!tnEliminar.puedeEliminar(u)) return res.status(403).json({ error: 'Eliminar de la tienda es sólo para Darío y Bruno.' });
+      const deps = {
+        tnFetch: (path, init) => fetch(`https://api.tiendanube.com/v1/${cfg.storeId}${path}`, { ...init, headers: tnHeaders(cfg.token) }),
+        kv: async (cmd) => {
+          const url = process.env.KV_REST_API_URL || process.env.STORAGE_KV_REST_API_URL;
+          const tok = process.env.KV_REST_API_TOKEN || process.env.STORAGE_KV_REST_API_TOKEN;
+          if (!url || !tok) throw new Error('KV no configurado');
+          const r = await fetch(url, { method: 'POST', headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' }, body: JSON.stringify(cmd) });
+          const d = await r.json();
+          if (!r.ok || d.error) throw new Error(d.error || 'HTTP ' + r.status);
+          return d.result;
+        },
+      };
+      const resultados = [];
+      for (const it of items) {
+        resultados.push(await tnEliminar.eliminarUno({ store: storeKey, id: it.id, esperado: it.nombre, quien: u.name }, deps));
+      }
+      console.log(`[tn-eliminar] ${u.name} · ${storeKey} · ` + resultados.map((r) => `${r.id}:${r.resultado}`).join(' '));
+      return res.status(200).json({ ok: true, resultados });
     } catch (e) { return res.status(500).json({ error: e.message }); }
   }
 
