@@ -155,7 +155,7 @@ module.exports = async (req, res) => {
   // un `GET ?accion=loquesea` contesta 400 sin escribir nada y sin loguearse. No se filtra
   // nada: los nombres de las acciones ya están en este repo, que es público.
   const ACCIONES_POST = new Set(['descripcion-talles', 'descripcion-prosa', 'publicar', 'ocultar', 'stock', 'asignar', 'desasignar', 'auto-modelos', 'nota-cobro', 'eliminar']);
-  const ACCIONES_GET = new Set(['variantes', 'cats', 'descripcion']);
+  const ACCIONES_GET = new Set(['variantes', 'cats', 'descripcion', 'eliminados']);
   const accionBody = req.body && req.body.accion;
   const accionQuery = req.query && req.query.accion;
   if (accionBody && !ACCIONES_POST.has(accionBody)) {
@@ -361,6 +361,24 @@ module.exports = async (req, res) => {
         if (r.ok) publicados++; else { const t = await r.text(); errores.push({ id, status: r.status, msg: t.slice(0, 120) }); }
       }
       return res.status(200).json({ ok: true, publicados, errores });
+    } catch (e) { return res.status(500).json({ error: e.message }); }
+  }
+
+  // --- El historial de lo eliminado (pestaña «Eliminados» de Productos caducados) ---
+  // GET ?accion=eliminados&store=… → { ok, eliminados:[{id, nombre, quien, cuando}] }, lo último primero.
+  // Sólo lee. Pide usuario de verdad (no el pase de AUTH_MODO_AVISO) aunque no haya plata ni PII:
+  // son nombres de productos y de quién los eliminó, que no tienen por qué salir del equipo.
+  if (req.query?.accion === 'eliminados') {
+    try {
+      if (!(await usuarioValido(req))) return res.status(403).json({ error: 'No se pudo verificar tu sesión del Monitor.' });
+      const url = process.env.KV_REST_API_URL || process.env.STORAGE_KV_REST_API_URL;
+      const tok = process.env.KV_REST_API_TOKEN || process.env.STORAGE_KV_REST_API_TOKEN;
+      if (!url || !tok) return res.status(500).json({ error: 'KV no configurado' });
+      const r = await fetch(url, { method: 'POST', headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' }, body: JSON.stringify(['LRANGE', tnEliminar.claveRegistro(storeKey), 0, 1999]) });
+      const d = await r.json();
+      if (!r.ok || d.error) return res.status(502).json({ error: 'El almacén de datos no respondió bien' });
+      const eliminados = (d.result || []).map((x) => { try { return JSON.parse(x); } catch { return null; } }).filter(Boolean);
+      return res.status(200).json({ ok: true, eliminados });
     } catch (e) { return res.status(500).json({ error: e.message }); }
   }
 
