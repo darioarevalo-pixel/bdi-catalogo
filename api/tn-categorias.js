@@ -396,7 +396,17 @@ module.exports = async (req, res) => {
       const u = await usuarioValido(req);
       if (!tnEliminar.puedeEliminar(u)) return res.status(403).json({ error: 'Eliminar de la tienda es sólo para Darío y Bruno.' });
       const deps = {
-        tnFetch: (path, init) => fetch(`https://api.tiendanube.com/v1/${cfg.storeId}${path}`, { ...init, headers: tnHeaders(cfg.token) }),
+        // TN corta con 429 cuando se va rápido (medido el 6-oct: 3 de 72 en una tanda de 72). Se
+        // espera lo que dice `x-rate-limit-reset` (ms) y se reintenta; si sigue, vuelve el 429 y
+        // el producto queda «sin eliminar», sin tocarlo.
+        tnFetch: async (path, init) => {
+          for (let intento = 0; ; intento++) {
+            const r = await fetch(`https://api.tiendanube.com/v1/${cfg.storeId}${path}`, { ...init, headers: tnHeaders(cfg.token) });
+            if (r.status !== 429 || intento >= 3) return r;
+            const espera = Math.min(Number(r.headers.get('x-rate-limit-reset')) || 1500, 4000);
+            await new Promise((ok) => setTimeout(ok, espera));
+          }
+        },
         kv: async (cmd) => {
           const url = process.env.KV_REST_API_URL || process.env.STORAGE_KV_REST_API_URL;
           const tok = process.env.KV_REST_API_TOKEN || process.env.STORAGE_KV_REST_API_TOKEN;
