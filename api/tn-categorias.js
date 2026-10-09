@@ -16,6 +16,16 @@ const MODELO_PARENT = 36220324; // categoría padre "Modelo de iPhone" (BDI)
 const MODEL_ALIAS = { 'iphone17air': 'iphoneair' };
 
 const { exigirUsuario, usuarioValido } = require('./_auth');
+const crypto = require('crypto');
+
+// Comparación en tiempo constante contra `STOCK_CRON_KEY` (ver el portero, más abajo).
+function llaveCronValida(llave) {
+  const esperada = process.env.STOCK_CRON_KEY;
+  if (!esperada || typeof llave !== 'string') return false;
+  const a = crypto.createHash('sha256').update(llave).digest();
+  const b = crypto.createHash('sha256').update(esperada).digest();
+  return crypto.timingSafeEqual(a, b);
+}
 const tnEliminar = require('./_tn-eliminar');
 
 const CORS = {
@@ -169,7 +179,19 @@ module.exports = async (req, res) => {
   // stock de hasta 500 variantes y reescribe descripciones. Un POST sin body llega a
   // recategorizar la tienda entera. Alcanza con estar en el padrón —no hace falta ser admin—
   // porque estas pantallas las usa el equipo de marketing.
-  if (!(await exigirUsuario(req, res, 'tn-categorias'))) return;
+  //
+  // 🔑 **La única excepción es el cron diario de stock de Stunned** (`scripts/sync-stock-stunned.mjs`
+  // del monitor, en GitHub Actions): no hay persona detrás, así que entra con `x-stock-cron-key`.
+  // Esa llave abre UNA sola puerta —POST `accion:'stock'` sobre `?store=stunned`— y nada más: con
+  // la llave y cualquier otra cosa se contesta 403, ⛔ no se cae al portero. Así el token de Tienda
+  // Nube no sale nunca de Vercel. Sin `STOCK_CRON_KEY` cargada, la llave no abre nada.
+  if (req.headers['x-stock-cron-key'] != null) {
+    const esStockStunned = req.method === 'POST' && req.body && req.body.accion === 'stock'
+      && String(req.query?.store || '').toLowerCase() === 'stunned';
+    if (!esStockStunned || !llaveCronValida(req.headers['x-stock-cron-key'])) {
+      return res.status(403).json({ error: 'La llave del cron sólo escribe stock de Stunned.' });
+    }
+  } else if (!(await exigirUsuario(req, res, 'tn-categorias'))) return;
 
   const storeKey = (req.query?.store || 'bdi').toLowerCase();
   const cfg = STORES[storeKey];
