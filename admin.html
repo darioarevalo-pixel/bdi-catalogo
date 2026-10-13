@@ -534,6 +534,7 @@
     </div>
     <div class="tab-subs" data-group="pedidos">
       <button class="tab-btn" onclick="setTab('pedidos')">📋 Pedidos</button>
+      <button class="tab-btn" onclick="setTab('carritos')">🛒 Sin terminar</button>
       <button class="tab-btn" onclick="setTab('pedido')">Cargar pedido</button>
       <button class="tab-btn" onclick="setTab('nota')">Nota de pedido</button>
     </div>
@@ -670,6 +671,16 @@
         <button class="tab-btn" onclick="cargarPedidos(true)" title="Volver a traer la lista">↻ Actualizar</button>
       </div>
       <div id="pedidos-list"><div class="loading-state">Cargando pedidos...</div></div>
+    </div>
+
+    <div id="tab-carritos" style="display:none">
+      <p class="section-note">Clientes que armaron un pedido en el catálogo y no lo confirmaron. Si llegaron a escribir su teléfono, aparece acá. Se borran solos a los 30 días.</p>
+      <div class="admin-toolbar">
+        <input class="admin-search" type="text" id="carritos-search" placeholder="Buscar por cliente o teléfono..." oninput="renderCarritos()" />
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-muted);white-space:nowrap"><input type="checkbox" id="carritos-solo-tel" onchange="renderCarritos()" /> Solo con teléfono</label>
+        <button class="tab-btn" onclick="cargarCarritos(true)" title="Volver a traer la lista">↻ Actualizar</button>
+      </div>
+      <div id="carritos-list"><div class="loading-state">Cargando...</div></div>
     </div>
 
     <div id="tab-pedido" style="display:none">
@@ -1773,7 +1784,7 @@ function prodDrop(e, cat, catIdx, toProdIdx) {
 const TAB_GROUPS = {
   catalogo: ['products', 'categories', 'fotos', 'topes'],
   precios: ['recargos', 'prices', 'margenes', 'pendientes', 'generador'],
-  pedidos: ['pedidos', 'pedido', 'nota'],
+  pedidos: ['pedidos', 'carritos', 'pedido', 'nota'],
   marketing: ['banners', 'cupones', 'codigos'],
   ajustes: ['settings'],
 };
@@ -1799,6 +1810,7 @@ function setTab(tab) {
   $('tab-pendientes').style.display = tab === 'pendientes' ? 'block' : 'none';
   $('tab-generador').style.display = tab === 'generador' ? 'block' : 'none';
   $('tab-pedidos').style.display = tab === 'pedidos' ? 'block' : 'none';
+  $('tab-carritos').style.display = tab === 'carritos' ? 'block' : 'none';
   $('tab-pedido').style.display = tab === 'pedido' ? 'block' : 'none';
   $('tab-nota').style.display = tab === 'nota' ? 'block' : 'none';
   $('tab-fotos').style.display = tab === 'fotos' ? 'block' : 'none';
@@ -1832,6 +1844,7 @@ function setTab(tab) {
   if (tab === 'pendientes') { populatePendientesCatFilter(); renderPendientes(); }
   if (tab === 'generador') populateGenerador();
   if (tab === 'pedidos') cargarPedidos();
+  if (tab === 'carritos') cargarCarritos();
   if (tab === 'pedido') populatePedidoManual();
   if (tab === 'nota') notaInit();
   if (tab === 'fotos') { fotosBuscar(); fotosRender(); }
@@ -2907,6 +2920,108 @@ function renderPedidos() {
       <div class="pedido-falt-panel" id="pedido-falt-${idFaltantes(p.id)}" style="display:none"></div>
     </div>
   `).join('');
+}
+
+// ---- Carritos sin terminar ----
+//
+// Lo que un cliente armó en el catálogo y no confirmó. El catálogo manda una
+// copia mientras arma y la borra al confirmar (ver api/pedido.js). Si confirmó
+// desde otro teléfono o compu, la copia queda: por eso se cruza con los pedidos
+// por número de teléfono y se avisa "Después hizo el pedido".
+let allCarritos = null;
+
+async function cargarCarritos(force) {
+  const cont = $('carritos-list');
+  if (allCarritos && !force) { renderCarritos(); return; }
+  if (cont) cont.innerHTML = '<div class="loading-state">Cargando...</div>';
+  try {
+    const opts = { headers: { 'x-admin-password': adminPassword } };
+    const [rc, rp] = await Promise.all([
+      fetch('/api/pedido?carritos=1', opts),
+      allPedidos && !force ? null : fetch('/api/pedido?list=1', opts),
+    ]);
+    const data = await rc.json().catch(() => ({}));
+    if (!rc.ok) throw new Error(data.error || 'HTTP ' + rc.status);
+    if (rp && rp.ok) {
+      const dp = await rp.json().catch(() => ({}));
+      if (Array.isArray(dp.pedidos)) allPedidos = dp.pedidos;
+    }
+    allCarritos = Array.isArray(data.carritos) ? data.carritos : [];
+    renderCarritos();
+  } catch (e) {
+    if (cont) cont.innerHTML = '<div class="loading-state">No se pudieron cargar los carritos.</div>';
+    showToast('Error al cargar carritos: ' + e.message, 'error', 4000);
+  }
+}
+
+function soloDigitos(t) { return String(t || '').replace(/\D/g, '').slice(-8); }
+
+/** El pedido que ese mismo teléfono confirmó después de armar el carrito, si hay. */
+function pedidoPosterior(c) {
+  const tel = soloDigitos(c.telefono);
+  if (tel.length < 8 || !allPedidos) return null;
+  return allPedidos.find(p => soloDigitos(p.telefono) === tel && String(p.fecha || '') >= String(c.creado || '')) || null;
+}
+
+function haceCuanto(iso) {
+  const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (!isFinite(min)) return '';
+  if (min < 1) return 'recién';
+  if (min < 60) return 'hace ' + min + ' min';
+  const h = Math.round(min / 60);
+  if (h < 24) return 'hace ' + h + (h === 1 ? ' hora' : ' horas');
+  const d = Math.round(h / 24);
+  return 'hace ' + d + (d === 1 ? ' día' : ' días');
+}
+
+function renderCarritos() {
+  const cont = $('carritos-list');
+  if (!cont) return;
+  if (!allCarritos) { cargarCarritos(); return; }
+  const q = ($('carritos-search') ? $('carritos-search').value : '').trim().toLowerCase();
+  const soloTel = $('carritos-solo-tel') && $('carritos-solo-tel').checked;
+  let lista = allCarritos;
+  if (soloTel) lista = lista.filter(c => c.telefono);
+  if (q) lista = lista.filter(c =>
+    (c.cliente || '').toLowerCase().includes(q) ||
+    (c.telefono || '').toLowerCase().includes(q) ||
+    (c.codigoCliente || '').toLowerCase().includes(q)
+  );
+  if (!lista.length) {
+    cont.innerHTML = '<div class="loading-state">' + (q || soloTel ? 'Sin resultados.' : 'No hay carritos sin terminar.') + '</div>';
+    return;
+  }
+  cont.innerHTML = lista.map(c => {
+    const id = idFaltantes(c.cid);
+    const nombre = c.cliente || c.codigoCliente || 'Sin datos';
+    const despues = pedidoPosterior(c);
+    const recien = (Date.now() - new Date(c.actualizado).getTime()) < 30 * 60000;
+    return `
+    <div class="pedido-item" id="carrito-item-${id}">
+      <div class="pedido-row">
+        <div class="pedido-main">
+          <div class="pedido-cliente">${notaEsc(nombre)}</div>
+          <div class="pedido-meta">${haceCuanto(c.actualizado)}${c.telefono ? ' · ' + notaEsc(c.telefono) : ''}${c.email ? ' · ' + notaEsc(c.email) : ''}</div>
+          <div class="pedido-meta">${c.unidades} unidad${c.unidades === 1 ? '' : 'es'} · ${c.items.length} producto${c.items.length === 1 ? '' : 's'}${c.codigo ? ' · código ' + notaEsc(c.codigo) : ''}${c.llegoADatos ? ' · llegó a cerrar la compra' : ''}</div>
+          ${despues ? `<div class="pedido-meta" style="color:var(--success, #16a34a);font-weight:600">✓ Después hizo el pedido N° ${notaEsc(despues.id)}</div>` : ''}
+          ${!despues && recien ? `<div class="pedido-meta">Puede estar armándolo todavía.</div>` : ''}
+        </div>
+        <div class="pedido-total">${fmtAR(c.total || 0)}</div>
+        <button class="pedido-ver" onclick="verCarrito('${id}')">Ver productos</button>
+      </div>
+      <div class="pedido-falt-panel" id="carrito-det-${id}" style="display:none">
+        ${c.items.map(i => `<div class="pedido-falt-linea"><div class="pedido-falt-nombre">${i.cantidad} × ${notaEsc(i.nombre)}${i.variante ? ' — ' + notaEsc(i.variante) : ''}</div><div class="pedido-falt-detalle">${fmtAR(i.precio)} c/u · ${fmtAR(i.precio * i.cantidad)}</div></div>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function verCarrito(id) {
+  const panel = $('carrito-det-' + id), item = $('carrito-item-' + id);
+  if (!panel) return;
+  const abrir = panel.style.display === 'none';
+  panel.style.display = abrir ? 'block' : 'none';
+  if (item) item.classList.toggle('abierto', abrir);
 }
 
 // ---- Lo que se le cayó del carrito por falta de stock ----

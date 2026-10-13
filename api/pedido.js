@@ -127,6 +127,80 @@ function sinFaltantes(pedido) {
   return copia;
 }
 
+// ---------------------------------------------------------------------------
+// LOS CARRITOS SIN TERMINAR
+//
+// Hasta el 13-10-2026 el carrito vivía solo en el navegador del cliente: si
+// armaba un pedido y se iba sin confirmar, no nos enterábamos. Ahora el
+// navegador nos manda una copia mientras lo arma (unos segundos después de cada
+// cambio, no en cada toque) y el panel la muestra en "Sin terminar", con el
+// nombre y el teléfono si llegó a escribirlos.
+//
+// Cada navegador tiene su número al azar (`cid`), así que un carrito solo lo
+// pisa el mismo navegador que lo armó. Al confirmar, o si lo vacía, se borra.
+// Si nadie lo toca, se borra solo a los 30 días.
+//
+// Como lo manda el navegador sin contraseña, se guarda campo por campo —nunca
+// el objeto entero— y con topes de tamaño.
+//
+// Va adentro de este archivo y no en uno propio porque el plan de Vercel deja
+// 12 rutas y ya están las 12 (ver la nota en _kv.js).
+// ---------------------------------------------------------------------------
+const CARRITO_TTL = 30 * 24 * 60 * 60;
+const MAX_RENGLONES_CARRITO = 500;
+
+async function guardarCarrito(b) {
+  const cid = String(b.cid || '');
+  if (!/^[a-z0-9]{16,40}$/.test(cid)) return { status: 400, body: { error: 'Carrito inválido' } };
+  const key = 'carrito:' + cid;
+  const texto = (v, max) => String(v == null ? '' : v).trim().slice(0, max);
+  const numero = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) && n >= 0 ? Math.min(n, 1e10) : 0;
+  };
+
+  const items = (Array.isArray(b.items) ? b.items : []).slice(0, MAX_RENGLONES_CARRITO).map(i => ({
+    nombre: texto(i && i.nombre, 200),
+    variante: texto(i && i.variante, 120),
+    cantidad: Math.round(numero(i && i.cantidad)),
+    precio: numero(i && i.precio),
+  })).filter(i => i.nombre && i.cantidad > 0);
+
+  // Lo vació (o confirmó): ya no hay nada que mostrar.
+  if (!items.length) {
+    await kvCmd(['DEL', key]);
+    return { body: { ok: true, borrado: true } };
+  }
+
+  // Si vuelve otro día, el formulario arranca vacío: no perder el nombre y el
+  // teléfono que ya había escrito la vez anterior.
+  let antes = null;
+  try {
+    const a = await kvCmd(['GET', key]);
+    antes = a && a.result ? JSON.parse(a.result) : null;
+  } catch (e) { /* sin lo anterior, se guarda lo de ahora */ }
+
+  const ahora = new Date().toISOString();
+  const carrito = {
+    cid,
+    creado: (antes && antes.creado) || ahora,
+    actualizado: ahora,
+    cliente: texto(b.cliente, 120) || (antes && antes.cliente) || '',
+    telefono: texto(b.telefono, 40) || (antes && antes.telefono) || '',
+    email: texto(b.email, 160) || (antes && antes.email) || '',
+    pago: texto(b.pago, 60),
+    entrega: texto(b.entrega, 60),
+    codigo: texto(b.codigo, 40),
+    codigoCliente: texto(b.codigoCliente, 120),
+    llegoADatos: !!b.llegoADatos || !!(antes && antes.llegoADatos),
+    items,
+    unidades: items.reduce((s, i) => s + i.cantidad, 0),
+    total: Math.round(items.reduce((s, i) => s + i.cantidad * i.precio, 0)),
+  };
+  await kvCmd(['SET', key, JSON.stringify(carrito), 'EX', String(CARRITO_TTL)]);
+  return { body: { ok: true } };
+}
+
 // Normaliza el id para que la clave en KV sea siempre segura.
 function clave(id) {
   return 'pedido:' + String(id).replace(/[^a-zA-Z0-9_-]/g, '');
@@ -448,6 +522,31 @@ module.exports = async (req, res) => {
       return res.json({ pedidos });
     }
 
+    // Los carritos sin terminar, para el panel: GET /api/pedido?carritos=1
+    if (req.method === 'GET' && req.query.carritos) {
+      if (!esAdmin(req)) return res.status(401).json({ error: 'Necesitás la contraseña del panel.' });
+      const keys = [];
+      let cursor = '0';
+      for (let i = 0; i < 20; i++) {
+        const s = await kvCmd(['SCAN', cursor, 'MATCH', 'carrito:*', 'COUNT', '200']);
+        const r = s && s.result;
+        if (!Array.isArray(r)) break;
+        cursor = String(r[0]);
+        if (Array.isArray(r[1])) keys.push(...r[1]);
+        if (cursor === '0') break;
+      }
+      const carritos = [];
+      for (let i = 0; i < keys.length; i += 100) {
+        const m = await kvCmd(['MGET', ...keys.slice(i, i + 100)]);
+        ((m && m.result) || []).forEach(v => {
+          if (!v) return;
+          try { carritos.push(JSON.parse(v)); } catch (e) { /* renglón roto: se saltea */ }
+        });
+      }
+      carritos.sort((a, b) => String(b.actualizado || '').localeCompare(String(a.actualizado || '')));
+      return res.json({ carritos });
+    }
+
     // Leer un pedido para mostrarlo en la página /pedido/<id>
     if (req.method === 'GET') {
       const id = req.query.id;
@@ -534,6 +633,12 @@ module.exports = async (req, res) => {
       ]);
       if (!cliente.ok) return res.status(502).json({ error: 'No se pudo mandar el mail', aviso: !!aviso.ok });
       return res.json({ ok: true, aviso: !!aviso.ok });
+    }
+
+    // Guardar el carrito mientras el cliente lo arma: POST /api/pedido?accion=carrito
+    if (req.method === 'POST' && req.query.accion === 'carrito') {
+      const r = await guardarCarrito(req.body || {});
+      return res.status(r.status || 200).json(r.body);
     }
 
     // Guardar un pedido cuando el cliente confirma.

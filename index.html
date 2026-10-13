@@ -898,7 +898,85 @@ function saveCart() {
     if (!cart || !Object.keys(cart).length) localStorage.removeItem(CART_STORAGE_KEY);
     else localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
   } catch(e) {}
+  programarAvisoCarrito();
 }
+
+// ── Copia del carrito para el panel ("Sin terminar") ────────────────────────
+// Se manda unos segundos después del último cambio, no en cada toque, y solo si
+// cambió algo desde la última vez. Si el cliente confirma o vacía el carrito, la
+// copia se borra. Ver la nota larga en api/pedido.js.
+const CARRITO_ID_KEY = 'bdi_carrito_id';
+const CARRITO_ENVIADO_KEY = 'bdi_carrito_enviado'; // lo último que se mandó
+let avisoCarritoTimer = null;
+
+function carritoId() {
+  try {
+    let id = localStorage.getItem(CARRITO_ID_KEY);
+    if (!id || !/^[a-z0-9]{16,40}$/.test(id)) {
+      const b = new Uint8Array(12);
+      crypto.getRandomValues(b);
+      id = Array.from(b, x => x.toString(16).padStart(2, '0')).join('');
+      localStorage.setItem(CARRITO_ID_KEY, id);
+    }
+    return id;
+  } catch (e) { return null; }
+}
+
+function valorCampo(id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; }
+
+function datosCarrito() {
+  const dr = document.getElementById('cart-drawer');
+  return {
+    cid: carritoId(),
+    items: Object.values(cart || {}).map(i => ({ nombre: i.nombre, variante: i.varNombre || '', cantidad: i.qty, precio: i.precio })),
+    cliente: valorCampo('client-name'),
+    telefono: valorCampo('client-phone'),
+    email: valorCampo('client-email'),
+    pago: valorCampo('client-payment'),
+    entrega: valorCampo('client-delivery'),
+    codigo: (typeof codigoAplicado !== 'undefined' && codigoAplicado) ? codigoAplicado.codigo : '',
+    codigoCliente: (typeof codigoAplicado !== 'undefined' && codigoAplicado) ? (codigoAplicado.cliente || '') : '',
+    llegoADatos: !!(dr && dr.classList.contains('paso-2')),
+  };
+}
+
+function programarAvisoCarrito() {
+  clearTimeout(avisoCarritoTimer);
+  avisoCarritoTimer = setTimeout(() => mandarCarrito(false), 4000);
+}
+
+function mandarCarrito(alSalir) {
+  clearTimeout(avisoCarritoTimer);
+  avisoCarritoTimer = null;
+  try {
+    const d = datosCarrito();
+    if (!d.cid) return;
+    const firma = JSON.stringify(d);
+    const anterior = localStorage.getItem(CARRITO_ENVIADO_KEY);
+    if (firma === anterior) return;
+    // Carrito vacío que nunca se mandó: no hay nada que borrar del otro lado.
+    if (!d.items.length && !anterior) return;
+    if (d.items.length) localStorage.setItem(CARRITO_ENVIADO_KEY, firma);
+    else localStorage.removeItem(CARRITO_ENVIADO_KEY);
+    fetch('/api/pedido?accion=carrito', {
+      method: 'POST', keepalive: !!alSalir,
+      headers: { 'Content-Type': 'application/json' }, body: firma,
+    }).catch(() => {});
+  } catch (e) { /* es solo un aviso para nosotros: nunca molesta al cliente */ }
+}
+
+// Si cierra la pestaña o cambia de app con un aviso pendiente, se manda ya.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && avisoCarritoTimer) mandarCarrito(true);
+});
+window.addEventListener('pagehide', () => { if (avisoCarritoTimer) mandarCarrito(true); });
+// Lo que escribe en "Cerrar compra" (nombre, teléfono…) también cuenta como cambio.
+document.addEventListener('input', (e) => {
+  if (e.target && /^client-(name|phone|email|payment|delivery)$/.test(e.target.id || '')) programarAvisoCarrito();
+});
+document.addEventListener('change', (e) => {
+  if (e.target && /^client-(payment|delivery)$/.test(e.target.id || '')) programarAvisoCarrito();
+});
 let cart = loadCart();
 let filtro = 'todos';
 let categoria = 'todas';
@@ -3296,6 +3374,7 @@ function irACerrar() {
   // El "atrás" del teléfono debe volver al pedido, NO sacar al cliente del
   // catálogo haciéndole creer que perdió todo. Por eso anotamos el paso.
   try { history.pushState({ bdiPaso: 2 }, ''); } catch (e) {}
+  programarAvisoCarrito(); // llegó a "Cerrar compra": eso también se anota
 }
 
 function irAPedido(desdeAtras) {
@@ -3488,6 +3567,7 @@ async function confirmarPedido() {
     $('client-obs').value = '';
     validarTelefono();
     updateCartUI();
+    mandarCarrito(true); // confirmado: se borra ya la copia de "Sin terminar"
     cerrarCarrito();
     // Mensaje de WhatsApp cortito: el detalle completo va en el link del pedido.
     const waMsg = '¡Hola! Acabo de realizar un pedido en el catálogo mayorista de BDI Accesorios.' +
