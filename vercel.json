@@ -12,5 +12,8 @@
     { "source": "/revision", "destination": "/revision.html" },
     { "source": "/pedido/:id", "destination": "/pedido.html" },
     { "source": "/votar", "destination": "/votar.html" }
+  ],
+  "crons": [
+    { "path": "/api/pedido?accion=resumen-carritos", "schedule": "0 23 * * *" }
   ]
 }

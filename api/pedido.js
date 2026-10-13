@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const FOTOS = require('./_fotos.js');
 const MAIL = require('./_mail-pedido.js');
+const MAIL_CARRITOS = require('./_mail-carritos.js');
 const VIDEOS = require('./_videos.js');
 const { kvGet } = require('./_kv');
 
@@ -148,6 +149,29 @@ function sinFaltantes(pedido) {
 // ---------------------------------------------------------------------------
 const CARRITO_TTL = 30 * 24 * 60 * 60;
 const MAX_RENGLONES_CARRITO = 500;
+
+/** Todo lo guardado bajo un patrón (`carrito:*`, `pedido:*`), ya leído. */
+async function leerTodos(patron) {
+  const keys = [];
+  let cursor = '0';
+  for (let i = 0; i < 20; i++) {
+    const s = await kvCmd(['SCAN', cursor, 'MATCH', patron, 'COUNT', '200']);
+    const r = s && s.result;
+    if (!Array.isArray(r)) break;
+    cursor = String(r[0]);
+    if (Array.isArray(r[1])) keys.push(...r[1]);
+    if (cursor === '0') break;
+  }
+  const out = [];
+  for (let i = 0; i < keys.length; i += 100) {
+    const m = await kvCmd(['MGET', ...keys.slice(i, i + 100)]);
+    ((m && m.result) || []).forEach(v => {
+      if (!v) return; // vencido entre el SCAN y el MGET
+      try { out.push(JSON.parse(v)); } catch (e) { /* renglón roto: se saltea */ }
+    });
+  }
+  return out;
+}
 
 async function guardarCarrito(b) {
   const cid = String(b.cid || '');
@@ -522,27 +546,41 @@ module.exports = async (req, res) => {
       return res.json({ pedidos });
     }
 
+    // El correo de fin del día con los carritos sin terminar. Lo llama el cron
+    // de vercel.json. Sale una sola vez por día aunque lo llamen de nuevo (la
+    // marca `resumen-carritos:<día>`), así que dispararlo de afuera no sirve
+    // para mandar correos de más. Con CRON_SECRET cargado en Vercel, además
+    // pide esa clave.
+    if (req.method === 'GET' && req.query.accion === 'resumen-carritos') {
+      const secreto = process.env.CRON_SECRET;
+      if (secreto && req.headers.authorization !== 'Bearer ' + secreto && !esAdmin(req)) {
+        return res.status(401).json({ error: 'No autorizado' });
+      }
+      const dia = new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10); // día de Argentina
+      const marca = 'resumen-carritos:' + dia;
+      const tomada = await kvCmd(['SET', marca, new Date().toISOString(), 'NX', 'EX', String(3 * 24 * 3600)]);
+      if (tomada && tomada.result === null) return res.json({ ok: true, yaEnviado: true });
+
+      let cfg = {};
+      try { cfg = (await kvGet()) || {}; } catch (e) { /* sigue con el respaldo */ }
+      const [carritos, pedidos] = await Promise.all([leerTodos('carrito:*'), leerTodos('pedido:*')]);
+      const r = await MAIL_CARRITOS.mandarResumen(
+        carritos, pedidos,
+        cfg.mailAvisoA || process.env.PEDIDOS_AVISO_A,
+        'https://' + req.headers.host + '/admin'
+      );
+      if (!r.ok) {
+        await kvCmd(['DEL', marca]); // que se pueda reintentar
+        console.error('resumen carritos', r.motivo);
+        return res.status(502).json({ error: 'No se pudo mandar el correo' });
+      }
+      return res.json(r);
+    }
+
     // Los carritos sin terminar, para el panel: GET /api/pedido?carritos=1
     if (req.method === 'GET' && req.query.carritos) {
       if (!esAdmin(req)) return res.status(401).json({ error: 'Necesitás la contraseña del panel.' });
-      const keys = [];
-      let cursor = '0';
-      for (let i = 0; i < 20; i++) {
-        const s = await kvCmd(['SCAN', cursor, 'MATCH', 'carrito:*', 'COUNT', '200']);
-        const r = s && s.result;
-        if (!Array.isArray(r)) break;
-        cursor = String(r[0]);
-        if (Array.isArray(r[1])) keys.push(...r[1]);
-        if (cursor === '0') break;
-      }
-      const carritos = [];
-      for (let i = 0; i < keys.length; i += 100) {
-        const m = await kvCmd(['MGET', ...keys.slice(i, i + 100)]);
-        ((m && m.result) || []).forEach(v => {
-          if (!v) return;
-          try { carritos.push(JSON.parse(v)); } catch (e) { /* renglón roto: se saltea */ }
-        });
-      }
+      const carritos = await leerTodos('carrito:*');
       carritos.sort((a, b) => String(b.actualizado || '').localeCompare(String(a.actualizado || '')));
       return res.json({ carritos });
     }
