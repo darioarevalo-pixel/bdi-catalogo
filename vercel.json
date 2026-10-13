@@ -4,7 +4,7 @@
     "api/config.js": { "maxDuration": 10 },
     "api/tiendanube.js": { "maxDuration": 15 },
     "api/tiendanube-audit.js": { "maxDuration": 20 },
-    "api/pedido.js": { "maxDuration": 10 }
+    "api/pedido.js": { "maxDuration": 25 }
   },
   "rewrites": [
     { "source": "/api/reposicion", "destination": "/api/ingresos?kind=reposicion" },

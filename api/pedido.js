@@ -373,11 +373,11 @@ module.exports = async (req, res) => {
         const c = await kvCmd(['GET', KV_VIDEOS]);
         if (c && c.result) return res.json(JSON.parse(c.result));
       }
-      const videos = await VIDEOS.mapaDeVideos();
+      const { videos, fallidas } = await VIDEOS.mapaDeVideos();
       const out = { videos, leido: new Date().toISOString() };
-      // Vacío = Drive no contestó o la carpeta se cerró: no se guarda, así el
-      // próximo intento vuelve a leer en vez de quedar media hora sin videos.
-      if (Object.keys(videos).length) await kvCmd(['SET', KV_VIDEOS, JSON.stringify(out), 'EX', '1800']);
+      // Vacío o con carpetas que Drive no contestó: no se guarda, así el
+      // próximo intento vuelve a leer en vez de quedar media hora con faltantes.
+      if (Object.keys(videos).length && !fallidas) await kvCmd(['SET', KV_VIDEOS, JSON.stringify(out), 'EX', '1800']);
       return res.json(out);
     }
 

@@ -32,9 +32,19 @@ const desescapar = (s) => s
 
 /** Lo que hay adentro de una carpeta pública: [{id, nombre, esCarpeta, esVideo}]. */
 async function leerCarpeta(id) {
-  const r = await fetch('https://drive.google.com/embeddedfolderview?id=' + encodeURIComponent(id));
-  if (!r.ok) return [];
-  const html = await r.text();
+  // Con ~45 pedidos juntos, Drive a veces no contesta alguno y ese diseño se
+  // perdía en silencio (pasó con Velvet). Se reintenta; si igual falla, se tira
+  // el error para que el mapa quede marcado como incompleto.
+  let html;
+  for (let intento = 0; intento < 3; intento++) {
+    try {
+      const r = await fetch('https://drive.google.com/embeddedfolderview?id=' + encodeURIComponent(id));
+      if (r.ok) { html = await r.text(); if (html.includes('flip-entries')) break; }
+    } catch (e) { /* reintenta */ }
+    html = null;
+    await new Promise(ok => setTimeout(ok, 400 * (intento + 1)));
+  }
+  if (!html) throw new Error('Drive no contestó la carpeta ' + id);
   const out = [];
   // Cada renglón: <div class="flip-entry" id="entry-ID"> … <a href="…"> … <div class="flip-entry-title">NOMBRE</div>
   const re = /<div class="flip-entry" id="entry-([\w-]+)"[\s\S]*?<a href="([^"]+)"[\s\S]*?<div class="flip-entry-title">([^<]*)<\/div>/g;
@@ -54,17 +64,18 @@ async function leerCarpeta(id) {
 }
 
 /**
- * Recorre la carpeta y devuelve { "SHINY CASE": [{nombre, url}], … }:
+ * Recorre la carpeta y devuelve { videos: { "SHINY CASE": [{nombre, url}], … }, fallidas }:
  * cada video queda anotado con el nombre de la carpeta que lo contiene.
  */
 async function mapaDeVideos() {
   const videos = {};
+  let fallidas = 0;
   let nivel = [{ id: CARPETA_RAIZ, nombre: '' }];
   for (let p = 0; p < PROFUNDIDAD && nivel.length; p++) {
     const siguiente = [];
     for (let i = 0; i < nivel.length; i += EN_PARALELO) {
       const tramo = nivel.slice(i, i + EN_PARALELO);
-      const leidos = await Promise.all(tramo.map(c => leerCarpeta(c.id).catch(() => [])));
+      const leidos = await Promise.all(tramo.map(c => leerCarpeta(c.id).catch(() => { fallidas++; return []; })));
       leidos.forEach((hijos, j) => {
         const padre = tramo[j];
         hijos.forEach(h => {
@@ -81,7 +92,8 @@ async function mapaDeVideos() {
     }
     nivel = siguiente;
   }
-  return videos;
+  // `fallidas` > 0: faltan diseños. Quien llama no lo guarda, así no queda media hora sin ellos.
+  return { videos, fallidas };
 }
 
 module.exports = { mapaDeVideos, normalizar, CARPETA_RAIZ };
