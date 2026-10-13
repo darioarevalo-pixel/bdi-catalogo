@@ -2901,6 +2901,7 @@ function renderPedidos() {
         <div class="pedido-total">${fmtAR(p.total || 0)}</div>
         <button class="pedido-ver" style="border:1px solid var(--border-strong);background:transparent;color:var(--text);cursor:pointer;font-family:inherit" onclick="copiarLinkPedido('${encodeURIComponent(p.id)}','${p.k ? encodeURIComponent(p.k) : ''}')">Copiar link</button>
         <button class="pedido-ver" style="border:1px solid var(--border-strong);background:transparent;color:var(--text);cursor:pointer;font-family:inherit" onclick="copiarLinkPedido('${encodeURIComponent(p.id)}','${p.k ? encodeURIComponent(p.k) : ''}',${Number(p.total) || 0})">Copiar con total</button>
+        <button class="pedido-ver" style="border:1px solid var(--border-strong);background:transparent;color:var(--text);cursor:pointer;font-family:inherit" onclick="copiarVideosPedido('${encodeURIComponent(p.id)}')">Videos</button>
         <a class="pedido-ver" href="/pedido/${encodeURIComponent(p.id)}${p.k ? '?k=' + encodeURIComponent(p.k) : ''}" target="_blank" rel="noopener">Ver</a>
       </div>
       <div class="pedido-falt-panel" id="pedido-falt-${idFaltantes(p.id)}" style="display:none"></div>
@@ -2972,6 +2973,87 @@ function renderFaltantes(lista) {
            '</div>';
   };
   return '<div class="pedido-falt-titulo">Se le cayó del pedido por stock</div>' + lista.map(linea).join('');
+}
+
+// ---- Los videos de lo que llevó ----
+//
+// Cada diseño tiene su video en el Drive (09_MAYORISTAS+MELI), en una carpeta
+// con el mismo nombre que el producto. El botón junta los diseños del pedido
+// —uno por diseño, sin importar para cuántos modelos lo llevó—, arma el
+// mensaje con los links y lo copia. Los que no tienen video se avisan aparte,
+// para pedírselos a quien filma.
+
+let videosDisenos = null; // nombre normalizado → [{nombre, url}], se trae una vez
+
+function normalizarNombre(s) {
+  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toUpperCase().replace(/\s+/g, ' ').trim();
+}
+
+/** "POP CASE PINK" → "Pop Case Pink", para que el mensaje no parezca a los gritos. */
+function nombreLindo(s) {
+  return String(s || '').toLowerCase().replace(/(^|[\s-])(\S)/g, (m, a, b) => a + b.toUpperCase());
+}
+
+async function copiarVideosPedido(idEnc) {
+  const id = decodeURIComponent(idEnc);
+  const panel = $('pedido-falt-' + idFaltantes(id));
+  const item = $('pedido-item-' + idFaltantes(id));
+  if (panel) {
+    panel.style.display = 'block';
+    panel.innerHTML = '<div class="pedido-falt-titulo">Buscando los videos…</div>';
+  }
+  if (item) item.classList.add('abierto');
+
+  let pedido;
+  try {
+    const pedir = (url) => fetch(url, { headers: { 'x-admin-password': adminPassword } })
+      .then(async r => { const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status); return d; });
+    const [p, v] = await Promise.all([
+      pedir('/api/pedido?id=' + encodeURIComponent(id)),
+      videosDisenos ? null : pedir('/api/pedido?videos=1'),
+    ]);
+    pedido = p;
+    if (v) videosDisenos = v.videos || {};
+  } catch (e) {
+    if (panel) panel.innerHTML = '<div class="pedido-falt-titulo">No se pudieron traer los videos: ' + notaEsc(e.message) + '</div>';
+    return;
+  }
+
+  // Un renglón por diseño: el pedido trae uno por modelo.
+  const vistos = new Set(), conVideo = [], sinVideo = [];
+  (pedido.items || []).forEach(i => {
+    const k = normalizarNombre(i.nombre);
+    if (!k || vistos.has(k)) return;
+    vistos.add(k);
+    if (videosDisenos[k]) conVideo.push({ nombre: i.nombre, videos: videosDisenos[k] });
+    // Solo las fundas tienen video: vidrios, cables y holders no se avisan.
+    else if (/\bCASE\b/.test(k)) sinVideo.push(i.nombre);
+  });
+
+  const faltan = sinVideo.length
+    ? '<div class="pedido-falt-linea eliminado"><div class="pedido-falt-nombre">Sin video todavía</div>' +
+      '<div class="pedido-falt-detalle">' + sinVideo.map(n => notaEsc(nombreLindo(n))).join(', ') + '</div></div>'
+    : '';
+
+  if (!conVideo.length) {
+    if (panel) panel.innerHTML = '<div class="pedido-falt-titulo">Ningún diseño de este pedido tiene video.</div>' + faltan;
+    return;
+  }
+
+  const texto = '¡Hola! Te paso los videos de los diseños que llevaste, para que los puedas mostrar:\n\n' +
+    conVideo.map(d => '• ' + nombreLindo(d.nombre) + ': ' + d.videos.map(x => x.url).join(' ')).join('\n');
+
+  // Se muestra el mensaje en el panel además de copiarlo: si el navegador no
+  // deja copiar (pasa en Safari cuando la respuesta tarda), queda a mano.
+  if (panel) panel.innerHTML =
+    '<div class="pedido-falt-titulo">' + conVideo.length + ' video' + (conVideo.length === 1 ? '' : 's') + ' para mandar</div>' +
+    '<textarea readonly style="width:100%;min-height:140px;font-family:inherit;font-size:13px;padding:8px;border:1px solid var(--border-strong);border-radius:8px;background:transparent;color:var(--text)" onclick="this.select()">' + notaEsc(texto) + '</textarea>' +
+    faltan;
+
+  navigator.clipboard.writeText(texto)
+    .then(() => showToast('Mensaje con ' + conVideo.length + ' video' + (conVideo.length === 1 ? '' : 's') + ' copiado' + (sinVideo.length ? ' — ' + sinVideo.length + ' sin video' : ''), 'success'))
+    .catch(() => showToast('No se pudo copiar solo: tocá el mensaje y copialo', 'error', 6000));
 }
 
 /**

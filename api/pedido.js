@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const FOTOS = require('./_fotos.js');
 const MAIL = require('./_mail-pedido.js');
+const VIDEOS = require('./_videos.js');
 const { kvGet } = require('./_kv');
 
 const KV_URL = process.env.KV_REST_API_URL || process.env.STORAGE_KV_REST_API_URL;
@@ -362,6 +363,24 @@ module.exports = async (req, res) => {
   if (!KV_URL || !KV_TOKEN) return res.status(500).json({ error: 'Almacenamiento no configurado' });
 
   try {
+    // Los videos de cada diseño, para el botón "Videos" del panel: GET /api/pedido?videos=1
+    // Leer el Drive tarda 3-4 s, así que se guarda media hora; ?refresh=1 lo
+    // relee (para cuando Camila acaba de subir uno).
+    if (req.method === 'GET' && req.query.videos) {
+      if (!esAdmin(req)) return res.status(401).json({ error: 'Necesitás la contraseña del panel.' });
+      const KV_VIDEOS = 'videos:disenos';
+      if (!req.query.refresh) {
+        const c = await kvCmd(['GET', KV_VIDEOS]);
+        if (c && c.result) return res.json(JSON.parse(c.result));
+      }
+      const videos = await VIDEOS.mapaDeVideos();
+      const out = { videos, leido: new Date().toISOString() };
+      // Vacío = Drive no contestó o la carpeta se cerró: no se guarda, así el
+      // próximo intento vuelve a leer en vez de quedar media hora sin videos.
+      if (Object.keys(videos).length) await kvCmd(['SET', KV_VIDEOS, JSON.stringify(out), 'EX', '1800']);
+      return res.json(out);
+    }
+
     // Listado para el panel del admin: GET /api/pedido?list=1
     // Devuelve un resumen liviano por pedido (sin los items completos); el detalle
     // se obtiene con GET ?id=<id> o navegando a /pedido/<id>.
