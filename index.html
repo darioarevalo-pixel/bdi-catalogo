@@ -1243,7 +1243,11 @@ const MISMA_FUNDA = {
 function esFundaId(id) {
   const p = allProducts.find(x => (x.id || x.product_id) == id);
   const cat = (p && p.category) || '';
-  return !!p && (/funda/i.test(cat) || /templados de celular/i.test(cat));
+  if (!p) return false;
+  if (/funda/i.test(cat) || /templados de celular/i.test(cat)) return true;
+  // Por el nombre también: "VIDRIO TEMPLADO PREMIUM AUTOMATICO" vino de GN sin
+  // categoría y quedaba como 17 solo. Los de cámara siguen afuera.
+  return /templad/i.test(p.name || '') && !/c[aá]mara/i.test((p.name || '') + ' ' + cat);
 }
 
 // Reescribe la parte del MODELO dentro del texto de una variante y deja el resto
