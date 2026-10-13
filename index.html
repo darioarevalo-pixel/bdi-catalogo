@@ -1231,8 +1231,9 @@ const PM_TIER = { 4: ' Pro Max', 3: ' Pro', 2: ' Plus', 1: '', 0: ' Mini' };
 // "iPhone 17 Pro Max", y el depósito sigue leyendo lo que dice la caja.
 //
 // Las claves son las de variantSortKey (modelo*10 + línea): 174 = 17 Pro Max.
-// Se aplica SOLO A FUNDAS: en los vidrios templados la compatibilidad depende de
-// la medida de la pantalla y del bloque de cámara, y eso no está comprobado.
+// Se aplica a FUNDAS y a los VIDRIOS TEMPLADOS DE PANTALLA (categoría "VIDRIOS
+// TEMPLADOS DE CELULAR"): el vidrio lo confirmó Darío el 30-sep-2026. Los
+// protectores de CÁMARA quedan afuera: el bloque de cámara no está comprobado.
 // Si un modelo deja de ser compatible, se borra su renglón de acá y listo.
 const MISMA_FUNDA = {
   174: 'iPhone 17/18 Pro Max',
@@ -1241,13 +1242,14 @@ const MISMA_FUNDA = {
 
 function esFundaId(id) {
   const p = allProducts.find(x => (x.id || x.product_id) == id);
-  return !!p && /funda/i.test(p.category || '');
+  const cat = (p && p.category) || '';
+  return !!p && (/funda/i.test(cat) || /templados de celular/i.test(cat));
 }
 
 // Reescribe la parte del MODELO dentro del texto de una variante y deja el resto
 // intacto ("iPhone 17 Pro Max - MARRON" → "iPhone 17/18 Pro Max - MARRON"). Si el
 // modelo no tiene equivalencia, o el producto no es funda, devuelve el texto tal
-// cual. `id` es opcional: sin él no se filtra por categoría, porque los grupos de
+// cual ("funda" acá incluye el vidrio de pantalla). `id` es opcional: sin él no se filtra por categoría, porque los grupos de
 // "Ver por modelo" ya salen de una lista que es solo de fundas.
 function nombreCompat(txt, id) {
   const s = String(txt || '');
