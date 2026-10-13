@@ -9,8 +9,8 @@
 //
 // Entran los carritos tocados en las últimas 24 horas, menos los de un
 // teléfono que después confirmó un pedido. Los que tienen teléfono van
-// primero y con detalle; los anónimos, solo contados. Si no quedó ninguno, no
-// sale nada.
+// primero y con detalle; los anónimos, solo contados. Si no quedó ninguno,
+// sale igual un correo corto que lo dice: así se sabe que está andando.
 // ---------------------------------------------------------------------------
 const SES = require('./_ses.js');
 const { mailValido } = require('./_mail-pedido.js');
@@ -78,6 +78,18 @@ function armar(sel, linkPanel) {
   const asunto = n === 1 ? '1 pedido sin terminar en el catálogo' : n + ' pedidos sin terminar en el catálogo';
   const totalSin = sinTelefono.reduce((s, c) => s + (c.total || 0), 0);
 
+  if (!n) {
+    return {
+      asunto: 'Hoy no quedaron pedidos sin terminar en el catálogo',
+      html: '<div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;padding:20px;color:#111827">' +
+        '<h2 style="font-size:18px;margin:0 0 4px">Pedidos sin terminar de hoy</h2>' +
+        '<p style="font-size:14px;color:#374151;margin:0 0 18px">Hoy no quedó ninguno: todos los que armaron un pedido lo confirmaron, o nadie armó uno.</p>' +
+        '<a href="' + esc(linkPanel) + '" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-size:14px;font-weight:600">Ver en el panel</a>' +
+        '</div>',
+      texto: 'Pedidos sin terminar de hoy\n\nHoy no quedó ninguno.\n\nVer en el panel: ' + linkPanel,
+    };
+  }
+
   let html = '<div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;padding:20px;color:#111827">' +
     '<h2 style="font-size:18px;margin:0 0 4px">Pedidos sin terminar de hoy</h2>' +
     '<p style="font-size:13px;color:#6b7280;margin:0 0 18px">Armaron un pedido en el catálogo y no lo confirmaron.</p>';
@@ -101,7 +113,6 @@ function armar(sel, linkPanel) {
 async function mandarResumen(carritos, pedidos, destinatarios, linkPanel) {
   const sel = elegir(carritos, pedidos, Date.now());
   const n = sel.conTelefono.length + sel.sinTelefono.length;
-  if (!n) return { ok: true, enviados: 0, motivo: 'no hubo carritos sin terminar' };
   const a = String(destinatarios || '').split(/[,;\s]+/).map(x => x.trim()).filter(mailValido);
   if (!a.length) return { ok: false, motivo: 'sin destinatarios' };
   const { asunto, html, texto } = armar(sel, linkPanel);
