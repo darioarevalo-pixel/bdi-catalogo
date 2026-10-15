@@ -1113,9 +1113,13 @@ function renderCuponUI(descuento, hayOferta) {
 }
 
 // ===== Código de acceso a la "lista mejor" (precios para clientes mayoristas) =====
+// 15-oct-2026: se sacó el código del catálogo (todos ven el mismo precio; los
+// descuentos van a ser por cantidad y generales). La caja queda vacía.
+const CODIGO_HABILITADO = false;
 function renderCodigoBar() {
   const bar = $('codigo-bar');
   if (!bar) return;
+  if (!CODIGO_HABILITADO) { bar.innerHTML = ''; bar.style.display = 'none'; return; }
   if (codigoAplicado) {
     bar.innerHTML =
       '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:10px;padding:10px 14px">' +
@@ -1171,6 +1175,15 @@ function salirCodigo() {
 // Al cargar el catálogo: si había un código guardado, lo re-valida (para respetar
 // bajas/vencimientos) y recalcula los precios.
 async function restaurarCodigo() {
+  if (!CODIGO_HABILITADO) {
+    // Los que ya tenían el código guardado vuelven al precio de todos.
+    codigoAplicado = null;
+    try { localStorage.removeItem(CODIGO_LS_KEY); } catch (e) {}
+    renderCodigoBar();
+    if (allProducts.length) renderProductos();
+    updateCartUI();
+    return;
+  }
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem(CODIGO_LS_KEY) || 'null'); } catch (e) {}
   if (!saved || !saved.codigo) { renderCodigoBar(); return; }

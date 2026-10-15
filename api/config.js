@@ -100,6 +100,8 @@ module.exports = async (req, res) => {
     // la lista de códigos: valida el tipeado y, si es válido, devuelve las reglas de
     // precio (descuento base + excepciones) para que el catálogo recalcule.
     if (req.query.accion === 'codigo') {
+      // 15-oct-2026: el código se sacó del catálogo; no se acepta ninguno.
+      return res.status(400).json({ error: 'Los códigos ya no están disponibles' });
       const codigo = (req.query.codigo || '').trim().toUpperCase();
       if (!codigo) return res.status(400).json({ error: 'Ingresá tu código' });
       let cfg = null;
