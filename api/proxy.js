@@ -971,6 +971,59 @@ async function pasaElFreno(req) {
   }
 }
 
+// ===== Aviso al ERP (erp.arebensrl.com) =====
+// El ERP propio de Areben va a reemplazar a Gestión Nube. Mientras GN viva, GN
+// MANDA: el pedido se crea allá como siempre y, recién DESPUÉS del OK, se le
+// pasa una copia al ERP (que la guarda como pedido; la venta la arma cuando GN
+// tiene el cobro). Por eso esto nunca puede tirar abajo ni demorar un pedido:
+//   · sin ERP_LLAVE_CATALOGO configurada, no hace nada;
+//   · si el ERP falla o tarda, queda en el registro y el pedido sale igual
+//     (el ERP igual lo levanta de GN en el cruce de cada día);
+//   · si Vercel deja seguir trabajando después de responder (`waitUntil`), el
+//     cliente no espera ni un milisegundo; si no, se espera como mucho 1,5 s.
+const ERP_URL = process.env.ERP_URL || 'https://erp.arebensrl.com';
+const ERP_ESPERA_MAX_MS = 1500;
+
+function waitUntilDeVercel() {
+  try {
+    const ctx = globalThis[Symbol.for('@vercel/request-context')];
+    const w = ctx && typeof ctx.get === 'function' && ctx.get() && ctx.get().waitUntil;
+    return typeof w === 'function' ? w : null;
+  } catch { return null; }
+}
+
+async function mandarAlERP(pedido, respuestaGN, esAdmin) {
+  let gn = null;
+  try { const c = JSON.parse(respuestaGN); gn = (c && c.data) || c; } catch { /* abajo */ }
+  if (!gn || !gn.id) { console.error('[erp] la respuesta de GN no trae el id de la venta: no se avisa'); return; }
+  const t0 = Date.now();
+  try {
+    const r = await fetch(ERP_URL + '/api/pedido-mayorista', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-erp-llave': process.env.ERP_LLAVE_CATALOGO },
+      body: JSON.stringify({
+        origen: esAdmin ? 'admin' : 'catalogo',
+        gn: { id: gn.id, number: gn.number ?? null },
+        pedido: { store_id: pedido.store_id, items: pedido.items },
+      }),
+      signal: AbortSignal.timeout(ERP_ESPERA_MAX_MS),
+    });
+    const ms = Date.now() - t0;
+    if (r.ok) console.log(`[erp] pedido ${gn.number ?? gn.id} avisado al ERP (${ms} ms)`);
+    else console.error(`[erp] el ERP contestó ${r.status} al pedido ${gn.number ?? gn.id} (${ms} ms): queda para el cruce diario`);
+  } catch (e) {
+    console.error(`[erp] no se pudo avisar el pedido ${gn.number ?? gn.id} (${Date.now() - t0} ms): ${(e && e.name) || e}. Queda para el cruce diario`);
+  }
+}
+
+async function avisarAlERP(pedido, respuestaGN, esAdmin) {
+  if (!process.env.ERP_LLAVE_CATALOGO || !pedido || !Array.isArray(pedido.items)) return;
+  const tarea = mandarAlERP(pedido, respuestaGN, esAdmin); // no tira: atrapa todo adentro
+  const waitUntil = waitUntilDeVercel();
+  if (waitUntil) { waitUntil(tarea); return; }
+  await tarea;
+}
+
 module.exports = async (req, res) => {
   Object.entries(CORS).forEach(([k, v]) => res.setHeader(k, v));
   // Evitar que el navegador cachee respuestas del proxy.
@@ -1287,6 +1340,10 @@ module.exports = async (req, res) => {
     // aviso `[stock] camino de siempre: …` de más arriba. El registro sale en el
     // `finally`, para que también lo dejen los pedidos rechazados.
     if (esConfirmarPedido) marcar('crearVenta');
+    // La venta ya está en GN: se le avisa también al ERP (ver `avisarAlERP`). No
+    // cambia en nada la respuesta al cliente; `erp` mide cuánto se esperó (0 si
+    // Vercel deja terminarlo después de responder).
+    if (esConfirmarPedido && r.ok) { await avisarAlERP(req.body, data, esAdmin); marcar('erp'); }
     // Cacheo en el CDN de Vercel SOLO para la lista de productos (lectura pura,
     // se usa para mostrar el catálogo). El navegador igual revalida (max-age=0),
     // pero el CDN sirve una copia compartida hasta 60s → abrir el catálogo es
@@ -1301,6 +1358,19 @@ module.exports = async (req, res) => {
       if (cuerpo) data = JSON.stringify(sinCostos(cuerpo, await leerConfigKV()));
       else if (/unit_cost/.test(data)) {
         // No se pudo leer y trae costo adentro: antes que dejarlo pasar, error.
+        return res.status(502).json({ error: 'Respuesta inesperada de Gestión Nube' });
+      }
+    }
+    // Las referencias las pide el navegador de CUALQUIER cliente, sin clave, y GN
+    // manda adentro el SALDO de cada cuenta de cobro (16-10-2026: cientos de
+    // millones a la vista). Ninguna pantalla lo usa: se saca.
+    if (req.method === 'GET' && ruta === '/ventas/referencias' && r.status === 200) {
+      let cuerpo = null;
+      try { cuerpo = JSON.parse(data); } catch { /* abajo */ }
+      if (cuerpo && Array.isArray(cuerpo.cuentas)) {
+        cuerpo.cuentas = cuerpo.cuentas.map(({ balance, ...c }) => c);
+        data = JSON.stringify(cuerpo);
+      } else if (/"balance"/.test(data)) {
         return res.status(502).json({ error: 'Respuesta inesperada de Gestión Nube' });
       }
     }
