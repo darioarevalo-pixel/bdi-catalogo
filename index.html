@@ -1484,7 +1484,7 @@ function renderVariantRowsHTML(productId, dims, selectedDim1, nomEsc, precio, im
       (vPrecio !== precio ? '<div class="modal-variant-price dif">' + formatPrecio(vPrecio) + '</div>' : '') +
       '<div class="modal-vqty-wrap">' +
         '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1)">−</button>' +
-        '<input class="modal-vqty-num" type="number" id="' + inputId + '" value="' + currentQty + '" min="0"' + maxAttr + ' />' +
+        '<input class="modal-vqty-num" type="number" inputmode="numeric" onclick="event.stopPropagation()" id="' + inputId + '" value="' + currentQty + '" min="0"' + maxAttr + ' />' +
         '<button class="modal-vqty-btn plus"' + (atMax ? ' disabled' : '') + ' onclick="chQty(' + chArgs + ',1)">+</button>' +
       '</div>' +
     '</div>';
@@ -2678,7 +2678,7 @@ function renderPorModelo() {
       precioHTML +
       '<div class="pm-qty">' +
         '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1)">−</button>' +
-        '<input class="modal-vqty-num" type="number" id="q-m-' + cartKey + '" value="' + currentQty + '" min="0"' + maxAttr + ' />' +
+        '<input class="modal-vqty-num" type="number" inputmode="numeric" onclick="event.stopPropagation()" id="q-m-' + cartKey + '" value="' + currentQty + '" min="0"' + maxAttr + ' />' +
         '<button class="modal-vqty-btn plus"' + (atMax ? ' disabled' : '') + ' onclick="chQty(' + chArgs + ',1)">+</button>' +
       '</div>' +
     '</div>';
@@ -2726,7 +2726,7 @@ function renderCardVariantRows(id, dims, selectedColor, nomEsc, precio, imgEsc) 
       (vPrecio !== precio ? '<div class="modal-variant-price dif">' + formatPrecio(vPrecio) + '</div>' : '') +
       '<div class="modal-vqty-wrap">' +
         '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1);event.stopPropagation()">−</button>' +
-        '<input class="modal-vqty-num" type="number" id="q-m-' + cartKey + '" value="' + currentQty + '" min="0"' + maxAttr + ' />' +
+        '<input class="modal-vqty-num" type="number" inputmode="numeric" onclick="event.stopPropagation()" id="q-m-' + cartKey + '" value="' + currentQty + '" min="0"' + maxAttr + ' />' +
         '<button class="modal-vqty-btn plus"' + (atMax ? ' disabled' : '') + ' onclick="chQty(' + chArgs + ',1);event.stopPropagation()">+</button>' +
       '</div>' +
     '</div>';
@@ -2808,7 +2808,7 @@ function renderVariantesGrid(prods) {
             (vPrecio !== precio ? '<div class="modal-variant-price dif">' + formatPrecio(vPrecio) + '</div>' : '') +
             '<div class="modal-vqty-wrap">' +
               '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1);event.stopPropagation()">−</button>' +
-              '<input class="modal-vqty-num" type="number" id="q-m-' + cartKey + '" value="' + currentQty + '" min="0"' + maxAttr + ' />' +
+              '<input class="modal-vqty-num" type="number" inputmode="numeric" onclick="event.stopPropagation()" id="q-m-' + cartKey + '" value="' + currentQty + '" min="0"' + maxAttr + ' />' +
               '<button class="modal-vqty-btn plus"' + (atMax ? ' disabled' : '') + ' onclick="chQty(' + chArgs + ',1);event.stopPropagation()">+</button>' +
             '</div>' +
           '</div>';
@@ -2821,7 +2821,7 @@ function renderVariantesGrid(prods) {
       const chArgs = '\'' + cartKey + '\',' + id + ',\'' + nomEsc + '\',' + precio + ',null,\'\',\'' + imgEsc + '\'';
       variantsHTML = '<div style="padding:6px 10px 8px;display:flex;align-items:center;gap:6px">' +
         '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1);event.stopPropagation()">−</button>' +
-        '<input class="modal-vqty-num" type="number" id="q-m-' + cartKey + '" value="' + currentQty + '" min="0" style="margin:0 2px" />' +
+        '<input class="modal-vqty-num" type="number" inputmode="numeric" onclick="event.stopPropagation()" id="q-m-' + cartKey + '" value="' + currentQty + '" min="0" style="margin:0 2px" />' +
         '<button class="modal-vqty-btn plus" onclick="chQty(' + chArgs + ',1);event.stopPropagation()">+</button>' +
         '<span style="font-size:12px;color:var(--text-muted);margin-left:4px">Agregar</span>' +
       '</div>';
@@ -2871,6 +2871,32 @@ function toggleCard(btn) {
 }
 
 // Cambia la cantidad directamente en el carrito y actualiza el input
+// Cantidad escrita a mano en el casillero (entre el − y el +). Hasta el 16-oct
+// el número se podía tipear pero no llegaba al carrito: solo contaban los botones.
+// Para no repetir los datos del producto en cada lugar donde se dibuja el
+// casillero, se reusa el botón − de al lado con la cantidad fija.
+let cantidadEscrita = null;
+document.addEventListener('change', (e) => {
+  const el = e.target;
+  if (!el || !el.classList || !el.classList.contains('modal-vqty-num')) return;
+  const btn = el.parentElement && el.parentElement.querySelector('.modal-vqty-btn.minus');
+  if (!btn || typeof btn.onclick !== 'function') return;
+  const n = parseInt(el.value, 10);
+  const key = (el.id || '').replace(/^q-m-/, '');
+  if (isNaN(n)) { el.value = (cart[key] && cart[key].qty) || 0; return; }
+  cantidadEscrita = Math.max(0, n);
+  try { btn.onclick(new Event('click')); } finally { cantidadEscrita = null; }
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && e.target && e.target.classList && e.target.classList.contains('modal-vqty-num')) e.target.blur();
+});
+document.addEventListener('focusin', (e) => {
+  // Se selecciona el número para que lo escrito lo reemplace (si no, el 0 queda y
+  // tipear 5 da 50). Con demora: el clic que lo enfoca sacaba la selección.
+  const el = e.target;
+  if (el && el.classList && el.classList.contains('modal-vqty-num')) setTimeout(() => { try { el.select(); } catch (_) {} }, 0);
+});
+
 function chQty(cartKey, productId, nombre, precio, sizeId, varNombre, img, d) {
   // Única puerta de entrada al carrito: traducir acá alcanza para que el nombre
   // del modelo sea el mismo en la ficha, el carrito, el pedido guardado y el
@@ -2884,7 +2910,7 @@ function chQty(cartKey, productId, nombre, precio, sizeId, varNombre, img, d) {
   const els = document.querySelectorAll('[id="q-m-' + cartKey + '"]');
   const el0 = els[0];
   const max = el0 && el0.max ? parseInt(el0.max) : null;
-  let newQty = current + d;
+  let newQty = cantidadEscrita !== null ? cantidadEscrita : current + d;
   if (newQty < 0) newQty = 0;
   if (max !== null && newQty > max) newQty = max;
 
@@ -3096,7 +3122,7 @@ function abrirModal(id) {
             (vPrecio !== precio ? '<div class="modal-variant-price dif">' + formatPrecio(vPrecio) + '</div>' : '') +
             '<div class="modal-vqty-wrap">' +
               '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1)">−</button>' +
-              '<input class="modal-vqty-num" type="number" id="q-m-' + cartKey + '" value="' + currentQty + '" min="0"' + maxAttr + ' />' +
+              '<input class="modal-vqty-num" type="number" inputmode="numeric" onclick="event.stopPropagation()" id="q-m-' + cartKey + '" value="' + currentQty + '" min="0"' + maxAttr + ' />' +
               '<button class="modal-vqty-btn plus"' + (atMax ? ' disabled' : '') + ' onclick="chQty(' + chArgs + ',1)">+</button>' +
             '</div>' +
           '</div>';
@@ -3109,7 +3135,7 @@ function abrirModal(id) {
     wrap.innerHTML =
       '<div class="modal-no-variants">' +
         '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1)">−</button>' +
-        '<input class="modal-vqty-num" type="number" id="q-m-' + cartKey + '" value="' + currentQty + '" min="0" style="margin:0 6px" />' +
+        '<input class="modal-vqty-num" type="number" inputmode="numeric" onclick="event.stopPropagation()" id="q-m-' + cartKey + '" value="' + currentQty + '" min="0" style="margin:0 6px" />' +
         '<button class="modal-vqty-btn plus" onclick="chQty(' + chArgs + ',1)">+</button>' +
         '<span style="font-size:13px;color:var(--text-muted);margin-left:8px">Agregar al pedido</span>' +
       '</div>';
