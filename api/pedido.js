@@ -4,6 +4,7 @@ const MAIL = require('./_mail-pedido.js');
 const MAIL_CARRITOS = require('./_mail-carritos.js');
 const VIDEOS = require('./_videos.js');
 const { kvGet } = require('./_kv');
+const { usuarioValido } = require('./_auth');
 
 const KV_URL = process.env.KV_REST_API_URL || process.env.STORAGE_KV_REST_API_URL;
 const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.STORAGE_KV_REST_API_TOKEN;
@@ -14,7 +15,9 @@ const TTL_SECONDS = 90 * 24 * 60 * 60; // 90 días: pasado ese plazo el link se 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, x-admin-password',
+  // `x-monitor-auth` lo manda el panel de WhatsApp del Monitor (`?panel=1`). Sin declararlo, el
+  // navegador frena el preflight y el panel ve "no hay pedidos".
+  'Access-Control-Allow-Headers': 'Content-Type, x-admin-password, x-monitor-auth',
 };
 
 // ---------------------------------------------------------------------------
@@ -171,6 +174,59 @@ async function leerTodos(patron) {
     });
   }
   return out;
+}
+
+// ── Lo que ve el panel de WhatsApp (`?panel=1`) ────────────────────────────
+//
+// Hoy y ayer, en día de Argentina: un pedido de la noche se atiende a la mañana.
+// Los carritos van solo con teléfono (sin teléfono no hay a quién escribirle) y
+// sin los de un número que después confirmó, con la misma regla del correo de
+// las 20:00. Se recuerda 30 s: el panel pregunta cada pocos minutos y leer todos
+// los pedidos es una vuelta larga al almacenamiento.
+let panelCache = null; // { at, valor }
+
+function desdeAyerArgentina(ahora) {
+  const hoyAR = new Date(ahora - 3 * 3600 * 1000).toISOString().slice(0, 10);
+  // 00:00 de Argentina = 03:00 UTC.
+  return new Date(Date.parse(hoyAR + 'T03:00:00Z') - 24 * 3600 * 1000).toISOString();
+}
+
+const unidadesDe = (items) => (Array.isArray(items) ? items : []).reduce((s, i) => s + (Number(i && i.cantidad) || 0), 0);
+
+async function pedidosParaElPanel() {
+  const ahora = Date.now();
+  if (panelCache && ahora - panelCache.at < 30000) return panelCache.valor;
+  const desde = desdeAyerArgentina(ahora);
+  const [todosCarritos, todosPedidos] = await Promise.all([leerTodos('carrito:*'), leerTodos('pedido:*')]);
+  const pedidos = todosPedidos
+    .filter(p => String(p.fecha || '') >= desde)
+    .map(p => ({
+      id: p.id != null ? p.id : null,
+      fecha: p.fecha,
+      cliente: p.cliente || '',
+      telefono: p.telefono || '',
+      total: p.total || 0,
+      unidades: unidadesDe(p.items),
+    }))
+    .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+  const digitos = t => String(t || '').replace(/\D/g, '').slice(-8);
+  const confirmo = c => {
+    const tel = digitos(c.telefono);
+    return tel.length >= 8 && todosPedidos.some(p => digitos(p.telefono) === tel && String(p.fecha || '') >= String(c.creado || ''));
+  };
+  const carritos = todosCarritos
+    .filter(c => c.telefono && String(c.actualizado || '') >= desde && !confirmo(c))
+    .map(c => ({
+      fecha: c.actualizado,
+      cliente: c.cliente || c.codigoCliente || '',
+      telefono: c.telefono,
+      total: c.total || 0,
+      unidades: unidadesDe(c.items),
+    }))
+    .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+  const valor = { ok: true, desde, pedidos, carritos };
+  panelCache = { at: ahora, valor };
+  return valor;
 }
 
 async function guardarCarrito(b) {
@@ -575,6 +631,19 @@ module.exports = async (req, res) => {
         return res.status(502).json({ error: 'No se pudo mandar el correo' });
       }
       return res.json(r);
+    }
+
+    // Los pedidos y carritos de hoy y ayer, para el panel de WhatsApp del Monitor:
+    // GET /api/pedido?panel=1 (Darío, 20-10-2026: «que vea los pedidos del día así le
+    // escribo si no me habla»).
+    //
+    // Entra con la sesión del Monitor y NO con la contraseña del panel, que el Monitor no
+    // tiene. ⛔ Pide `admin` y no usa `exigirUsuario`: aquél deja pasar sin credencial
+    // mientras dure el modo aviso, y esto devuelve teléfonos de clientes.
+    if (req.method === 'GET' && req.query.panel) {
+      const u = await usuarioValido(req);
+      if (!u || !u.admin) return res.status(403).json({ error: 'Esto lo ven solo los administradores.' });
+      return res.json(await pedidosParaElPanel());
     }
 
     // Los carritos sin terminar, para el panel: GET /api/pedido?carritos=1
