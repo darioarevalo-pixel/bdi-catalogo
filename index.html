@@ -135,7 +135,7 @@
      columnas con los modelos al lado, así que no hay nada que elegir. */
   .txt-celu { display: none; }
   .btn-vista { display: none; flex-shrink: 0; align-items: center; gap: 5px; padding: 9px 12px; border: 1.5px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; font-weight: 600; background: var(--surface); color: var(--text); cursor: pointer; white-space: nowrap; }
-  .btn-por-modelo { flex-shrink: 0; padding: 9px 14px; border: 1.5px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; font-weight: 600; background: var(--surface); color: var(--text); cursor: pointer; white-space: nowrap; transition: all 0.15s; }
+  .btn-por-modelo { flex-shrink: 0; padding: 9px 14px; border: 1.5px solid var(--accent); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; font-weight: 700; background: var(--surface); color: var(--accent); cursor: pointer; white-space: nowrap; transition: all 0.15s; }
   .btn-por-modelo:hover { border-color: var(--accent); }
   .btn-por-modelo.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
@@ -686,7 +686,7 @@
           <span class="search-icon">⌕</span>
           <input type="text" id="search-input" placeholder="Buscar productos..." oninput="renderProductosDebounced()" />
         </div>
-        <button type="button" id="btn-por-modelo" class="btn-por-modelo" onclick="toggleModeloView()" title="Ver fundas agrupadas por modelo de iPhone">📱 <span class="txt-compu">Ver por modelo</span><span class="txt-celu">Por modelo</span></button>
+        <button type="button" id="btn-por-modelo" class="btn-por-modelo" onclick="toggleModeloView()" title="Ver fundas agrupadas por modelo de iPhone">📱 <span class="txt-compu">Elegí tu modelo</span><span class="txt-celu">Por modelo</span></button>
         <button type="button" id="btn-vista" class="btn-vista" onclick="alternarVista()" title="Cambiar cómo se ve el catálogo"></button>
         <select class="sort-select" id="sort-select" onchange="renderProductos()" style="display:none">
           <option value="custom">Orden personalizado</option>
@@ -2405,6 +2405,27 @@ function applyCustomProductOrder(prods, cat) {
   return indexed.map(x => x.p);
 }
 
+// Los 8 modelos que se llevan el 75% de las fundas mayoristas (medido el
+// 21-10-2026 sobre 521 compras): 17 Pro, 17 Pro Max, 17, 16 Pro Max, 16 Pro,
+// 16, 15 y 13. Claves de variantSortKey; el Air (170) y el 16e (165) quedan afuera.
+const MODELOS_FUERTES = new Set([174, 173, 171, 164, 163, 161, 151, 131]);
+
+// El mayorista NO busca la curva completa de un diseño: lleva ~2 modelos de cada
+// uno y arma la variedad mezclando diseños. Lo que no le sirve es un producto que
+// sólo tiene stock en modelos flojos (restos de 11, 12, Air). Esos van al final,
+// sin cambiar el orden del panel; cuando les entra stock de un modelo fuerte,
+// vuelven solos a su lugar. Los productos que no son por modelo de iPhone no se tocan.
+function bajarSinModelosFuertes(prods) {
+  const arriba = [], abajo = [];
+  prods.forEach(p => {
+    const vars = p.variantes || [];
+    const porModelo = vars.some(v => variantSortKey(v.size) > 0);
+    const fuerte = vars.some(v => MODELOS_FUERTES.has(variantSortKey(v.size)) && getStockVariante(v) > 0);
+    (porModelo && !fuerte ? abajo : arriba).push(p);
+  });
+  return arriba.concat(abajo);
+}
+
 // Buscar dibuja el catálogo entero (cientos de productos). Si lo hiciéramos en
 // cada tecla, tipear se sentiría trabado en celulares. Con debounce esperamos a
 // que el cliente frene ~220ms y recién ahí dibujamos una sola vez → tipeo fluido.
@@ -2458,6 +2479,7 @@ function renderProductos() {
   else if (sort === 'price-asc') prods.sort((a,b) => getPrecio(a) - getPrecio(b));
   else if (sort === 'price-desc') prods.sort((a,b) => getPrecio(b) - getPrecio(a));
   else if (sort === 'name') prods.sort((a,b) => (a.name||'').localeCompare(b.name||''));
+  if (sort === 'custom' || sort === 'default') prods = bajarSinModelosFuertes(prods);
 
   const grid = $('products-grid');
   if (viewMode === 'modelo') {
