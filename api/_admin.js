@@ -133,26 +133,26 @@ const claveFreno = user => String(user).slice(0, 80);
 const huella = pass => crypto.createHash('sha256').update(String(pass)).digest('hex').slice(0, 16);
 
 /** ¿Este usuario está frenado? Si el KV no contesta, ⛔ frena: el login sigue igual que antes. */
-async function frenado(user) {
+async function frenado(user, ns = 'login') {
   try {
-    return !!(await kvCmd(['GET', `login:freno:${claveFreno(user)}`]));
+    return !!(await kvCmd(['GET', `${ns}:freno:${claveFreno(user)}`]));
   } catch {
     return false;
   }
 }
 
 /** Anota una contraseña fallida; a la `FRENO_DISTINTAS`-ésima distinta, frena al usuario. */
-async function anotarFallo(user, pass) {
+async function anotarFallo(user, pass, ns = 'login') {
   const k = claveFreno(user);
   try {
     // Ya anotada (la compu con la clave vieja): nada más que hacer, y son 2 consultas y ⛔ 5.
-    if (!(await kvCmd(['SADD', `login:fallos:${k}`, huella(pass)]))) return;
-    await kvCmd(['EXPIRE', `login:fallos:${k}`, FRENO_SEG]);
-    const distintas = await kvCmd(['SCARD', `login:fallos:${k}`]);
+    if (!(await kvCmd(['SADD', `${ns}:fallos:${k}`, huella(pass)]))) return;
+    await kvCmd(['EXPIRE', `${ns}:fallos:${k}`, FRENO_SEG]);
+    const distintas = await kvCmd(['SCARD', `${ns}:fallos:${k}`]);
     if (distintas >= FRENO_DISTINTAS) {
-      await kvCmd(['SET', `login:freno:${k}`, '1', 'EX', FRENO_SEG]);
-      await kvCmd(['DEL', `login:fallos:${k}`]);
-      console.warn(`[login] usuario frenado ${FRENO_SEG / 60} min: ${distintas} contraseñas distintas fallidas`);
+      await kvCmd(['SET', `${ns}:freno:${k}`, '1', 'EX', FRENO_SEG]);
+      await kvCmd(['DEL', `${ns}:fallos:${k}`]);
+      console.warn(`[${ns}] frenado ${FRENO_SEG / 60} min: ${distintas} contraseñas distintas fallidas`);
     }
   } catch {
     /* que un tropiezo del contador ⛔ tire el login */
@@ -172,6 +172,26 @@ async function usuarioPorPass(cfg, user, pass) {
   if (u && verificarPass(pass, u.pass)) return u;
   await anotarFallo(user, pass);
   return null;
+}
+
+/**
+ * ¿El request trae la contraseña del panel (`x-admin-password`, la de `ADMIN_PASSWORD` en Vercel)?
+ *
+ * Es una clave fija, sin usuario, y hasta el 21-oct se comparaba sin límite en config, pedido y
+ * proxy. Ahora pasa por el mismo freno que el login: 10 claves DISTINTAS fallidas en 15 min frenan
+ * EL PANEL 15 min, y frenado contesta false sin mirar la clave. El precio es el mismo que el del
+ * login —quien quiera puede trabar el panel 15 min—; ⛔ por IP porque la IP se puede cambiar.
+ * Sin el header no cuenta nada: la mayoría de los requests son de la tienda y no lo traen.
+ */
+async function claveDelPanelOk(req) {
+  const pass = req.headers['x-admin-password'];
+  const buena = process.env.ADMIN_PASSWORD || '';
+  if (!buena || !pass) return false;
+  if (await frenado('clave', 'panel')) return false;
+  const h = x => crypto.createHash('sha256').update(String(x)).digest();
+  if (crypto.timingSafeEqual(h(pass), h(buena))) return true;
+  await anotarFallo('clave', pass, 'panel');
+  return false;
 }
 
 /**
@@ -222,6 +242,7 @@ function tieneSub(u, store, key) {
 
 module.exports = {
   esAdmin,
+  claveDelPanelOk,
   usuarioDe,
   tieneSub,
   emailDelToken,

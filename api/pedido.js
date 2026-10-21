@@ -5,6 +5,7 @@ const MAIL_CARRITOS = require('./_mail-carritos.js');
 const VIDEOS = require('./_videos.js');
 const { kvGet } = require('./_kv');
 const { usuarioValido } = require('./_auth');
+const { claveDelPanelOk } = require('./_admin');
 
 const KV_URL = process.env.KV_REST_API_URL || process.env.STORAGE_KV_REST_API_URL;
 const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.STORAGE_KV_REST_API_TOKEN;
@@ -67,8 +68,11 @@ const SECRETO_LINK = process.env.PEDIDO_SECRET || ADMIN_PASSWORD;
 // queda ninguno que abrir. Se cierra sola, no hay que acordarse de apagar nada.
 const FIN_TRANSICION = Date.parse('2026-10-31T00:00:00Z');
 
+// Con el freno a probar claves (`claveDelPanelOk`, en `_admin.js`). Se pregunta una vez por
+// request: cada pregunta es una ida al KV, y abajo se llama hasta tres veces.
 function esAdmin(req) {
-  return !!ADMIN_PASSWORD && req.headers['x-admin-password'] === ADMIN_PASSWORD;
+  if (!req._esAdmin) req._esAdmin = claveDelPanelOk(req);
+  return req._esAdmin;
 }
 
 /** La clave del link de un pedido, o null si el servidor no tiene secreto cargado. */
@@ -521,7 +525,7 @@ module.exports = async (req, res) => {
     // Leer el Drive tarda 3-4 s, así que se guarda media hora; ?refresh=1 lo
     // relee (para cuando Camila acaba de subir uno).
     if (req.method === 'GET' && req.query.videos) {
-      if (!esAdmin(req)) return res.status(401).json({ error: 'Necesitás la contraseña del panel.' });
+      if (!(await esAdmin(req))) return res.status(401).json({ error: 'Necesitás la contraseña del panel.' });
       const KV_VIDEOS = 'videos:disenos';
       if (!req.query.refresh) {
         const c = await kvCmd(['GET', KV_VIDEOS]);
@@ -540,7 +544,7 @@ module.exports = async (req, res) => {
     // se obtiene con GET ?id=<id> o navegando a /pedido/<id>.
     if (req.method === 'GET' && req.query.list) {
       // Esta es la consulta que entregaba la nómina entera de clientes. Solo el panel.
-      if (!esAdmin(req)) return res.status(401).json({ error: 'Necesitás la contraseña del panel.' });
+      if (!(await esAdmin(req))) return res.status(401).json({ error: 'Necesitás la contraseña del panel.' });
       // 1) Juntar las claves pedido:* con SCAN (no bloqueante, a diferencia de KEYS).
       //    Iterar hasta cursor '0'; tope de 20 vueltas por seguridad.
       const keys = [];
@@ -609,7 +613,7 @@ module.exports = async (req, res) => {
     // pide esa clave.
     if (req.method === 'GET' && req.query.accion === 'resumen-carritos') {
       const secreto = process.env.CRON_SECRET;
-      if (secreto && req.headers.authorization !== 'Bearer ' + secreto && !esAdmin(req)) {
+      if (secreto && req.headers.authorization !== 'Bearer ' + secreto && !(await esAdmin(req))) {
         return res.status(401).json({ error: 'No autorizado' });
       }
       const dia = new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10); // día de Argentina
@@ -648,7 +652,7 @@ module.exports = async (req, res) => {
 
     // Los carritos sin terminar, para el panel: GET /api/pedido?carritos=1
     if (req.method === 'GET' && req.query.carritos) {
-      if (!esAdmin(req)) return res.status(401).json({ error: 'Necesitás la contraseña del panel.' });
+      if (!(await esAdmin(req))) return res.status(401).json({ error: 'Necesitás la contraseña del panel.' });
       const carritos = await leerTodos('carrito:*');
       carritos.sort((a, b) => String(b.actualizado || '').localeCompare(String(a.actualizado || '')));
       return res.json({ carritos });
@@ -665,7 +669,7 @@ module.exports = async (req, res) => {
       // La clave del link. Se contesta 404 —y no 401— a propósito: sin clave, el
       // de afuera no puede distinguir "existe pero no tenés la clave" de "no
       // existe", así que barrer números no le dice nada.
-      if (!esAdmin(req) && !claveOk(id, req.query.k) && !esLinkViejoTolerado(pedido)) {
+      if (!(await esAdmin(req)) && !claveOk(id, req.query.k) && !esLinkViejoTolerado(pedido)) {
         return res.status(404).json({ error: 'Pedido no encontrado o vencido' });
       }
 
@@ -679,11 +683,11 @@ module.exports = async (req, res) => {
             // Marca de "sincronizado ahora" SOLO en la respuesta (no se guarda),
             // para que la página muestre "Actualizado" únicamente si releyó de GN.
             fresco.sincronizado = true;
-            return res.json(esAdmin(req) ? fresco : sinFaltantes(fresco));
+            return res.json((await esAdmin(req)) ? fresco : sinFaltantes(fresco));
           }
         } catch (e) { /* cae al snapshot */ }
       }
-      return res.json(esAdmin(req) ? pedido : sinFaltantes(pedido));
+      return res.json((await esAdmin(req)) ? pedido : sinFaltantes(pedido));
     }
 
     // Mandar el mail de "recibimos tu pedido": POST /api/pedido?accion=mail {id, k}
@@ -776,11 +780,11 @@ module.exports = async (req, res) => {
       // pedido a mano, a veces lo vuelve a guardar corregido.
       // El orden NX antes de EX es el que ya usa el turno del proxy contra este
       // mismo almacenamiento, así que se sabe que lo acepta.
-      const cmd = esAdmin(req)
+      const cmd = (await esAdmin(req))
         ? ['SET', clave(pedido.id), cuerpo, 'EX', String(TTL_SECONDS)]
         : ['SET', clave(pedido.id), cuerpo, 'NX', 'EX', String(TTL_SECONDS)];
       const r = await kvCmd(cmd);
-      if (!esAdmin(req) && r && r.result === null) {
+      if (!(await esAdmin(req)) && r && r.result === null) {
         return res.status(409).json({ error: 'Ese número de pedido ya estaba guardado' });
       }
       // La clave viaja de vuelta para que quien confirmó pueda armar el link.

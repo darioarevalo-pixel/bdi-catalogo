@@ -1,4 +1,5 @@
 const { kvGet, kvSet, kvCmd } = require('./_kv');
+const { claveDelPanelOk } = require('./_admin');
 
 // Sin respaldo a propósito. Antes había acá una contraseña por defecto escrita en
 // el código: como el repo es público, estaba a la vista de cualquiera y entraba al
@@ -12,13 +13,14 @@ const { kvGet, kvSet, kvCmd } = require('./_kv');
 // sin contraseña. Por eso cae a '' y `passwordOk` exige que esté cargada.
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 
-// Única puerta: sin ADMIN_PASSWORD cargada en Vercel, no entra nadie.
-function passwordOk(req) {
+// Única puerta: sin ADMIN_PASSWORD cargada en Vercel, no entra nadie. Con el freno a probar
+// claves (`claveDelPanelOk`, en `_admin.js`).
+async function passwordOk(req) {
   if (!ADMIN_PASSWORD) {
     console.error('[admin] falta la variable ADMIN_PASSWORD en Vercel: se rechaza todo.');
     return false;
   }
-  return req.headers['x-admin-password'] === ADMIN_PASSWORD;
+  return claveDelPanelOk(req);
 }
 
 const COSTOS_KEY = process.env.COSTOS_KEY || 'catalog-costos';
@@ -138,7 +140,7 @@ module.exports = async (req, res) => {
     }
     // Con ?verify=1 valida la contraseña y devuelve la config (para el login del admin)
     if (req.query.verify) {
-      if (!passwordOk(req))
+      if (!(await passwordOk(req)))
         return res.status(401).json({ error: 'Contraseña incorrecta' });
     }
     try {
@@ -169,7 +171,7 @@ module.exports = async (req, res) => {
   }
 
   if (req.method === 'POST') {
-    if (!passwordOk(req))
+    if (!(await passwordOk(req)))
       return res.status(401).json({ error: 'Contraseña incorrecta' });
     try {
       const incoming = req.body || {};

@@ -1,10 +1,10 @@
 const { kvGet, kvCmd } = require('./_kv');
+const { claveDelPanelOk } = require('./_admin');
 
 const API_BASE = 'https://www.gestionnube.com/api/v1';
-// Sin respaldo: ver la nota larga en api/config.js. Si la variable no está
-// cargada, `esAdmin` da false siempre (nadie saltea los topes) en vez de que un
-// pedido sin header pase por admin.
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
+// Sin respaldo: ver la nota larga en api/config.js. Si ADMIN_PASSWORD no está
+// cargada, `esAdmin` da false siempre (nadie saltea los topes): lo resuelve
+// `claveDelPanelOk`, en `_admin.js`.
 
 // ---------------------------------------------------------------------------
 // LISTA DE LO PERMITIDO
@@ -1194,7 +1194,7 @@ module.exports = async (req, res) => {
 
   // El admin (pestaña "Cargar pedido") vende SIN tope a propósito: el dueño
   // decide caso por caso, y allá el aviso se muestra antes de confirmar.
-  const esAdmin = !!ADMIN_PASSWORD && req.headers['x-admin-password'] === ADMIN_PASSWORD;
+  const esAdmin = await claveDelPanelOk(req); // con el freno a probar claves
   const pideCosto = req.query.con_costo === '1';
   const conCosto = pideCosto && (esAdmin || (!!COSTOS_CLAVE && req.headers['x-costos-clave'] === COSTOS_CLAVE));
 
