@@ -113,11 +113,65 @@ function usuarioPorEmail(cfg, email) {
   return cfg.users.find(u => String(u.email || '').toLowerCase().trim() === email) || null;
 }
 
-/** El usuario del KV con ese nombre, si la contraseña verifica. */
-function usuarioPorPass(cfg, user, pass) {
+// ── El freno a probar contraseñas ────────────────────────────────────────────
+// Hasta el 21-oct este login contestaba sin límite: con un programa se podían probar miles de
+// claves por minuto contra un usuario, y los que entran con contraseña son justo los puestos
+// compartidos (Depósito, Local, bdilocal), los que manejan la Caja.
+//
+// Se cuentan las contraseñas DISTINTAS que fallaron para un usuario, ⛔ los intentos: el Monitor
+// manda la credencial en CADA request, así que una compu con la clave vieja guardada falla cientos
+// de veces seguidas — pero siempre con la misma, y eso suma 1. Adivinar exige claves distintas.
+// Va por usuario y ⛔ por IP: cuando el pedido viene del Monitor, la IP que se ve acá es la de
+// Vercel, la misma para todo el equipo.
+//
+// El precio: quien conozca un nombre de usuario puede trabarlo `FRENO_SEG` errando a propósito.
+// Es la contraparte de no dejar adivinar, y dura 15 minutos.
+const FRENO_DISTINTAS = 10;
+const FRENO_SEG = 15 * 60;
+
+const claveFreno = user => String(user).slice(0, 80);
+const huella = pass => crypto.createHash('sha256').update(String(pass)).digest('hex').slice(0, 16);
+
+/** ¿Este usuario está frenado? Si el KV no contesta, ⛔ frena: el login sigue igual que antes. */
+async function frenado(user) {
+  try {
+    return !!(await kvCmd(['GET', `login:freno:${claveFreno(user)}`]));
+  } catch {
+    return false;
+  }
+}
+
+/** Anota una contraseña fallida; a la `FRENO_DISTINTAS`-ésima distinta, frena al usuario. */
+async function anotarFallo(user, pass) {
+  const k = claveFreno(user);
+  try {
+    // Ya anotada (la compu con la clave vieja): nada más que hacer, y son 2 consultas y ⛔ 5.
+    if (!(await kvCmd(['SADD', `login:fallos:${k}`, huella(pass)]))) return;
+    await kvCmd(['EXPIRE', `login:fallos:${k}`, FRENO_SEG]);
+    const distintas = await kvCmd(['SCARD', `login:fallos:${k}`]);
+    if (distintas >= FRENO_DISTINTAS) {
+      await kvCmd(['SET', `login:freno:${k}`, '1', 'EX', FRENO_SEG]);
+      await kvCmd(['DEL', `login:fallos:${k}`]);
+      console.warn(`[login] usuario frenado ${FRENO_SEG / 60} min: ${distintas} contraseñas distintas fallidas`);
+    }
+  } catch {
+    /* que un tropiezo del contador ⛔ tire el login */
+  }
+}
+
+/**
+ * El usuario del KV con ese nombre, si la contraseña verifica y ⛔ está frenado.
+ *
+ * Frenado, contesta `null` SIN mirar la contraseña: si la mirara, el que prueba claves igual
+ * se enteraría de cuál era la buena.
+ */
+async function usuarioPorPass(cfg, user, pass) {
   if (!user || !pass || !cfg || !Array.isArray(cfg.users)) return null;
+  if (await frenado(user)) return null;
   const u = cfg.users.find(x => x.name === user);
-  return u && verificarPass(pass, u.pass) ? u : null;
+  if (u && verificarPass(pass, u.pass)) return u;
+  await anotarFallo(user, pass);
+  return null;
 }
 
 /**
@@ -135,7 +189,7 @@ async function usuarioDe(body, cfg) {
   const config = cfg !== undefined ? cfg : await leerCfgUsuarios();
   return b.adminToken
     ? usuarioPorEmail(config, await emailDelToken(b.adminToken))
-    : usuarioPorPass(config, b.adminUser, b.adminPass);
+    : await usuarioPorPass(config, b.adminUser, b.adminPass);
 }
 
 /**

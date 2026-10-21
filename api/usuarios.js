@@ -119,7 +119,7 @@ module.exports = async (req, res) => {
       const cred = credencialDeHeader(req) || {};
       const yo = cred.token
         ? usuarioPorEmail(cfg, await emailDelToken(cred.token))
-        : usuarioPorPass(cfg, cred.user, cred.pass);
+        : await usuarioPorPass(cfg, cred.user, cred.pass);
       if (!yo) return res.status(403).json({ error: 'Necesitás estar logueado en el Monitor.' });
       const safe = cfg ? { ...cfg, users: (cfg.users || []).map(({ pass, ...u }) => u) } : null;
       return res.status(200).json({ ok: true, config: safe });
@@ -133,7 +133,7 @@ module.exports = async (req, res) => {
       if (action === 'login') {
         const { user, pass } = body;
         const cfg = await leerCfg();
-        const u = usuarioPorPass(cfg, user, pass);
+        const u = await usuarioPorPass(cfg, user, pass);
         if (!u) return res.status(200).json({ ok: false });
         // Migración silenciosa: si esta contraseña todavía estaba en texto plano, se
         // guarda hasheada ahora que sabemos que es la correcta. Pasa una sola vez por

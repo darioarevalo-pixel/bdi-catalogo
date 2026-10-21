@@ -91,7 +91,7 @@ async function usuarioValido(req) {
       const email = await emailCacheado(token);
       return email ? usuarioPorEmail(cfg, email) : null;
     }
-    return usuarioPorPass(cfg, user, pass);
+    return await usuarioPorPass(cfg, user, pass);
   } catch (e) {
     // El portero le suma a estos endpoints una dependencia que antes no tenían (el KV, y el
     // proveedor de identidad si entró con Google). Si alguno se cae, no puede reventar el
