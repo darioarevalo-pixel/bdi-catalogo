@@ -3484,6 +3484,12 @@ function validarTelefono() {
   }
 }
 
+// La clave con la que el ERP reconoce este pedido (la misma si el aviso se repite).
+function claveDePedido() {
+  if (window.crypto && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  return 'p-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
+}
+
 async function confirmarPedido() {
   const items = Object.values(cart);
   if (!items.length) { showToast('El pedido está vacío', 'error'); return; }
@@ -3571,7 +3577,14 @@ async function confirmarPedido() {
       sale_state_id: 1,
       discount_inventory: true,
       comments: [clientName, contact, email, 'Pago: ' + payment, 'Entrega: ' + delivery, cuponNota, obs].filter(Boolean).join(' — '),
-      items: items.map(i => ({ product_id: i.id, ...(i.sizeId ? { size_id: i.sizeId } : {}), quantity: i.qty, unit_price: cartItemOferta(i) ? i.precio : Math.round(i.precio * factorCupon * 100) / 100 }))
+      items: items.map(i => ({ product_id: i.id, ...(i.sizeId ? { size_id: i.sizeId } : {}), quantity: i.qty, unit_price: cartItemOferta(i) ? i.precio : Math.round(i.precio * factorCupon * 100) / 100 })),
+      // Para el ERP (el proxy lo saca antes de mandarle el pedido a GN): una clave
+      // nueva por confirmación y los datos del cliente, que a GN sólo le llegan
+      // como texto en `comments`.
+      erp: {
+        clave: claveDePedido(),
+        contacto: { nombre: clientName, telefono: phone, email: email, pago: payment, entrega: delivery, obs: obs, cupon: cuponNota },
+      },
     };
 
     const data = await fetchProxy('/ventas', { method: 'POST', body });

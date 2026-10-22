@@ -975,7 +975,11 @@ async function pasaElFreno(req) {
 // El ERP propio de Areben va a reemplazar a Gestión Nube. Mientras GN viva, GN
 // MANDA: el pedido se crea allá como siempre y, recién DESPUÉS del OK, se le
 // pasa una copia al ERP (que la guarda como pedido; la venta la arma cuando GN
-// tiene el cobro). Por eso esto nunca puede tirar abajo ni demorar un pedido:
+// tiene el cobro). Bruno (21-oct): el pedido NACE también en el ERP ⇒ va con su
+// `clave` propia (una por confirmación, la arma la página) y lo que escribió el
+// cliente (`contacto`), que a GN sólo le llega como texto en `comments`. Ese
+// bloque (`erp` en el cuerpo) se saca ANTES de mandarle el pedido a GN.
+// Por eso esto nunca puede tirar abajo ni demorar un pedido:
 //   · sin ERP_LLAVE_CATALOGO configurada, no hace nada;
 //   · si el ERP falla o tarda, queda en el registro y el pedido sale igual
 //     (el ERP igual lo levanta de GN en el cruce de cada día);
@@ -992,7 +996,25 @@ function waitUntilDeVercel() {
   } catch { return null; }
 }
 
-async function mandarAlERP(pedido, respuestaGN, esAdmin) {
+// Los topes del ERP (`CAMPOS_CONTACTO` en el motor): ahí un texto de más rechaza
+// el pedido entero, así que acá se recorta (el formulario no tiene tope).
+const ERP_CONTACTO = { nombre: 200, telefono: 60, email: 200, pago: 100, entrega: 300, obs: 2000, cupon: 200 };
+function paraElERP(erp) {
+  if (!erp || typeof erp !== 'object') return {};
+  const fuera = {};
+  if (typeof erp.clave === 'string' && /^[A-Za-z0-9_-]{8,100}$/.test(erp.clave)) fuera.clave = erp.clave;
+  const c = erp.contacto && typeof erp.contacto === 'object' ? erp.contacto : null;
+  if (c) {
+    const contacto = {};
+    for (const [k, max] of Object.entries(ERP_CONTACTO)) {
+      if (typeof c[k] === 'string' && c[k].trim()) contacto[k] = c[k].trim().slice(0, max);
+    }
+    if (Object.keys(contacto).length) fuera.contacto = contacto;
+  }
+  return fuera;
+}
+
+async function mandarAlERP(pedido, respuestaGN, esAdmin, erp) {
   let gn = null;
   try { const c = JSON.parse(respuestaGN); gn = (c && c.data) || c; } catch { /* abajo */ }
   if (!gn || !gn.id) { console.error('[erp] la respuesta de GN no trae el id de la venta: no se avisa'); return; }
@@ -1003,6 +1025,7 @@ async function mandarAlERP(pedido, respuestaGN, esAdmin) {
       headers: { 'Content-Type': 'application/json', 'x-erp-llave': process.env.ERP_LLAVE_CATALOGO },
       body: JSON.stringify({
         origen: esAdmin ? 'admin' : 'catalogo',
+        ...paraElERP(erp),
         gn: { id: gn.id, number: gn.number ?? null },
         pedido: { store_id: pedido.store_id, items: pedido.items },
       }),
@@ -1016,9 +1039,9 @@ async function mandarAlERP(pedido, respuestaGN, esAdmin) {
   }
 }
 
-async function avisarAlERP(pedido, respuestaGN, esAdmin) {
+async function avisarAlERP(pedido, respuestaGN, esAdmin, erp) {
   if (!process.env.ERP_LLAVE_CATALOGO || !pedido || !Array.isArray(pedido.items)) return;
-  const tarea = mandarAlERP(pedido, respuestaGN, esAdmin); // no tira: atrapa todo adentro
+  const tarea = mandarAlERP(pedido, respuestaGN, esAdmin, erp); // no tira: atrapa todo adentro
   const waitUntil = waitUntilDeVercel();
   if (waitUntil) { waitUntil(tarea); return; }
   await tarea;
@@ -1282,8 +1305,10 @@ module.exports = async (req, res) => {
       method: req.method,
       headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
     };
+    // El bloque `erp` (clave y contacto del pedido) es del ERP: a GN ⛔ le llega.
+    const { erp: paraERP, ...paraGN } = (esConfirmarPedido && req.body && typeof req.body === 'object') ? req.body : {};
     if (req.body && ['POST', 'PUT', 'PATCH'].includes(req.method)) {
-      opts.body = JSON.stringify(req.body);
+      opts.body = JSON.stringify(esConfirmarPedido ? paraGN : req.body);
     }
     if (esConfirmarPedido) marcar('precios');
 
@@ -1343,7 +1368,7 @@ module.exports = async (req, res) => {
     // La venta ya está en GN: se le avisa también al ERP (ver `avisarAlERP`). No
     // cambia en nada la respuesta al cliente; `erp` mide cuánto se esperó (0 si
     // Vercel deja terminarlo después de responder).
-    if (esConfirmarPedido && r.ok) { await avisarAlERP(req.body, data, esAdmin); marcar('erp'); }
+    if (esConfirmarPedido && r.ok) { await avisarAlERP(paraGN, data, esAdmin, paraERP); marcar('erp'); }
     // Cacheo en el CDN de Vercel SOLO para la lista de productos (lectura pura,
     // se usa para mostrar el catálogo). El navegador igual revalida (max-age=0),
     // pero el CDN sirve una copia compartida hasta 60s → abrir el catálogo es

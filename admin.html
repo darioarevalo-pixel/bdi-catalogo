@@ -3676,7 +3676,12 @@ async function pmConfirmar() {
       channel_id: channelId, sale_type_id: saleTypeId, currency_id: currencyId, store_id: storeId,
       sale_state_id: 1, discount_inventory: true,
       comments: 'Pedido mayorista (admin) — ' + cliente,
-      items: pmLineas.map(l => ({ product_id: l.id, ...(l.sizeId ? { size_id: l.sizeId } : {}), quantity: l.cant, unit_price: l.precio }))
+      items: pmLineas.map(l => ({ product_id: l.id, ...(l.sizeId ? { size_id: l.sizeId } : {}), quantity: l.cant, unit_price: l.precio })),
+      // Para el ERP (el proxy lo saca antes de mandarle el pedido a GN).
+      erp: {
+        clave: (window.crypto && typeof crypto.randomUUID === 'function') ? crypto.randomUUID() : 'p-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12),
+        contacto: { nombre: cliente },
+      },
     };
     // La contraseña le dice al proxy que esta venta es del admin: se verifica el
     // stock real de GN, pero SIN descontar los topes (ya avisamos más arriba).
