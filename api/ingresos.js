@@ -106,6 +106,33 @@ module.exports = async (req, res) => {
       return res.status(405).json({ error: 'método no permitido' });
     }
 
+    // --- Pedidos marcados «Contactado» a mano en el panel de WhatsApp (Darío, 25-oct-2026) ---
+    // El panel lo deduce de WhatsApp Web, pero si el cliente escribe desde otro número que el del
+    // pedido no lo une. Clave = últimos 8 dígitos + fecha del pedido → cuándo se marcó (ms).
+    // 🔑 El cambio se hace ACÁ, de a uno (POST { clave, marcado }), y no reescribiendo el mapa
+    // desde el navegador: así dos pantallas no se pisan. Se borra solo lo de más de 4 días: el
+    // panel muestra pedidos de hoy y ayer.
+    if (req.query?.kind === 'crmcontactados') {
+      const key = `crm:contactados:${store === 'zattia' ? 'zattia' : 'bdi'}`;
+      const leer = async () => {
+        const raw = await kvCmd(['GET', key]);
+        try { return raw ? JSON.parse(raw) : {}; } catch { return {}; }
+      };
+      if (req.method === 'GET') return res.status(200).json({ ok: true, map: await leer() });
+      if (req.method === 'POST') {
+        const { clave, marcado } = req.body || {};
+        if (typeof clave !== 'string' || !clave || clave.length > 80) return res.status(400).json({ error: 'clave inválida' });
+        const map = await leer();
+        if (marcado) map[clave] = Date.now();
+        else delete map[clave];
+        const corte = Date.now() - 4 * 24 * 3600 * 1000;
+        for (const [k, t] of Object.entries(map)) if (!(Number(t) > corte)) delete map[k];
+        await kvCmd(['SET', key, JSON.stringify(map)]);
+        return res.status(200).json({ ok: true, map });
+      }
+      return res.status(405).json({ error: 'método no permitido' });
+    }
+
     // --- Quién está en la comunidad de WhatsApp (lista de teléfonos que manda la extensión del panel) ---
     // Es una foto de la comunidad, no un dato que se edite a mano: la extensión la lee de WhatsApp Web
     // y la reemplaza entera. Vive aparte de `crm:seg` a propósito: así el cruce no pisa las marcas
