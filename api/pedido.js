@@ -195,6 +195,30 @@ function desdeAyerArgentina(ahora) {
   return new Date(Date.parse(hoyAR + 'T03:00:00Z') - 24 * 3600 * 1000).toISOString();
 }
 
+// El link que recibió el cliente al confirmar (el mismo que arma index.html), para que el panel
+// se lo pueda volver a pasar al que lo perdió (Darío, 26-10-2026).
+const BASE_LINK = 'https://bdi-catalogo.vercel.app';
+function linkDe(id) {
+  if (id == null || id === '') return '';
+  const k = claveDe(id);
+  return BASE_LINK + '/pedido/' + encodeURIComponent(id) + (k ? '?k=' + k : '');
+}
+
+/** El link y el total de los pedidos de Logística (`ids` = números de GN). Los que no salieron del catálogo no vienen. */
+async function linksDePedidos(ids) {
+  const lista = [...new Set(ids.map(x => String(x).trim()).filter(x => /^\d{1,12}$/.test(x)))].slice(0, 100);
+  if (!lista.length) return {};
+  const m = await kvCmd(['MGET', ...lista.map(id => 'pedido:' + id)]);
+  const out = {};
+  ((m && m.result) || []).forEach((v, j) => {
+    if (!v) return;
+    let p;
+    try { p = JSON.parse(v); } catch (e) { return; }
+    out[lista[j]] = { link: linkDe(lista[j]), total: p.total || 0 };
+  });
+  return out;
+}
+
 const unidadesDe = (items) => (Array.isArray(items) ? items : []).reduce((s, i) => s + (Number(i && i.cantidad) || 0), 0);
 
 async function pedidosParaElPanel() {
@@ -211,6 +235,7 @@ async function pedidosParaElPanel() {
       telefono: p.telefono || '',
       total: p.total || 0,
       unidades: unidadesDe(p.items),
+      link: linkDe(p.id),
     }))
     .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
   const digitos = t => String(t || '').replace(/\D/g, '').slice(-8);
@@ -647,6 +672,11 @@ module.exports = async (req, res) => {
     if (req.method === 'GET' && req.query.panel) {
       const u = await usuarioValido(req);
       if (!u || !u.admin) return res.status(403).json({ error: 'Esto lo ven solo los administradores.' });
+      // `&ids=29561,29580`: además, el link y el total de esos pedidos (los de Logística).
+      if (req.query.ids) {
+        const [base, links] = await Promise.all([pedidosParaElPanel(), linksDePedidos(String(req.query.ids).split(','))]);
+        return res.json({ ...base, links });
+      }
       return res.json(await pedidosParaElPanel());
     }
 
