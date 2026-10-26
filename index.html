@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BDI Accesorios — Catálogo Mayorista</title>
+<link rel="icon" type="image/png" sizes="64x64" href="/favicon-64.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <!-- De acá salen TODAS las fotos de la grilla (ver thumbTN). Sin este saludo
@@ -590,6 +592,10 @@
   /* Botón y modal de Preguntas Frecuentes */
   .faq-btn { width: 36px; height: 36px; flex-shrink: 0; border: 1px solid var(--border-strong); border-radius: 50%; background: var(--surface); color: var(--text-muted); font-family: inherit; font-size: 17px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; line-height: 1; transition: background 0.12s, color 0.12s; }
   .faq-btn:hover { background: var(--bg); color: var(--text); }
+  /* En compu dice "¿Cómo comprar?" (un "?" solo no se entiende); en el celular
+     vuelve al círculo con "?" porque no hay lugar. */
+  .faq-btn { width: auto; padding: 0 14px; border-radius: 18px; font-size: 13px; font-weight: 600; color: var(--text); }
+  @media (max-width: 600px) { .faq-btn { width: 36px; padding: 0; border-radius: 50%; font-size: 17px; font-weight: 700; color: var(--text-muted); } }
   .faq-box { background: var(--surface); border-radius: var(--radius); width: 100%; max-width: 540px; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
   .faq-header { padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
   .faq-header h2 { font-size: 16px; font-weight: 600; }
@@ -605,6 +611,16 @@
   .anuncio-bar { background: var(--accent); color: #fff; text-align: center; font-size: 12.5px; font-weight: 500; letter-spacing: 0.01em; padding: 8px 16px; line-height: 1.4; }
   .anuncio-bar .sep { opacity: 0.5; margin: 0 8px; }
   .anuncio-bar .corto { display: none; }
+
+  /* Botones de categorías debajo del buscador (26-10-2026): en el celular el
+     menú ☰ queda escondido y el que entra por primera vez no ve que hay algo
+     más que fundas. En el celular la fila se desliza con el dedo. */
+  .cat-chips { display: flex; gap: 8px; margin: -0.25rem 0 1.25rem; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .cat-chips::-webkit-scrollbar { display: none; }
+  .cat-chip { flex-shrink: 0; padding: 7px 14px; border-radius: 20px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; transition: background 0.15s, color 0.15s, border-color 0.15s; }
+  .cat-chip:hover { border-color: var(--accent); }
+  .cat-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  @media (max-width: 600px) { .cat-chips { margin-left: -16px; margin-right: -16px; padding: 0 16px; } }
   @media (max-width: 600px) {
     .anuncio-bar { font-size: 11.5px; padding: 7px 8px; letter-spacing: 0; white-space: nowrap; }
     .anuncio-bar .largo { display: none; }
@@ -630,7 +646,7 @@
   <div class="header-right">
     <span class="conn-dot" id="conn-dot"></span>
     <span class="conn-label" id="conn-label"></span>
-    <button class="faq-btn" onclick="abrirFAQ()" title="Preguntas frecuentes" aria-label="Preguntas frecuentes">?</button>
+    <button class="faq-btn" onclick="abrirFAQ()" title="Preguntas frecuentes" aria-label="Preguntas frecuentes"><span class="txt-compu">¿Cómo comprar?</span><span class="txt-celu">?</span></button>
     <button class="cart-btn" onclick="abrirCarrito()">
       Pedido
       <span class="cart-badge" id="cart-badge">0</span>
@@ -708,7 +724,6 @@
           <input type="text" id="search-input" placeholder="Buscar productos..." oninput="renderProductosDebounced()" />
         </div>
         <button type="button" id="btn-por-modelo" class="btn-por-modelo" onclick="toggleModeloView()" title="Ver fundas agrupadas por modelo de iPhone">📱 <span class="txt-compu">Elegí tu modelo</span><span class="txt-celu">Por modelo</span></button>
-        <button type="button" id="btn-vista" class="btn-vista" onclick="alternarVista()" title="Cambiar cómo se ve el catálogo"></button>
         <select class="sort-select" id="sort-select" onchange="renderProductos()" style="display:none">
           <option value="custom">Orden personalizado</option>
           <option value="stock-desc">Stock: mayor a menor</option>
@@ -726,6 +741,7 @@
           </select>
         </div>
       </div>
+      <div class="cat-chips" id="cat-chips"></div>
     </div>
     <div class="products-grid" id="products-grid">
       <div class="state-msg">
@@ -1010,15 +1026,17 @@ try {
   // compu entran las dos columnas con los modelos al lado, así que ahí se
   // arranca en la grilla de siempre. Y la preferencia guardada es del teléfono:
   // el botón que la graba solo existe ahí.
+  // 26-10-2026: se sacó el botón de grilla/lista (su ☰ se confundía con el menú
+  // de categorías). En el celular es siempre la lista, que es la que sirve para
+  // cargar cantidades; una preferencia vieja de "grilla" ya no se respeta.
   if (window.matchMedia('(max-width: 700px)').matches) {
-    const _guardada = localStorage.getItem('bdiVista');
-    viewMode = ['variants', 'lista2'].includes(_guardada) ? _guardada : 'lista2';
+    viewMode = 'lista2';
   }
   // ?vista=... manda por encima de todo: sirve para probar formas.
   const _v = new URLSearchParams(location.search).get('vista');
   if (['variants', 'lista', 'lista2', 'product'].includes(_v)) viewMode = _v;
 } catch (e) {}
-let prevViewMode = 'variants'; // modo al que volver al salir de "por modelo"
+let prevViewMode = viewMode; // modo al que volver al salir de "por modelo" (en el celular, la lista)
 let modeloSel = null;          // modelo de iPhone elegido en la vista "por modelo" (null = mostrar selector)
 let pmSort = 'nuevo';          // orden dentro de un modelo: 'nuevo' | 'viejo' | 'precio-asc' | 'precio-desc'
 let references = null;
@@ -1808,6 +1826,52 @@ async function cargarReferencias() {
   try { references = await fetchProxy('/ventas/referencias'); } catch(e) { references = null; }
 }
 
+// Nombre corto de cada categoría para los botones de arriba. Las que comparten
+// nombre se juntan en un solo botón (Soportes y Accesorios tienen 1 producto
+// cada una). Una categoría nueva que no esté acá sale con su nombre en
+// minúscula y su propio botón.
+const NOMBRE_BOTON_CATEGORIA = {
+  'FUNDAS': 'Fundas',
+  'SMARTWATCH': 'Smartwatch',
+  'AURICULARES': 'Auriculares',
+  'CARGADOR BDI': 'Cables y cargadores',
+  'VIDRIOS TEMPLADOS DE CELULAR': 'Vidrios',
+  'VIDRIOS TEMPLADOS DE CÁMARA': 'Protector de cámara',
+  'SOPORTES': 'Accesorios',
+  'ACCESORIOS': 'Accesorios',
+};
+function nombreBoton(cat) {
+  if (NOMBRE_BOTON_CATEGORIA[cat]) return NOMBRE_BOTON_CATEGORIA[cat];
+  const t = String(cat).toLowerCase();
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+// La categoría elegida puede ser una del sistema ("FUNDAS", desde el menú ☰) o
+// un botón de arriba ("boton:Accesorios", que junta varias).
+function coincideCategoria(p) {
+  if (categoria === 'todas') return true;
+  const cat = p.category || '';
+  if (categoria.startsWith('boton:')) return nombreBoton(cat) === categoria.slice(6);
+  return cat === categoria;
+}
+
+function renderCatChips(orderedCats) {
+  const cont = $('cat-chips');
+  if (!cont) return;
+  const botones = [];
+  orderedCats.forEach(c => { const n = nombreBoton(c); if (!botones.includes(n)) botones.push(n); });
+  // Primero en el orden de la lista de arriba (Fundas primero); las nuevas, al final.
+  const fijo = [...new Set(Object.values(NOMBRE_BOTON_CATEGORIA))];
+  const lugar = n => { const i = fijo.indexOf(n); return i < 0 ? 999 : i; };
+  botones.sort((x, y) => lugar(x) - lugar(y));
+  const activo = categoria === 'todas' ? null
+    : categoria.startsWith('boton:') ? categoria.slice(6) : nombreBoton(categoria);
+  cont.innerHTML =
+    '<button class="cat-chip' + (activo === null ? ' active' : '') + '" onclick="setCategoria(\'todas\')">Todo</button>' +
+    botones.map(n =>
+      '<button class="cat-chip' + (activo === n ? ' active' : '') + '" onclick="setCategoria(\'boton:' + n.replace(/'/g, "\\'") + '\')">' + n + '</button>'
+    ).join('');
+}
+
 function renderCatPills() {
   const hiddenCats = adminConfig.hiddenCategories || [];
   const rawCats = [...new Set(allProducts.map(p => p.category || '').filter(Boolean))]
@@ -1821,6 +1885,7 @@ function renderCatPills() {
     orderedCats = rawCats.sort();
   }
   const cats = ['todas', ...orderedCats];
+  renderCatChips(orderedCats);
   const cuenta = c => c === 'todas'
     ? allProducts.length
     : allProducts.filter(p => (p.category || '') === c).length;
@@ -2471,7 +2536,30 @@ function renderProductosDebounced() {
   _renderProductosTimer = setTimeout(renderProductos, 220);
 }
 
+// Volver a dibujar la grilla (al tocar una categoría, buscar, etc.) creaba todas
+// las fotos de cero y, aunque ya estaban bajadas, por un instante quedaban en
+// blanco: se veía un parpadeo. Ahora las fotos que siguen en pantalla se reusan
+// tal cual (ya están listas para mostrarse) en vez de crear unas nuevas.
 function renderProductos() {
+  const grid = $('products-grid');
+  const previas = {};
+  if (grid) grid.querySelectorAll('img').forEach(img => {
+    const k = img.getAttribute('src');
+    if (img.complete && img.naturalWidth) (previas[k] = previas[k] || []).push(img);
+  });
+  dibujarProductos();
+  if (!grid) return;
+  grid.querySelectorAll('img').forEach(img => {
+    const vieja = (previas[img.getAttribute('src')] || []).shift();
+    if (!vieja) return;
+    // La foto vieja toma todo lo de la nueva (clase, texto, qué abre al tocarla).
+    [...vieja.attributes].forEach(at => { if (!img.hasAttribute(at.name)) vieja.removeAttribute(at.name); });
+    [...img.attributes].forEach(at => { if (at.name !== 'src') vieja.setAttribute(at.name, at.value); });
+    img.replaceWith(vieja);
+  });
+}
+
+function dibujarProductos() {
   pintarBotonVista();
   const q = ($('search-input')?.value || '').toLowerCase();
   const sort = $('sort-select')?.value || 'custom';
@@ -2481,7 +2569,7 @@ function renderProductos() {
     const matchQ = !q || nombre.includes(q) || cod.includes(q);
     const stock = getStock(p);
     const matchStock = filtro === 'stock' ? (stock === null || stock > 0) : true;
-    const matchCat = categoria === 'todas' || (p.category || '') === categoria;
+    const matchCat = coincideCategoria(p);
     return matchQ && matchStock && matchCat;
   });
   if (sort === 'custom' || sort === 'default') {
