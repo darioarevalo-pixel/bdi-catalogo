@@ -2418,13 +2418,22 @@ const MODELOS_FUERTES = new Set([174, 173, 171, 164, 163, 161, 151, 131]);
 // sólo tiene stock en modelos flojos (restos de 11, 12, Air). Esos van al final,
 // sin cambiar el orden del panel; cuando les entra stock de un modelo fuerte,
 // vuelven solos a su lugar. Los productos que no son por modelo de iPhone no se tocan.
+// 26-10-2026: también bajan las FUNDAS casi agotadas (stock en 2 o menos de los
+// modelos fuertes, o menos de 15 unidades): quedaban arriba con 1 o 2 restos.
+// Los vidrios y protectores de cámara siguen sólo con la regla de arriba.
+const FUERTES_MINIMOS = 3;
+const STOCK_MINIMO_FUNDA = 15;
 function bajarSinModelosFuertes(prods) {
   const arriba = [], abajo = [];
   prods.forEach(p => {
     const vars = p.variantes || [];
     const porModelo = vars.some(v => variantSortKey(v.size) > 0);
-    const fuerte = vars.some(v => MODELOS_FUERTES.has(variantSortKey(v.size)) && getStockVariante(v) > 0);
-    (porModelo && !fuerte ? abajo : arriba).push(p);
+    const fuertes = new Set(vars
+      .filter(v => MODELOS_FUERTES.has(variantSortKey(v.size)) && getStockVariante(v) > 0)
+      .map(v => variantSortKey(v.size))).size;
+    const casiAgotada = /funda/i.test(p.category || '') &&
+      (fuertes < FUERTES_MINIMOS || getStockTotal(p) < STOCK_MINIMO_FUNDA);
+    (porModelo && (fuertes === 0 || casiAgotada) ? abajo : arriba).push(p);
   });
   return arriba.concat(abajo);
 }
