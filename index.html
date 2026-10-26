@@ -358,7 +358,8 @@
   /* En la tarjeta: «Ver características», para que se note que adentro hay más
      información. Sólo en la grilla normal. */
   .product-ver-mas { font-size: 11px; font-weight: 600; color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
-  .lista-grid .product-ver-mas, .lista-foto .product-ver-mas, .product-card.abierta .product-ver-mas { display: none; }
+  .lista-grid .product-body .product-ver-mas, .product-card.abierta .product-body .product-ver-mas { display: none; }
+  .product-ver-mas.lista { margin-top: 4px; cursor: pointer; padding: 4px 0; }
   .modal-desc { padding: 4px 1.25rem 12px; font-size: 13px; color: var(--text); line-height: 1.5; }
   .modal-desc p { margin: 0 0 6px; color: var(--text-muted); }
   .modal-desc ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
@@ -3014,7 +3015,11 @@ function renderVariantesGrid(prods) {
         '</div>' +
         // El mismo precio, suelto: en la vista de lista va arriba a la derecha,
         // encabezando la columna de los modelos. En las otras vistas no se ve.
-        '<div class="precio-lista">' + precioHTML + '</div>' +
+        // En la lista (la vista del celular) tocar la tarjeta abre la foto, no la ficha:
+        // por eso «Ver características» va acá, debajo del precio, y abre la ficha.
+        '<div class="precio-lista">' + precioHTML +
+          (conDesc ? '<div class="product-ver-mas lista" onclick="abrirModalSoloGaleria(' + id + ');event.stopPropagation()">Ver características ›</div>' : '') +
+        '</div>' +
         variantsHTML +
         (variantes.length > 0 ? '<button class="vcard-mobile-btn" onclick="toggleCard(this);event.stopPropagation()">Ver modelos ▾</button>' : '') +
       '</div>'
