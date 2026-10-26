@@ -2423,6 +2423,9 @@ const MODELOS_FUERTES = new Set([174, 173, 171, 164, 163, 161, 151, 131]);
 // Los vidrios y protectores de cámara siguen sólo con la regla de arriba.
 const FUERTES_MINIMOS = 3;
 const STOCK_MINIMO_FUNDA = 15;
+// Fundas que Darío quiere arriba aunque estén casi agotadas (26-10-2026):
+// Bambi, Astro, Stardust y Dua. Si se quedan sin NINGÚN modelo fuerte, bajan igual.
+const FUNDAS_SIEMPRE_ARRIBA = new Set(['1100562', '1100573', '1100568', '1100567']);
 function bajarSinModelosFuertes(prods) {
   const arriba = [], abajo = [];
   prods.forEach(p => {
@@ -2432,6 +2435,7 @@ function bajarSinModelosFuertes(prods) {
       .filter(v => MODELOS_FUERTES.has(variantSortKey(v.size)) && getStockVariante(v) > 0)
       .map(v => variantSortKey(v.size))).size;
     const casiAgotada = /funda/i.test(p.category || '') &&
+      !FUNDAS_SIEMPRE_ARRIBA.has(String(p.id || p.product_id)) &&
       (fuertes < FUERTES_MINIMOS || getStockTotal(p) < STOCK_MINIMO_FUNDA);
     (porModelo && (fuertes === 0 || casiAgotada) ? abajo : arriba).push(p);
   });
