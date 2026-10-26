@@ -49,9 +49,27 @@ async function kvCmd(cmd) {
   const d = await r.json();
   return d.result;
 }
-async function leerCfg() {
+// El padrón entero se leía del KV en CADA login y en cada pedido del Monitor (cada acción de cada
+// pantalla pregunta «¿este usuario es válido?»): ~35 KB por lectura que, sumadas, agotaron los
+// 10 GB/mes del plan gratis de Upstash y lo suspendieron (26-oct-2026). Se guarda en memoria 60 s.
+//
+// Reglas para que esto no se vuelva un problema:
+//  · Sólo se guarda una lectura buena. Un KV caído devuelve null y ⛔ se cachea: si no, un corte de
+//    un segundo dejaría a todos «sin acceso» por un minuto más.
+//  · Quien va a ESCRIBIR el padrón lee fresco (`fresco = true`): guardar encima de una copia vieja
+//    pisaría lo que otro guardó en el medio.
+//  · Lo que cambia en el padrón (permisos, claves) puede tardar hasta 60 s en verse en otra
+//    instancia del servidor. En la misma se ve al instante porque el guardado limpia la copia.
+const PADRON_TTL_MS = 60 * 1000;
+let padronCopia = null;
+let padronCopiaAt = 0;
+async function leerCfg(fresco = false) {
+  if (!fresco && padronCopia && Date.now() - padronCopiaAt < PADRON_TTL_MS) return padronCopia;
   const raw = await kvCmd(['GET', KEY]);
-  return raw ? JSON.parse(raw) : null;
+  const cfg = raw ? JSON.parse(raw) : null;
+  padronCopia = cfg;
+  padronCopiaAt = Date.now();
+  return cfg;
 }
 // `email` entra en la lista: el perfil viaja al browser con una lista FIJA de campos,
 // así que un campo que no esté acá se guarda en el KV pero nunca llega al monitor.
@@ -141,8 +159,14 @@ module.exports = async (req, res) => {
         // login sigue siendo bueno: se reintenta en el próximo.
         if (!estaHasheada(u.pass)) {
           try {
-            u.pass = hashearPass(pass);
-            await kvCmd(['SET', KEY, JSON.stringify(cfg)]);
+            // Se escribe sobre una lectura fresca, no sobre la copia de 60 s (ver leerCfg).
+            const fresca = await leerCfg(true);
+            const uf = fresca && (fresca.users || []).find(x => x.name === u.name);
+            if (uf && !estaHasheada(uf.pass)) {
+              uf.pass = hashearPass(pass);
+              await kvCmd(['SET', KEY, JSON.stringify(fresca)]);
+              padronCopia = null;
+            }
           } catch {
             /* que no se caiga un login por esto */
           }
@@ -168,7 +192,7 @@ module.exports = async (req, res) => {
       // En su lugar va `tienePass`, que es lo único que la pantalla necesita saber
       // (si esa cuenta puede entrar con contraseña o solo con Google).
       if (action === 'config') {
-        const cfg = await leerCfg();
+        const cfg = await leerCfg(true); // la pantalla de gestión edita sobre lo último, no sobre la copia
         if (!(await esAdmin(body, cfg))) return res.status(403).json({ error: 'Necesitás ser administrador.' });
         const users = ((cfg && cfg.users) || []).map(({ pass, ...u }) => ({ ...u, tienePass: !!pass }));
         return res.status(200).json({ ok: true, config: { ...(cfg || {}), users } });
@@ -177,12 +201,13 @@ module.exports = async (req, res) => {
       // Guardar config (solo admin)
       const { config } = body;
       if (!config || !Array.isArray(config.users)) return res.status(400).json({ error: 'config inválida' });
-      const actual = await leerCfg();
+      const actual = await leerCfg(true);
       if (!(await esAdmin(body, actual))) return res.status(403).json({ error: 'Necesitás ser administrador para guardar.' });
       if (!config.users.some(u => u.admin)) return res.status(400).json({ error: 'Tiene que quedar al menos un administrador.' });
       config.users = fusionarPass(config.users, (actual && actual.users) || []);
       config.updatedAt = Date.now();
       await kvCmd(['SET', KEY, JSON.stringify(config)]);
+      padronCopia = null;
       return res.status(200).json({ ok: true });
     }
 
