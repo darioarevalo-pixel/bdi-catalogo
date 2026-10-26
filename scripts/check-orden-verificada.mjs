@@ -35,12 +35,20 @@ const ORDEN_CRUDA = {
   products: [{ product_id: 7, variant_id: 9, name: 'Campera', sku: 'A1', quantity: 1, price: '90000.00' }],
 };
 let sinMail = false;
-globalThis.fetch = async (url) => {
+globalThis.fetch = async (url, opts = {}) => {
   const u = String(url);
   const ok = (body) => ({ ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body) });
   // El KV con el padrón: un solo usuario, con la pass en el formato viejo (sin hashear), que
   // `verificarPass` acepta comparando texto.
-  if (u.includes('kv-de-mentira')) return ok({ result: JSON.stringify({ users: [{ name: 'Bruno Arevalo', pass: 'la-pass' }] }) });
+  // ⚠️ Contesta el padrón SOLO a `GET cfg:usuarios`. Desde el 20-oct el login además pregunta
+  // `GET login:freno:<usuario>` (el freno a probar contraseñas): si a eso también le contestara
+  // el padrón, el usuario parecería frenado y se rechazaría al que tiene la clave buena.
+  if (u.includes('kv-de-mentira')) {
+    let cmd = [];
+    try { cmd = JSON.parse(opts.body || '[]'); } catch {}
+    if (cmd[0] === 'GET' && cmd[1] === 'cfg:usuarios') return ok({ result: JSON.stringify({ users: [{ name: 'Bruno Arevalo', pass: 'la-pass' }] }) });
+    return ok({ result: null });
+  }
   if (/\/orders\/88(\?|$)/.test(u)) return ok(sinMail ? { ...ORDEN_CRUDA, contact_email: null } : ORDEN_CRUDA);
   if (/\/orders\?/.test(u)) return u.includes('page=1') ? ok([{ id: 88, number: 21033 }]) : ok([]);
   return { ok: false, status: 404, json: async () => ({}), text: async () => 'no' };
