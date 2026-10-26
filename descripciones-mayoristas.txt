@@ -1,0 +1,96 @@
+# DESCRIPCIONES MAYORISTAS DEL CATÁLOGO
+#
+# Lo que ve el revendedor al tocar «Ver características» en un producto.
+# NO es la descripción de Tienda Nube (esa es para el público y no se toca).
+#
+# Cómo se escribe cada producto:
+#   - primera línea: el nombre EXACTO como figura en el catálogo
+#   - cada característica en un renglón que empieza con «- »
+#   - «Incluye: …» va en un renglón aparte, al final
+#   - una línea en blanco entre producto y producto
+# Un producto que no está acá no muestra descripción.
+# Los renglones que empiezan con # no se muestran.
+
+SMARTWATCH T20 ULTRA 3
+- Diseño estilo Ultra, caja robusta
+- Notificaciones del celular: WhatsApp, Instagram, mensajes y llamadas
+- Llamadas por Bluetooth: atender y hablar desde el reloj
+- Salud: ritmo cardíaco, oxígeno en sangre y sueño
+- Actividad: pasos, calorías, distancia y modos deportivos
+- Carga inalámbrica: se apoya en el cargador, sin cables al reloj
+- Compatible con Android y iPhone (app Hiwatch Pro)
+Incluye: reloj, malla, cargador y manual
+
+SMARTWATCH I9 ULTRA MAX
+- Diseño estilo Ultra, caja de aluminio y malla deportiva
+- Notificaciones del celular: WhatsApp, Instagram, mensajes y llamadas
+- Llamadas por Bluetooth: atender y hablar desde el reloj
+- Salud: ritmo cardíaco, oxígeno en sangre y sueño
+- Actividad: pasos, calorías, distancia y modos deportivos
+- Control de música y clima
+- Compatible con Android y iPhone (app Hiwatch Pro)
+Incluye: reloj, malla, cable de carga y manual
+
+SMARTWATCH T20 MAX
+- Pantalla cuadrada, diseño clásico
+- 4 mallas intercambiables
+- Notificaciones del celular: WhatsApp, Instagram, mensajes y llamadas
+- Llamadas por Bluetooth: atender y hablar desde el reloj
+- Salud: ritmo cardíaco, oxígeno en sangre y sueño
+- Actividad: pasos, calorías y distancia
+- Compatible con Android y iPhone (app Hiwatch Pro)
+Incluye: reloj, 4 mallas, cable de carga y manual
+
+SMARTWATCH T1000 ULTRA
+- Diseño estilo Ultra
+- 7 mallas de distintos colores y materiales, una de ellas metálica
+- Notificaciones del celular: WhatsApp, Instagram, mensajes y llamadas
+- Llamadas por Bluetooth: atender y hablar desde el reloj
+- Salud: ritmo cardíaco, oxígeno en sangre y sueño
+- Actividad: pasos, calorías, distancia y modos deportivos
+- Compatible con Android y iPhone (app Hiwatch Pro)
+Incluye: reloj, 7 mallas, cable de carga y manual
+
+SMARTWATCH S5000 PRO MAX
+- Combo completo en una caja, ideal para regalo
+- Reloj + auriculares inalámbricos + 7 mallas + funda protectora
+- Notificaciones del celular: WhatsApp, Instagram, mensajes y llamadas
+- Llamadas por Bluetooth: atender y hablar desde el reloj
+- Salud: ritmo cardíaco, oxígeno en sangre y sueño
+- Modos deportivos, control de música, clima, alarma y cronómetro
+- Compatible con Android y iPhone (app Hiwatch Pro)
+Incluye: reloj, 7 mallas, auriculares, funda protectora, cable de carga y manual
+
+AURICULAR A6S
+- Inalámbricos, chicos y livianos
+- Bluetooth 5.3, alcance de hasta 10 m
+- Hasta 3 horas de música o de llamadas por carga
+- Estuche que los guarda y los recarga
+- Micrófono para hablar
+- Compatibles con Android y iPhone
+
+AURICULAR AIR 31
+- Estuche transparente con pantalla que muestra la batería
+- Se conectan solos al abrir el estuche
+- Control táctil: pausar, pasar de tema y atender llamadas
+- Bluetooth 5.3
+- De 4 a 5 horas de música por carga
+- Micrófono que reduce el ruido de afuera en las llamadas
+- Resisten salpicaduras y transpiración
+- Carga por USB-C
+
+AURICULAR F9
+- Inalámbricos, con estuche de gran batería
+- El estuche sirve de cargador de emergencia para el celular
+- Pantalla en el estuche que muestra la carga
+- Control táctil
+- Micrófono para hablar
+- Compatibles con celular, tablet y computadora
+
+AURICULAR AIR
+- Inalámbricos
+- Estuche que los guarda y los recarga
+
+AURICULAR PRO 5S
+- Inalámbricos
+- Estuche que los guarda y los recarga

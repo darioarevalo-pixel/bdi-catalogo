@@ -353,7 +353,22 @@
   .modal-title { font-size: 17px; font-weight: 700; color: var(--text); text-transform: uppercase; line-height: 1.3; }
   .modal-code { display: none !important; }
   .modal-price { font-size: 24px; font-weight: 700; color: var(--accent); margin-top: 8px; }
-  .modal-desc { display: none !important; }
+  /* Descripción mayorista (ver descripciones-mayoristas.txt): sólo la tienen los
+     productos cargados en esa lista, en la práctica los gadgets. */
+  /* En la tarjeta: «Ver características», para que se note que adentro hay más
+     información. Sólo en la grilla normal. */
+  .product-ver-mas { font-size: 11px; font-weight: 600; color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
+  .lista-grid .product-ver-mas, .lista-foto .product-ver-mas, .product-card.abierta .product-ver-mas { display: none; }
+  .modal-desc { padding: 4px 1.25rem 12px; font-size: 13px; color: var(--text); line-height: 1.5; }
+  .modal-desc p { margin: 0 0 6px; color: var(--text-muted); }
+  .modal-desc ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+  .modal-desc li { position: relative; padding-left: 20px; }
+  .modal-desc li::before { content: '✓'; position: absolute; left: 0; top: 0; color: var(--stock-ok); font-weight: 700; }
+  .modal-desc li.desc-extra { display: none; }
+  .modal-desc.abierta li.desc-extra { display: list-item; }
+  .modal-desc .desc-mas { background: none; border: 0; padding: 6px 0 0 20px; font: inherit; font-size: 12px; font-weight: 600; color: var(--text-muted); cursor: pointer; }
+  .modal-desc .desc-incluye { margin-top: 10px; padding: 8px 10px; background: var(--bg); border-radius: var(--radius-sm); font-size: 12px; color: var(--text-muted); }
+  .modal-desc .desc-incluye b { color: var(--text); font-weight: 600; }
   .modal-variants-label { font-size: 11px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; color: var(--text-hint); padding: 0 1.25rem; margin-top: 12px; margin-bottom: 4px; border-top: 1px solid var(--border); padding-top: 12px; }
   .modal-variants-label.no-border { border-top: none; padding-top: 0; margin-top: 8px; }
   .modal-variant-rows { padding: 0 1rem 1rem; display: flex; flex-direction: column; gap: 4px; }
@@ -1753,6 +1768,7 @@ async function conectar() {
 
     // Las fotos de Tienda Nube tampoco frenan: cuando llegan se vuelve a dibujar.
     cargarImagenesTN().then(() => { if (allProducts.length) renderProductos(); });
+    cargarDescripcionesMayoristas().then(() => { if (allProducts.length) renderProductos(); });
 
     // El catálogo y la configuración se piden JUNTOS. La configuración hace falta
     // para filtrar lo oculto, pero no para pedir los productos, así que esperar una
@@ -2979,6 +2995,7 @@ function renderVariantesGrid(prods) {
       ? '<div class="product-price-wrap" style="margin-top:4px"><span class="product-price-old">' + formatPrecio(precioAnt) + '</span><span class="product-price">' + formatPrecio(precio) + '</span><span class="product-discount-badge">-' + pctDisc + '%</span></div>'
       : '<div class="product-price" style="margin-top:4px">' + formatPrecio(precio) + '</div>';
 
+    const conDesc = !!getDescMayorista(p);
     cards.push(
       '<div class="product-card' + (dims ? ' con-colores' : '') + '" style="cursor:default">' +
         '<div class="product-img-wrap" style="cursor:pointer" onclick="abrirDesdeCard(' + id + ',this)">' +
@@ -2993,6 +3010,7 @@ function renderVariantesGrid(prods) {
           '<div class="product-name">' + nombre + '</div>' +
           (cod ? '<div class="product-code">' + cod + '</div>' : '') +
           precioHTML +
+          (conDesc ? '<div class="product-ver-mas">Ver características ›</div>' : '') +
         '</div>' +
         // El mismo precio, suelto: en la vista de lista va arriba a la derecha,
         // encabezando la columna de los modelos. En las otras vistas no se ve.
@@ -3176,7 +3194,7 @@ function abrirModal(id) {
   const imgs = getImagenes(p);
   const img = imgs[0] || null;
   const cat = p.category || '';
-  const desc = getDescripcionTN(p) || getDescripcion(p);
+  const desc = getDescMayorista(p);
   const hiddenVars = (adminConfig.hiddenVariants || {})[String(id)] || [];
   const variantes = sortVariantsByModel((p.variantes || []).filter(v => {
     if (hiddenVars.some(hid => hid == v.size_id)) return false;
@@ -3214,7 +3232,7 @@ function abrirModal(id) {
 
   // Descripción
   if (desc) {
-    $('modal-desc').textContent = desc;
+    pintarDescripcion($('modal-desc'), desc);
     $('modal-desc').style.display = 'block';
   } else {
     $('modal-desc').style.display = 'none';
@@ -3318,7 +3336,7 @@ function abrirModalSoloGaleria(id) {
   const cod = p.code || p.sku || p.codigo || '';
   const cat = p.category || '';
   const imgs = getImagenes(p);
-  const desc = getDescripcionTN(p) || getDescripcion(p);
+  const desc = getDescMayorista(p);
 
   modalGallery = imgs;
   renderGallery(0, nombre);
@@ -3331,7 +3349,7 @@ function abrirModalSoloGaleria(id) {
   $('modal-price').style.display = 'none';
 
   if (desc) {
-    $('modal-desc').textContent = desc;
+    pintarDescripcion($('modal-desc'), desc);
     $('modal-desc').style.display = 'block';
   } else {
     $('modal-desc').style.display = 'none';
@@ -3346,6 +3364,62 @@ function cerrarModal(e) {
   if (e && e.target !== $('modal-overlay')) return;
   $('modal-overlay').classList.remove('open');
   document.body.style.overflow = '';
+}
+
+// Descripciones MAYORISTAS: viven en `descripciones-mayoristas.txt`, aparte de la
+// descripción de Tienda Nube (esa es para el público, con frases de venta minorista
+// que al revendedor no le sirven). Decisión de Darío, 26-oct-2026. Se cargan y se
+// cambian pidiéndoselo a Claude Code. El producto que no está en la lista no muestra
+// descripción, aunque tenga una en Tienda Nube.
+let descMayorista = {}; // nombre normalizado -> texto (renglones)
+
+const normNombreDesc = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
+
+async function cargarDescripcionesMayoristas() {
+  try {
+    const r = await fetch('/descripciones-mayoristas.txt', { cache: 'no-cache' });
+    if (!r.ok) return;
+    const out = {};
+    const lineas = (await r.text()).split('\n').filter(l => !l.trim().startsWith('#'));
+    for (const bloque of lineas.join('\n').split(/\n\s*\n/)) {
+      const ls = bloque.split('\n').map(l => l.trim()).filter(Boolean);
+      if (ls.length > 1) out[normNombreDesc(ls[0])] = ls.slice(1).join('\n');
+    }
+    descMayorista = out;
+  } catch (e) {}
+}
+
+function getDescMayorista(p) {
+  return descMayorista[normNombreDesc(p.name || p.nombre || p.product_name)] || '';
+}
+
+// Arma la descripción como lista: cada renglón que empieza con «-», «•» o «✓» es un
+// punto; el renglón «Incluye: …» va aparte al final. Un texto corrido sin renglones
+// (las descripciones viejas de TN) se muestra como párrafo. Se ven 4 puntos y
+// «Ver más» abre el resto: es compra mayorista, se decide rápido.
+function pintarDescripcion(el, desc) {
+  const lineas = String(desc).split('\n').map(l => l.trim()).filter(Boolean);
+  const esc = t => t.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const intro = [], puntos = [];
+  let incluye = '';
+  for (const l of lineas) {
+    const m = l.match(/^(?:[-•✓*]\s*)?incluye\s*:?\s*(.*)$/i);
+    if (m) { incluye = m[1]; continue; }
+    if (/^[-•✓*]\s*/.test(l)) puntos.push(l.replace(/^[-•✓*]\s*/, ''));
+    else if (puntos.length) puntos.push(l);
+    else intro.push(l);
+  }
+  const VISIBLES = 4;
+  let html = intro.map(t => '<p>' + esc(t) + '</p>').join('');
+  if (puntos.length) {
+    html += '<ul>' + puntos.map((t, i) => '<li' + (i >= VISIBLES ? ' class="desc-extra"' : '') + '>' + esc(t) + '</li>').join('') + '</ul>';
+    if (puntos.length > VISIBLES) {
+      html += '<button class="desc-mas" type="button" onclick="const d=this.parentNode;d.classList.toggle(\'abierta\');this.textContent=d.classList.contains(\'abierta\')?\'Ver menos ▴\':\'Ver más ▾\'">Ver más ▾</button>';
+    }
+  }
+  if (incluye) html += '<div class="desc-incluye"><b>Incluye:</b> ' + esc(incluye) + '</div>';
+  el.innerHTML = html;
+  el.classList.remove('abierta');
 }
 
 function getDescripcion(p) {
