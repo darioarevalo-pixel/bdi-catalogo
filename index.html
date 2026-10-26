@@ -598,9 +598,27 @@
   .faq-item:last-child { border-bottom: none; }
   .faq-q { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 5px; }
   .faq-a { font-size: 13px; line-height: 1.55; color: var(--text-muted); }
+
+  /* Barra de anuncio (26-10-2026): para el que entra por primera vez, que sepa
+     de entrada que es mayorista y cuál es el mínimo. No es pegajosa: se va al
+     bajar y la cabecera (que sí lo es) queda arriba. */
+  .anuncio-bar { background: var(--accent); color: #fff; text-align: center; font-size: 12.5px; font-weight: 500; letter-spacing: 0.01em; padding: 8px 16px; line-height: 1.4; }
+  .anuncio-bar .sep { opacity: 0.5; margin: 0 8px; }
+  .anuncio-bar .corto { display: none; }
+  @media (max-width: 600px) {
+    .anuncio-bar { font-size: 11.5px; padding: 7px 8px; letter-spacing: 0; white-space: nowrap; }
+    .anuncio-bar .largo { display: none; }
+    .anuncio-bar .corto { display: inline; }
+    .anuncio-bar .sep { margin: 0 4px; }
+  }
+  @media (max-width: 340px) { .anuncio-bar { font-size: 10.5px; } }
 </style>
 </head>
 <body>
+
+<div class="anuncio-bar" id="anuncio-bar">
+  <span class="largo">Tienda online mayorista</span><span class="corto">Tienda mayorista</span><span id="anuncio-min" style="display:none"><span class="sep">·</span><span class="largo">Compra mínima </span><span class="corto">Mínimo </span><span class="faq-min-monto"></span></span><span class="sep">·</span>Envíos a todo el país
+</div>
 
 <header class="site-header">
   <div style="display:flex;justify-content:flex-start">
@@ -1558,6 +1576,8 @@ function aplicarMinimoFAQ() {
   document.querySelectorAll('.faq-min-monto').forEach(el => { el.textContent = formatPrecio(min); });
   const rec = document.getElementById('faq-min-recordatorio');
   if (rec) rec.style.display = hay ? '' : 'none';
+  const anu = document.getElementById('anuncio-min');
+  if (anu) anu.style.display = hay ? '' : 'none';
   const resp = document.querySelector('#faq-min-item .faq-min-respuesta');
   if (resp) resp.textContent = hay
     ? 'La compra mínima es de ' + formatPrecio(min) + '.'
