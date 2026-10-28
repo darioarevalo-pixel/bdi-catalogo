@@ -645,6 +645,10 @@
   }
   @media (max-width: 340px) { .anuncio-bar { font-size: 10.5px; } }
 </style>
+<!-- Medidor de visitas de Vercel (celular vs compu). Con defer no frena la carga;
+     si Analytics está apagado en el panel, el script simplemente no responde. -->
+<script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>
+<script defer src="/_vercel/insights/script.js"></script>
 </head>
 <body>
 
