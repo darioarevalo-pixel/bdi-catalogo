@@ -2697,9 +2697,12 @@ function dibujarProductos() {
   const enFundas = categoria === 'FUNDAS' || categoria === 'boton:Fundas';
   const cartel = enFundas && !q ? cartelOfertasFundas() : '';
   if (categoria === 'liq') {
-    grid.classList.add('variants-grid');
-    grid.classList.toggle('lista-grid', viewMode === 'lista' || viewMode === 'lista2');
-    grid.classList.toggle('lista-foto', viewMode === 'lista2');
+    // El formato de Fundas, solo cuando hay tarjetas: en la elección de categoría
+    // y en la pregunta de cómo verlas, esa grilla las desarmaba en el celular.
+    const conTarjetas = !!liqCat && (liqCat !== 'Fundas' || !!liqModo);
+    grid.classList.toggle('variants-grid', conTarjetas);
+    grid.classList.toggle('lista-grid', conTarjetas && (viewMode === 'lista' || viewMode === 'lista2'));
+    grid.classList.toggle('lista-foto', conTarjetas && viewMode === 'lista2');
     grid.innerHTML = renderLiquidacion(q);
     return;
   }
