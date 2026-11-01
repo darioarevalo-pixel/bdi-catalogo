@@ -3072,7 +3072,7 @@ function renderLiquidacion(q) {
                     : { label: cat.nombre, items: cat.items, desde: cat.desde };
   const chips = modelos ? modelos.map(x =>
     '<button class="lq-chip' + (x === m ? ' active' : '') + '" onclick="abrirLiquidacion(\'Fundas\',\'' + esc(x.key) + '\')">' +
-      x.label + '<small>' + x.items.length + (x.items.length === 1 ? ' diseño' : ' diseños') + '</small></button>').join('') : '';
+      x.label + '</button>').join('') : ''; // sin "N diseños": ocupaba lugar y "1 diseño" quedaba pobre (Darío, 1-11)
   const items = q ? m.items.filter(it => (it.p.name || '').toLowerCase().includes(q)) : m.items;
   const renglones = items.map(it => {
     const p = it.p, id = p.id || p.product_id;
