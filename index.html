@@ -4293,6 +4293,8 @@ async function confirmarPedido() {
     if (pedidoId) {
       const pedidoDetalle = {
         id: pedidoId,
+        // Nació en el ERP: el link lo relee de ahí, no de Gestión Nube.
+        ...(data.data && data.data.erp ? { erp: true } : {}),
         fecha: new Date().toISOString(),
         cliente: clientName,
         telefono: phone,

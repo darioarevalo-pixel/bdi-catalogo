@@ -446,20 +446,32 @@ async function traerFuentesDeFotos(host, pids) {
   return { productos, mapaTN, tnOk };
 }
 
+// El pedido nacido en el ERP (`erp: true`), con la misma forma que la venta de GN.
+async function erpGet(numero) {
+  const llave = process.env.ERP_LLAVE_CATALOGO;
+  if (!llave) return null;
+  try {
+    const r = await fetch((process.env.ERP_URL || 'https://erp.arebensrl.com') + '/api/v1/pedidos/' + encodeURIComponent(numero), {
+      headers: { Authorization: 'Bearer ' + llave },
+    });
+    return r.ok ? await r.json() : null;
+  } catch (e) { return null; }
+}
+
 // Relee la venta desde GN y devuelve el pedido actualizado (o null si no se pudo).
 // Conserva los datos del cliente del snapshot (GN no los guarda igual) y reusa
 // la foto de cada ítem por (nombre|variante). El N° del pedido = number de GN;
 // el endpoint /ventas/<id> usa el id INTERNO, así que primero lo buscamos por número.
 async function refrescarDesdeGN(numero, snap, host) {
   let gnId = snap && snap.gnId;
-  if (!gnId) {
+  if (!gnId && !(snap && snap.erp)) {
     const busq = await gnGet('/ventas?q=' + encodeURIComponent(numero));
     const lista = (busq && busq.data) || [];
     const match = lista.find(v => String(v.number) === String(numero));
     if (!match) return null;
     gnId = match.id;
   }
-  const venta = await gnGet('/ventas/' + gnId);
+  const venta = snap && snap.erp ? await erpGet(numero) : await gnGet('/ventas/' + gnId);
   // Sin venta, sin renglones, o venta vacía → NO actualizamos (evita pisar la
   // foto buena con un pedido en blanco si la venta se borró o quedó sin ítems).
   if (!venta || !Array.isArray(venta.items) || venta.items.length === 0) return null;
@@ -538,7 +550,7 @@ async function refrescarDesdeGN(numero, snap, host) {
   // Merge: mantiene datos del cliente del snapshot; refresca ítems, subtotal y total.
   // El descuento/ajuste de GN se muestra por la diferencia subtotal - total (cupon: null).
   return Object.assign({}, snap, {
-    gnId,
+    ...(gnId ? { gnId } : {}),
     fotosV,
     items,
     subtotal,
@@ -748,8 +760,8 @@ module.exports = async (req, res) => {
       const pedido = raw && raw.result ? JSON.parse(raw.result) : null;
       if (!pedido || !MAIL.mailValido(pedido.email)) return res.status(400).json({ error: 'El pedido no tiene un mail válido' });
 
-      const busq = await gnGet('/ventas?q=' + encodeURIComponent(id));
-      const venta = ((busq && busq.data) || []).find(v => String(v.number) === String(id));
+      const busq = pedido.erp ? null : await gnGet('/ventas?q=' + encodeURIComponent(id));
+      const venta = pedido.erp ? await erpGet(id) : ((busq && busq.data) || []).find(v => String(v.number) === String(id));
       const enGN = venta && String(venta.comments || '').toLowerCase().includes(pedido.email.toLowerCase());
       if (!enGN) return res.status(409).json({ error: 'El mail no coincide con la venta' });
 
