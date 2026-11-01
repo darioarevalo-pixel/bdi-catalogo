@@ -70,6 +70,15 @@ const FIN_TRANSICION = Date.parse('2026-10-31T00:00:00Z');
 
 // Con el freno a probar claves (`claveDelPanelOk`, en `_admin.js`). Se pregunta una vez por
 // request: cada pregunta es una ida al KV, y abajo se llama hasta tres veces.
+/** 'celular', 'compu' o 'tablet' según el navegador. Los iPad nuevos se presentan como Mac: cuentan como compu. */
+function aparatoDe(ua) {
+  const s = String(ua || '');
+  if (!s) return 'desconocido';
+  if (/iPad|Tablet|PlayBook|Silk|Android(?!.*Mobi)/i.test(s)) return 'tablet';
+  if (/Mobi|iPhone|iPod|Android/i.test(s)) return 'celular';
+  return 'compu';
+}
+
 function esAdmin(req) {
   if (!req._esAdmin) req._esAdmin = claveDelPanelOk(req);
   return req._esAdmin;
@@ -612,6 +621,7 @@ module.exports = async (req, res) => {
             // Solo el número: alcanza para el aviso del listado. El detalle se
             // pide con ?id= cuando el admin despliega ese pedido.
             nFaltantes: Array.isArray(p.faltantes) ? p.faltantes.length : 0,
+            aparato: p.aparato || '',
           });
         });
       }
@@ -798,6 +808,11 @@ module.exports = async (req, res) => {
       // La marca que separa "de antes" de "de ahora". El link que se le entrega a
       // este cliente YA lleva la clave, así que a este pedido sí se le puede exigir.
       pedido.conClave = true;
+      // Desde qué aparato lo confirmó el cliente. Lo decide el servidor (no se
+      // acepta lo que venga en el pedido). Los cargados desde el panel no llevan:
+      // ahí el aparato sería el nuestro, no el del cliente.
+      delete pedido.aparato;
+      if (!(await esAdmin(req))) pedido.aparato = aparatoDe(req.headers['user-agent']);
       // Lo manda el navegador sin contraseña: se guarda recortado o no se guarda.
       if (pedido.faltantes) {
         const f = limpiarFaltantes(pedido.faltantes);
