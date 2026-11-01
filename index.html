@@ -209,6 +209,24 @@
      chica, nombre, precio y cantidad); en el celular, uno debajo del otro.
      Van en columnas de diario (se llena una y sigue la otra) para que una funda
      con varios colores no deje un hueco al lado. */
+  .lq-pregunta { font-size: 17px; font-weight: 700; margin: 6px 0 12px; }
+  .lq-modos { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; max-width: 760px; }
+  .lq-modo { display: flex; flex-direction: column; gap: 6px; text-align: left; padding: 16px; border: 1.5px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); color: var(--text); font-family: inherit; cursor: pointer; }
+  .lq-modo:hover { border-color: var(--accent); box-shadow: var(--shadow); }
+  .lq-modo b { font-size: 16px; }
+  .lq-modo span { font-size: 13px; color: var(--text-muted); line-height: 1.45; }
+  .lq-seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 999px; padding: 3px; margin-bottom: 10px; background: var(--surface); }
+  .lq-seg button { border: 0; background: none; font-family: inherit; font-size: 13px; font-weight: 600; color: var(--text-muted); padding: 6px 14px; border-radius: 999px; cursor: pointer; }
+  .lq-seg button.active { background: var(--accent); color: #fff; }
+  .lq-pre em { font-style: normal; font-size: 11px; color: var(--text-muted); }
+  .lq-vp { color: var(--text); }
+  .lq-vermas { border: 0; background: none; font-family: inherit; font-size: 12px; font-weight: 600; color: var(--precio-dif); padding: 4px 0; cursor: pointer; text-align: left; }
+  .lq-resto { display: flex; flex-direction: column; gap: 2px; }
+  .lq-resto[hidden] { display: none; }
+  .lq-cartel { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; padding: 16px 18px; border-radius: var(--radius); border: 0; background: var(--accent); color: #fff; font-family: inherit; text-align: left; cursor: pointer; }
+  .lq-cartel b { display: block; font-size: 16px; margin-bottom: 2px; }
+  .lq-cartel span { font-size: 13px; color: #D1D5DB; }
+  .lq-cartel .lq-cartel-ir { background: #EA580C; color: #fff; font-weight: 700; padding: 8px 14px; border-radius: 8px; white-space: nowrap; }
   .lq-lista { column-width: 360px; column-gap: 8px; }
   .lq-lista .lq-r { break-inside: avoid; margin-bottom: 6px; }
   @media (max-width: 600px) { .lq-lista { column-width: auto; columns: 1; } .lq-lista .lq-r { margin-bottom: 4px; } }
@@ -1104,6 +1122,7 @@ let modeloSel = null;          // modelo de iPhone elegido en la vista "por mode
 let pmSort = 'nuevo';          // orden dentro de un modelo: 'nuevo' | 'viejo' | 'precio-asc' | 'precio-desc'
 let liqCat = null;             // categoría elegida en el Cyber BDI (null = mostrar las categorías)
 let liqModelo = null;          // modelo elegido en Fundas (null = el que tiene más diseños)
+let liqModo = null;            // Fundas del Cyber: 'diseno' | 'modelo' | null (null = preguntar)
 let references = null;
 let adminConfig = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, mostrarCupones: false, minPurchase: 0, referencePrices: {}, variantPrices: {}, newProducts: [], cupones: [], ofertaMargen: 0, descuentoBase: 15, excepciones: {}, apagados: [], codigosAcceso: [], topes: {}, descuentoMax: {}, descuentoMaxNota: '', avisarDescuentoMax: false };
 let cuponAplicado = null; // cupón aplicado en el carrito (objeto) o null
@@ -1522,8 +1541,10 @@ function construirIndiceModelos() {
     const id = p.id || p.product_id;
     const hiddenVars = (adminConfig.hiddenVariants || {})[String(id)] || [];
     // Mismo filtro por-variante que renderVariantesGrid: sin ocultas y con stock.
+    // Lo que está en oferta va en el Cyber BDI, no acá.
     const variantes = (p.variantes || []).filter(v => {
       if (hiddenVars.some(hid => hid == v.size_id)) return false;
+      if (varianteEnLiquidacion(p, v)) return false;
       const vs = getStockVariante(v);
       return vs === null || vs > 0;
     });
@@ -2673,6 +2694,7 @@ function dibujarProductos() {
   else if (sort === 'price-desc') prods.sort((a,b) => getPrecio(b) - getPrecio(a));
   else if (sort === 'name') prods.sort((a,b) => (a.name||'').localeCompare(b.name||''));
   if (sort === 'custom' || sort === 'default') prods = bajarSinModelosFuertes(prods);
+  if (!q) prods = prods.map(sinOfertaFundas).filter(Boolean);
 
   const grid = $('products-grid');
   if (viewMode === 'modelo') {
@@ -2681,6 +2703,9 @@ function dibujarProductos() {
     return;
   }
   document.body.classList.toggle('en-liq', categoria === 'liq');
+  // Al terminar las fundas de temporada, el cartel que lleva a las de oferta.
+  const enFundas = categoria === 'FUNDAS' || categoria === 'boton:Fundas';
+  const cartel = enFundas && !q ? cartelOfertasFundas() : '';
   if (categoria === 'liq') {
     grid.classList.remove('variants-grid', 'lista-grid', 'lista-foto');
     grid.innerHTML = renderLiquidacion(q);
@@ -2694,7 +2719,7 @@ function dibujarProductos() {
     return;
   }
   if (viewMode === 'variants' || viewMode === 'lista' || viewMode === 'lista2') {
-    grid.innerHTML = renderVariantesGrid(prods);
+    grid.innerHTML = renderVariantesGrid(prods) + cartel;
     return;
   }
   grid.innerHTML = prods.map(p => {
@@ -2724,7 +2749,7 @@ function dibujarProductos() {
           : precioCardHTML(precio, precioAnt)) +
       '</div>' +
     '</div>';
-  }).join('');
+  }).join('') + cartel;
 }
 
 // El cliente elige cómo ver el catálogo y se lo recordamos para la próxima.
@@ -3022,9 +3047,10 @@ function categoriasLiquidacion() {
   return cats;
 }
 // Botón "Cyber BDI": primero se elige la categoría y, en Fundas, el modelo.
-function abrirLiquidacion(cat, key) {
+function abrirLiquidacion(cat, key, modo) {
   liqCat = cat || null;
   liqModelo = key || null;
+  liqModo = key ? 'modelo' : (modo || null);
   setCategoria('liq');
   // Bajar hasta los botones de categorías: si no, en el celular la publicidad de
   // arriba tapa la lista y parece que no pasó nada. El margen es por la barra fija.
@@ -3064,52 +3090,136 @@ function renderLiquidacion(q) {
         '</button>').join('') + '</div>' +
     '</div>';
   }
-  // Paso 2: en Fundas, el modelo (arranca en el que tiene más diseños, aunque
-  // los botones vayan del más nuevo al más viejo). En las demás categorías no
-  // hay modelo: va la lista directa.
-  const modelos = cat.nombre === 'Fundas' ? indiceLiquidacion() : null;
-  const m = modelos ? (modelos.find(x => x.key === liqModelo) || modelos.reduce((a, b) => b.items.length > a.items.length ? b : a))
-                    : { label: cat.nombre, items: cat.items, desde: cat.desde };
-  const chips = modelos ? modelos.map(x =>
+  // Paso 2 (solo Fundas): cómo quiere verlas. Darío: las dos formas sirven y
+  // tiene que quedar clara la diferencia.
+  const esFundas = cat.nombre === 'Fundas';
+  const flecha = '<button class="pm-back" onclick="abrirLiquidacion(' + (esFundas && liqModo ? '\'Fundas\'' : 'null') + ')">←</button>';
+  if (esFundas && !liqModo) {
+    const opcion = (modo, tit, txt) =>
+      '<button class="lq-modo" onclick="abrirLiquidacion(\'Fundas\', null, \'' + modo + '\')"><b>' + tit + '</b><span>' + txt + '</span></button>';
+    return '<div class="lq-wrap">' +
+      '<div class="lq-top">' + flecha + titulo + '<span class="lq-ey">Fundas</span></div>' +
+      '<div class="lq-pregunta">¿Cómo querés ver las fundas en oferta?</div>' +
+      '<div class="lq-modos">' +
+        opcion('diseno', 'Por diseño', 'Cada funda aparece una sola vez, con todos los modelos de iPhone en los que está en oferta. Ideal si elegís por cómo se ve la funda.') +
+        opcion('modelo', 'Por modelo de celular', 'Elegís un iPhone y ves todas las fundas en oferta para ese modelo. Ideal si buscás para un celular en particular.') +
+      '</div>' +
+    '</div>';
+  }
+  // Cambiar de forma sin volver a la pregunta.
+  const selModo = esFundas
+    ? '<div class="lq-seg">' +
+        '<button class="' + (liqModo === 'diseno' ? 'active' : '') + '" onclick="abrirLiquidacion(\'Fundas\', null, \'diseno\')">Por diseño</button>' +
+        '<button class="' + (liqModo === 'modelo' ? 'active' : '') + '" onclick="abrirLiquidacion(\'Fundas\', null, \'modelo\')">Por modelo de celular</button>' +
+      '</div>'
+    : '';
+  // Paso 3: la lista. Por modelo: botones de modelo (arranca en el que tiene más
+  // diseños) y cada renglón dice solo el color. Por diseño (y en las demás
+  // categorías): cada producto una vez, con sus modelos debajo.
+  const porModelo = esFundas && liqModo === 'modelo';
+  const modelos = porModelo ? indiceLiquidacion() : null;
+  const m = porModelo ? (modelos.find(x => x.key === liqModelo) || modelos.reduce((a, b) => b.items.length > a.items.length ? b : a))
+          : esFundas ? { label: 'Fundas', items: indiceLiqDisenos() }
+          : { label: cat.nombre, items: cat.items };
+  const chips = porModelo ? modelos.map(x =>
     '<button class="lq-chip' + (x === m ? ' active' : '') + '" onclick="abrirLiquidacion(\'Fundas\',\'' + esc(x.key) + '\')">' +
       x.label + '</button>').join('') : ''; // sin "N diseños": ocupaba lugar y "1 diseño" quedaba pobre (Darío, 1-11)
   const items = q ? m.items.filter(it => (it.p.name || '').toLowerCase().includes(q)) : m.items;
-  const renglones = items.map(it => {
-    const p = it.p, id = p.id || p.product_id;
-    const nombre = p.name || p.nombre || p.product_name || 'Sin nombre';
-    const base = getPrecio(p);
-    // Tachado: el precio normal de la funda (o el de referencia, si es mayor).
-    const viejo = Math.max(getPrecioAnterior(p) || 0, base || 0);
-    const img = getImagenVariante(p, it.vars[0].color);
-    const imgEsc = (img || '').replace(/'/g, "\\'");
-    // El modelo ya está elegido arriba: el renglón solo dice el color y si quedan pocas.
-    const linea = x => {
-      const vs = getStockVariante(x.v);
-      const poca = vs !== null && vs <= 2 ? '<span class="pm-poca">Últimas ' + vs + '</span>' : '';
-      return [x.color, poca].filter(Boolean).join(' · ');
-    };
-    const precioDe = x => getPrecioVariante(id, x.v.size_id, base);
-    const uno = it.vars.length === 1;
-    return '<div class="lq-r">' +
-      '<div class="pm-foto" onclick="abrirFotoModelo(' + id + ',\'' + imgEsc + '\')">' + gridImgTag(img, nombre, 'modelo', 200) + '</div>' +
-      '<div class="lq-med"><span class="lq-nom">' + nombre + '</span>' +
-        '<span class="lq-pre"><b>' + formatPrecio(it.precio) + '</b>' + (viejo > it.precio ? '<s>' + formatPrecio(viejo) + '</s>' : '') + '</span>' +
-        (uno && linea(it.vars[0]) ? '<span class="pm-variante">' + linea(it.vars[0]) + '</span>' : '') +
-      '</div>' +
-      (uno ? qtyLiqHTML(p, it.vars[0].v, precioDe(it.vars[0]), nombre, img)
-           : '<span></span><div class="lq-colores">' + it.vars.map(x =>
-               '<div class="lq-var"><span>' + linea(x) + '</span>' + qtyLiqHTML(p, x.v, precioDe(x), nombre, getImagenVariante(p, x.color) || img) + '</div>').join('') + '</div>') +
-    '</div>';
-  }).join('');
-  // La flecha vuelve a elegir la categoría.
+  const desde = items.length ? Math.min(...items.map(it => it.precio)) : 0;
+  const renglones = items.map(it => renglonLiq(it, !porModelo)).join('');
   return '<div class="lq-wrap">' +
-    '<div class="lq-top"><button class="pm-back" onclick="abrirLiquidacion(null)">←</button>' + titulo +
-      '<span class="lq-ey">' + cat.nombre + '</span></div>' +
+    '<div class="lq-top">' + flecha + titulo + '<span class="lq-ey">' + cat.nombre + '</span></div>' +
+    selModo +
     (chips ? '<div class="lq-chips">' + chips + '</div>' : '') +
-    '<div class="pm-sub" style="margin-bottom:8px">' + m.label + ' · ' + m.items.length + (m.items.length === 1 ? ' diseño' : ' diseños') + ' desde ' + formatPrecio(m.desde) + '</div>' +
+    '<div class="pm-sub" style="margin-bottom:8px">' + (porModelo ? m.label + ' · ' : '') + items.length + (items.length === 1 ? ' diseño' : ' diseños') + (items.length ? ' desde ' + formatPrecio(desde) : '') + '</div>' +
     (renglones ? '<div class="lq-lista">' + renglones + '</div>'
-               : '<div class="state-msg"><h3>Sin resultados</h3><p>Nada de ' + m.label + ' coincide con la búsqueda.</p></div>') +
+               : '<div class="state-msg"><h3>Sin resultados</h3><p>Nada coincide con la búsqueda.</p></div>') +
   '</div>';
+}
+
+// Fundas del Cyber por diseño: cada funda una vez, con los modelos (y colores) en
+// oferta, del más nuevo al más viejo. Las que más unidades tienen, primero.
+function indiceLiqDisenos() {
+  const items = [];
+  for (const p of allProducts) {
+    if (!/funda/i.test(p.category || '')) continue;
+    const id = p.id || p.product_id;
+    const ocultas = (adminConfig.hiddenVariants || {})[String(id)] || [];
+    const vars = [];
+    for (const v of sortVariantsByModel(p.variantes || [])) {
+      if (ocultas.some(h => h == v.size_id)) continue;
+      const vs = getStockVariante(v);
+      if (vs !== null && vs <= 0) continue;
+      if (!varianteEnLiquidacion(p, v)) continue;
+      const ms = modelosDeVariante(v.size);
+      if (!ms.length) continue;
+      vars.push({ v, color: ms[0].color, modelo: ms.map(x => x.label.replace(/^iPhone\s*/, '')).join(' / ') });
+    }
+    if (!vars.length) continue;
+    const base = getPrecio(p);
+    items.push({ p, vars, u: vars.reduce((a, x) => a + (getStockVariante(x.v) || 0), 0),
+      precio: Math.min(...vars.map(x => getPrecioVariante(id, x.v.size_id, base))) });
+  }
+  return items.sort((a, b) => b.u - a.u);
+}
+
+// Un renglón: foto chica, nombre, precio (el normal tachado) y la cantidad. Si la
+// funda va en varios colores o modelos, cada uno en su línea. Por diseño, la
+// línea dice el modelo; si los precios no son todos iguales, cada línea lleva el
+// suyo. Con muchas líneas se muestran 4 y el resto con "Ver más".
+function renglonLiq(it, conModelo) {
+  const p = it.p, id = p.id || p.product_id;
+  const nombre = p.name || p.nombre || p.product_name || 'Sin nombre';
+  const base = getPrecio(p);
+  // Tachado: el precio normal de la funda (o el de referencia, si es mayor).
+  const viejo = Math.max(getPrecioAnterior(p) || 0, base || 0);
+  const img = getImagenVariante(p, it.vars[0].color);
+  const imgEsc = (img || '').replace(/'/g, "\\'");
+  const precioDe = x => getPrecioVariante(id, x.v.size_id, base);
+  const variosPrecios = new Set(it.vars.map(precioDe)).size > 1;
+  const linea = x => {
+    const vs = getStockVariante(x.v);
+    const poca = vs !== null && vs <= 2 ? '<span class="pm-poca">Últimas ' + vs + '</span>' : '';
+    const txt = conModelo && x.modelo ? x.modelo + (x.color ? ' · ' + x.color : '') : x.color;
+    return [txt, variosPrecios ? '<b class="lq-vp">' + formatPrecio(precioDe(x)) + '</b>' : '', poca].filter(Boolean).join(' · ');
+  };
+  const uno = it.vars.length === 1;
+  const lineaHTML = x => '<div class="lq-var"><span>' + linea(x) + '</span>' + qtyLiqHTML(p, x.v, precioDe(x), nombre, getImagenVariante(p, x.color) || img) + '</div>';
+  const VISIBLES = 4;
+  const mas = it.vars.length - VISIBLES;
+  const colores = mas > 1
+    ? it.vars.slice(0, VISIBLES).map(lineaHTML).join('') +
+      '<div class="lq-resto" hidden>' + it.vars.slice(VISIBLES).map(lineaHTML).join('') + '</div>' +
+      '<button class="lq-vermas" onclick="this.previousElementSibling.hidden=false;this.remove()">Ver ' + mas + ' modelos más</button>'
+    : it.vars.map(lineaHTML).join('');
+  return '<div class="lq-r">' +
+    '<div class="pm-foto" onclick="abrirFotoModelo(' + id + ',\'' + imgEsc + '\')">' + gridImgTag(img, nombre, 'modelo', 200) + '</div>' +
+    '<div class="lq-med"><span class="lq-nom">' + nombre + '</span>' +
+      '<span class="lq-pre">' + (variosPrecios ? '<em>desde</em> ' : '') + '<b>' + formatPrecio(it.precio) + '</b>' + (viejo > it.precio ? '<s>' + formatPrecio(viejo) + '</s>' : '') + '</span>' +
+      (uno && linea(it.vars[0]) ? '<span class="pm-variante">' + linea(it.vars[0]) + '</span>' : '') +
+    '</div>' +
+    (uno ? qtyLiqHTML(p, it.vars[0].v, precioDe(it.vars[0]), nombre, img)
+         : '<span></span><div class="lq-colores">' + colores + '</div>') +
+  '</div>';
+}
+
+// Fundas de temporada: lo que está en oferta no va en la lista de siempre (va en
+// el Cyber BDI). Una funda en oferta solo en algunos modelos queda acá con los
+// demás. Buscando sí aparece todo, para que nadie se quede sin encontrar algo.
+function sinOfertaFundas(p) {
+  if (!/funda/i.test(p.category || '') || !(p.variantes || []).length) return p;
+  const vars = p.variantes.filter(v => !varianteEnLiquidacion(p, v));
+  if (vars.length === p.variantes.length) return p;
+  // Si lo que queda no tiene stock, la tarjeta diría "Sin stock": mejor no mostrarla.
+  const conStock = vars.some(v => { const vs = getStockVariante(v); return vs === null || vs > 0; });
+  return conStock ? { ...p, variantes: vars } : null;
+}
+function cartelOfertasFundas() {
+  const n = indiceLiqDisenos().length;
+  if (!n) return '';
+  return '<button class="lq-cartel" onclick="abrirLiquidacion(\'Fundas\', null, \'diseno\')">' +
+    '<span><b>¿Querés ver más?</b>Hay ' + n + ' diseños de fundas en oferta en el ' + LIQ_NOMBRE + '.</span>' +
+    '<span class="lq-cartel-ir">Ver fundas en oferta →</span></button>';
 }
 
 function renderCardVariantRows(id, dims, selectedColor, nomEsc, precio, imgEsc) {
