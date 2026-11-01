@@ -181,23 +181,18 @@
     .pm-precio { font-size: 13px; min-width: 58px; }
   }
 
-  /* Liquidación (1-11-2026): botón propio en las categorías, franja arriba de
-     "Todo" y una sección por modelo de iPhone, una funda por renglón y un solo
+  /* Cyber BDI (1-11-2026): botón propio en las categorías; adentro se elige la
+     categoría y, en fundas, el modelo de iPhone, una funda por renglón y un solo
      precio por funda (el del modelo elegido, con el normal tachado). Darío pidió
      renglones uno debajo del otro, ni cuadrícula ni carrusel. */
   .cat-chip.liq { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
   .cat-chip.liq::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #EA580C; }
   .cat-chip.liq.active { background: #EA580C; border-color: #EA580C; }
   .cat-chip.liq.active::before { background: #fff; }
-  .lq-franja { grid-column: 1 / -1; background: var(--accent); color: #fff; border-radius: var(--radius); padding: 16px 16px 14px; display: flex; flex-direction: column; gap: 10px; }
   .lq-ey { font-size: 11px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: #FDBA74; }
-  .lq-franja h3 { margin: 0; font-size: 22px; line-height: 1.15; letter-spacing: -0.4px; }
-  .lq-franja p { margin: 0; font-size: 13px; color: #D1D5DB; }
   .lq-chips { display: flex; flex-wrap: wrap; gap: 6px; }
   .lq-chip { font-family: inherit; font-size: 13px; font-weight: 600; line-height: 1.2; border-radius: 8px; padding: 7px 11px; cursor: pointer; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); text-align: left; flex-shrink: 0; }
   .lq-chip small { display: block; font-weight: 500; font-size: 11px; color: var(--text-muted); }
-  .lq-franja .lq-chip { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.22); color: #fff; }
-  .lq-franja .lq-chip small { color: #D1D5DB; }
   .lq-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
   .lq-chip.active small { color: #D1D5DB; }
   .lq-wrap { grid-column: 1 / -1; max-width: 720px; width: 100%; }
@@ -217,7 +212,7 @@
   .lq-colores { grid-column: 2 / -1; display: flex; flex-direction: column; gap: 2px; padding-bottom: 2px; }
   .lq-var { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--text-muted); min-width: 0; }
   .lq-var > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  @media (max-width: 600px) { .lq-wrap .lq-chips { margin-left: -16px; margin-right: -16px; padding-left: 16px; padding-right: 16px; } .lq-franja h3 { font-size: 20px; } }
+  @media (max-width: 600px) { .lq-wrap .lq-chips { margin-left: -16px; margin-right: -16px; padding-left: 16px; padding-right: 16px; } }
   .view-label-wrap { display: flex; flex-direction: column; gap: 3px; flex-shrink: 0; }
   .view-label { font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; text-align: center; }
   .vcard-colors { display: flex; flex-wrap: wrap; gap: 5px; padding: 6px 10px 2px; }
@@ -1097,7 +1092,8 @@ try {
 let prevViewMode = viewMode; // modo al que volver al salir de "por modelo" (en el celular, la lista)
 let modeloSel = null;          // modelo de iPhone elegido en la vista "por modelo" (null = mostrar selector)
 let pmSort = 'nuevo';          // orden dentro de un modelo: 'nuevo' | 'viejo' | 'precio-asc' | 'precio-desc'
-let liqModelo = null;          // modelo elegido en la Liquidación (null = el que tiene más diseños)
+let liqCat = null;             // categoría elegida en el Cyber BDI (null = mostrar las categorías)
+let liqModelo = null;          // modelo elegido en Fundas (null = el que tiene más diseños)
 let references = null;
 let adminConfig = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, mostrarCupones: false, minPurchase: 0, referencePrices: {}, variantPrices: {}, newProducts: [], cupones: [], ofertaMargen: 0, descuentoBase: 15, excepciones: {}, apagados: [], codigosAcceso: [], topes: {}, descuentoMax: {}, descuentoMaxNota: '', avisarDescuentoMax: false };
 let cuponAplicado = null; // cupón aplicado en el carrito (objeto) o null
@@ -1928,7 +1924,7 @@ function renderCatChips(orderedCats) {
     : categoria.startsWith('boton:') ? categoria.slice(6) : nombreBoton(categoria);
   const enLiq = categoria === 'liq';
   cont.innerHTML =
-    (indiceLiquidacion().length ? '<button class="cat-chip liq' + (enLiq ? ' active' : '') + '" onclick="abrirLiquidacion(null)">Liquidación</button>' : '') +
+    (categoriasLiquidacion().length ? '<button class="cat-chip liq' + (enLiq ? ' active' : '') + '" onclick="abrirLiquidacion(null)">' + LIQ_NOMBRE + '</button>' : '') +
     '<button class="cat-chip' + (activo === null && !enLiq ? ' active' : '') + '" onclick="setCategoria(\'todas\')">Todo</button>' +
     botones.map(n =>
       '<button class="cat-chip' + (activo === n ? ' active' : '') + '" onclick="setCategoria(\'boton:' + n.replace(/'/g, "\\'") + '\')">' + n + '</button>'
@@ -2679,8 +2675,6 @@ function dibujarProductos() {
     grid.innerHTML = renderLiquidacion(q);
     return;
   }
-  // La franja de la Liquidación va arriba de todo, solo en "Todo" y sin búsqueda.
-  const franja = (categoria === 'todas' && !q) ? franjaLiquidacionHTML() : '';
   grid.classList.toggle('variants-grid', viewMode === 'variants');
   grid.classList.toggle('lista-grid', viewMode === 'lista' || viewMode === 'lista2');
   grid.classList.toggle('lista-foto', viewMode === 'lista2');
@@ -2689,10 +2683,10 @@ function dibujarProductos() {
     return;
   }
   if (viewMode === 'variants' || viewMode === 'lista' || viewMode === 'lista2') {
-    grid.innerHTML = franja + renderVariantesGrid(prods);
+    grid.innerHTML = renderVariantesGrid(prods);
     return;
   }
-  grid.innerHTML = franja + prods.map(p => {
+  grid.innerHTML = prods.map(p => {
     const id = p.id || p.product_id;
     const nombre = p.name || p.nombre || p.product_name || 'Sin nombre';
     const cod = p.code || p.sku || p.codigo || '';
@@ -2923,8 +2917,8 @@ function renderPorModelo() {
 // mirado modelo por modelo: una funda puede estar entera o solo en algunos
 // modelos (los de precio especial). Se mide con el precio de lista, no con el del
 // cliente con código, así la sección es la misma para todos.
-// Para el Cyber: LIQ_EVENTO = 'Cyber' suma la palabra a la franja; '' la saca.
-const LIQ_EVENTO = 'Cyber';
+// Nombre del botón y de la sección. Pasado el Cyber se cambia acá y listo.
+const LIQ_NOMBRE = 'Cyber BDI';
 function varianteEnLiquidacion(p, v) {
   const umbral = parseFloat(adminConfig.ofertaMargen) || 0;
   if (umbral <= 0) return false;
@@ -2982,35 +2976,49 @@ function indiceLiquidacion() {
   liqCache = { prods: allProducts, cfg: adminConfig, cod: codigoAplicado, modelos };
   return modelos;
 }
-function abrirLiquidacion(key) {
-  liqModelo = key;
+// Las categorías que tienen algo en el Cyber. Fundas va con selector de modelo;
+// cualquier otra (cargadores, vidrios...) sale como lista directa el día que tenga
+// productos en oferta.
+function categoriasLiquidacion() {
+  const cats = [];
+  const modelos = indiceLiquidacion();
+  if (modelos.length) {
+    const ids = new Set();
+    modelos.forEach(m => m.items.forEach(it => ids.add(it.p.id || it.p.product_id)));
+    cats.push({ nombre: 'Fundas', disenos: ids.size, desde: Math.min(...modelos.map(m => m.desde)) });
+  }
+  const otras = {};
+  for (const p of allProducts) {
+    if (/funda/i.test(p.category || '')) continue;
+    const id = p.id || p.product_id;
+    const ocultas = (adminConfig.hiddenVariants || {})[String(id)] || [];
+    const vars = (p.variantes || []).filter(v => {
+      if (ocultas.some(h => h == v.size_id)) return false;
+      const vs = getStockVariante(v);
+      return (vs === null || vs > 0) && varianteEnLiquidacion(p, v);
+    });
+    if (!vars.length) continue;
+    const nombre = nombreBoton(p.category || 'Otros');
+    const base = getPrecio(p);
+    const c = otras[nombre] = otras[nombre] || { nombre, items: [] };
+    c.items.push({ p, vars: vars.map(v => ({ v, color: v.size })), u: vars.reduce((a, v) => a + (getStockVariante(v) || 0), 0),
+      precio: Math.min(...vars.map(v => getPrecioVariante(id, v.size_id, base))) });
+  }
+  Object.values(otras).forEach(c => {
+    c.items.sort((a, b) => b.u - a.u);
+    cats.push({ nombre: c.nombre, items: c.items, disenos: c.items.length, desde: Math.min(...c.items.map(it => it.precio)) });
+  });
+  return cats;
+}
+// Botón "Cyber BDI": primero se elige la categoría y, en Fundas, el modelo.
+function abrirLiquidacion(cat, key) {
+  liqCat = cat || null;
+  liqModelo = key || null;
   setCategoria('liq');
   // Bajar hasta los botones de categorías: si no, en el celular la publicidad de
   // arriba tapa la lista y parece que no pasó nada. El margen es por la barra fija.
   const ref = $('cat-chips');
   if (ref) window.scrollTo(0, Math.max(0, ref.getBoundingClientRect().top + window.scrollY - (document.querySelector('header')?.offsetHeight || 0) - 8));
-}
-function franjaLiquidacionHTML() {
-  const modelos = indiceLiquidacion();
-  if (!modelos.length) return '';
-  // "Desde" sale de los modelos de los botones: una funda de iPhone 6 a $550
-  // con 2 unidades no es lo que el cliente va a encontrar al tocar.
-  const disenos = new Set(), desde = Math.min(...modelos.slice(0, 5).map(m => m.desde));
-  modelos.forEach(m => m.items.forEach(it => disenos.add(it.p.id || it.p.product_id)));
-  const chip = (m, txt, sub) => '<button class="lq-chip" onclick="abrirLiquidacion(\'' + m.key.replace(/'/g, "\\'") + '\')">' + txt + '<small>' + sub + '</small></button>';
-  const resto = modelos.slice(5);
-  const numeros = [...new Set(resto.map(m => (m.label.match(/\d+/) || [m.label.replace(/^iPhone\s*/, '')])[0]))]
-    .sort((a, b) => (parseInt(a) || 99) - (parseInt(b) || 99));
-  const listaNum = numeros.length > 1 ? numeros.slice(0, -1).join(', ') + ' y ' + numeros[numeros.length - 1] : numeros.join('');
-  return '<div class="lq-franja">' +
-    '<span class="lq-ey">Liquidación' + (LIQ_EVENTO ? ' ' + LIQ_EVENTO : '') + '</span>' +
-    '<h3>Fundas desde ' + formatPrecio(desde) + '</h3>' +
-    '<p>' + disenos.size + ' diseños. Elegí tu modelo:</p>' +
-    '<div class="lq-chips">' +
-      modelos.slice(0, 5).map(m => chip(m, m.label, m.items.length + (m.items.length === 1 ? ' diseño' : ' diseños') + ' · desde ' + formatPrecio(m.desde))).join('') +
-      (resto.length ? chip(resto[0], 'Otros modelos', listaNum) : '') +
-    '</div>' +
-  '</div>';
 }
 function qtyLiqHTML(p, v, precio, nombre, img) {
   const id = p.id || p.product_id;
@@ -3026,14 +3034,33 @@ function qtyLiqHTML(p, v, precio, nombre, img) {
   '</div>';
 }
 function renderLiquidacion(q) {
-  const modelos = indiceLiquidacion();
-  if (!modelos.length) {
-    return '<div class="lq-wrap"><div class="state-msg"><div class="icon">⊘</div><h3>No hay fundas en liquidación</h3></div></div>';
+  const cats = categoriasLiquidacion();
+  const titulo = '<div class="pm-title">' + LIQ_NOMBRE + '</div>';
+  const esc = t => String(t).replace(/'/g, "\\'");
+  if (!cats.length) {
+    return '<div class="lq-wrap"><div class="state-msg"><div class="icon">⊘</div><h3>Por ahora no hay productos en oferta</h3></div></div>';
   }
-  const m = modelos.find(x => x.key === liqModelo) || modelos[0];
-  const chips = modelos.map(x =>
-    '<button class="lq-chip' + (x === m ? ' active' : '') + '" onclick="abrirLiquidacion(\'' + x.key.replace(/'/g, "\\'") + '\')">' +
-      x.label + '<small>' + x.items.length + (x.items.length === 1 ? ' diseño' : ' diseños') + '</small></button>').join('');
+  const cat = cats.find(c => c.nombre === liqCat);
+  // Paso 1: elegir la categoría.
+  if (!cat) {
+    return '<div class="lq-wrap">' +
+      '<div class="lq-top"><button class="pm-back" onclick="setCategoria(\'todas\')">←</button>' + titulo + '</div>' +
+      '<div class="pm-sub" style="margin-bottom:10px">Elegí qué estás buscando</div>' +
+      '<div class="pm-modelos">' + cats.map(c =>
+        '<button class="pm-modelo-btn" onclick="abrirLiquidacion(\'' + esc(c.nombre) + '\')">' +
+          '<span class="pm-modelo-nombre">' + c.nombre + '</span>' +
+          '<span class="pm-modelo-count">' + c.disenos + (c.nombre === 'Fundas' ? (c.disenos === 1 ? ' diseño' : ' diseños') : (c.disenos === 1 ? ' producto' : ' productos')) + ' · desde ' + formatPrecio(c.desde) + '</span>' +
+        '</button>').join('') + '</div>' +
+    '</div>';
+  }
+  // Paso 2: en Fundas, el modelo (arranca en el que tiene más diseños). En las
+  // demás categorías no hay modelo: va la lista directa.
+  const modelos = cat.nombre === 'Fundas' ? indiceLiquidacion() : null;
+  const m = modelos ? (modelos.find(x => x.key === liqModelo) || modelos[0])
+                    : { label: cat.nombre, items: cat.items, desde: cat.desde };
+  const chips = modelos ? modelos.map(x =>
+    '<button class="lq-chip' + (x === m ? ' active' : '') + '" onclick="abrirLiquidacion(\'Fundas\',\'' + esc(x.key) + '\')">' +
+      x.label + '<small>' + x.items.length + (x.items.length === 1 ? ' diseño' : ' diseños') + '</small></button>').join('') : '';
   const items = q ? m.items.filter(it => (it.p.name || '').toLowerCase().includes(q)) : m.items;
   const renglones = items.map(it => {
     const p = it.p, id = p.id || p.product_id;
@@ -3062,13 +3089,14 @@ function renderLiquidacion(q) {
                '<div class="lq-var"><span>' + linea(x) + '</span>' + qtyLiqHTML(p, x.v, precioDe(x), nombre, getImagenVariante(p, x.color) || img) + '</div>').join('') + '</div>') +
     '</div>';
   }).join('');
+  // La flecha vuelve a elegir la categoría.
   return '<div class="lq-wrap">' +
-    '<div class="lq-top"><button class="pm-back" onclick="setCategoria(\'todas\')">←</button>' +
-      '<div class="pm-title">Liquidación</div>' + (LIQ_EVENTO ? '<span class="lq-ey">' + LIQ_EVENTO + '</span>' : '') + '</div>' +
-    '<div class="lq-chips">' + chips + '</div>' +
+    '<div class="lq-top"><button class="pm-back" onclick="abrirLiquidacion(null)">←</button>' + titulo +
+      '<span class="lq-ey">' + cat.nombre + '</span></div>' +
+    (chips ? '<div class="lq-chips">' + chips + '</div>' : '') +
     '<div class="pm-sub" style="margin-bottom:8px">' + m.label + ' · ' + m.items.length + (m.items.length === 1 ? ' diseño' : ' diseños') + ' desde ' + formatPrecio(m.desde) + '</div>' +
     (renglones ? '<div class="lq-lista">' + renglones + '</div>'
-               : '<div class="state-msg"><h3>Sin resultados</h3><p>Ninguna funda de ' + m.label + ' coincide con la búsqueda.</p></div>') +
+               : '<div class="state-msg"><h3>Sin resultados</h3><p>Nada de ' + m.label + ' coincide con la búsqueda.</p></div>') +
   '</div>';
 }
 
