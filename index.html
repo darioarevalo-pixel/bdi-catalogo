@@ -211,10 +211,21 @@
      con varios colores no deje un hueco al lado. */
   .lq-pregunta { font-size: 17px; font-weight: 700; margin: 6px 0 12px; }
   .lq-modos { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; max-width: 760px; }
-  .lq-modo { display: flex; flex-direction: column; gap: 6px; text-align: left; padding: 16px; border: 1.5px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); color: var(--text); font-family: inherit; cursor: pointer; }
+  .lq-modo { display: flex; flex-direction: row; align-items: center; gap: 14px; text-align: left; padding: 16px; border: 1.5px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); color: var(--text); font-family: inherit; cursor: pointer; }
   .lq-modo:hover { border-color: var(--accent); box-shadow: var(--shadow); }
-  .lq-modo b { font-size: 16px; }
-  .lq-modo span { font-size: 13px; color: var(--text-muted); line-height: 1.45; }
+  .lq-modo-txt { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .lq-modo-txt b { font-size: 16px; }
+  .lq-modo-txt > span { font-size: 13px; color: var(--text-muted); line-height: 1.45; }
+  .lq-muestra { flex-shrink: 0; width: 104px; display: flex; gap: 6px; padding: 8px; border-radius: 8px; background: var(--bg); }
+  .lq-muestra i { font-style: normal; font-size: 10px; font-weight: 700; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 5px; padding: 2px 5px; white-space: nowrap; text-align: center; }
+  .lq-mf { display: block; background: #fff; border-radius: 5px; overflow: hidden; }
+  .lq-mf img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .lq-muestra.diseno { align-items: center; }
+  .lq-muestra.diseno .lq-mf { width: 46px; height: 62px; flex-shrink: 0; }
+  .lq-mt { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .lq-muestra.modelo { flex-direction: column; align-items: stretch; }
+  .lq-mfs { display: flex; gap: 4px; }
+  .lq-mfs .lq-mf { flex: 1; height: 40px; }
   .lq-seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 999px; padding: 3px; margin-bottom: 10px; background: var(--surface); }
   .lq-seg button { border: 0; background: none; font-family: inherit; font-size: 13px; font-weight: 600; color: var(--text-muted); padding: 6px 14px; border-radius: 999px; cursor: pointer; }
   .lq-seg button.active { background: var(--accent); color: #fff; }
@@ -3095,8 +3106,20 @@ function renderLiquidacion(q) {
   const esFundas = cat.nombre === 'Fundas';
   const flecha = '<button class="pm-back" onclick="abrirLiquidacion(' + (esFundas && liqModo ? '\'Fundas\'' : 'null') + ')">←</button>';
   if (esFundas && !liqModo) {
+    // A la izquierda de cada opción, una muestra con fotos reales: una funda con
+    // varios modelos / un modelo con varias fundas (pedido de Darío, 1-11).
+    const disenos = indiceLiqDisenos();
+    const foto = it => gridImgTag(getImagenVariante(it.p, it.vars[0].color), it.p.name || '', 'modelo', 120);
+    const top = indiceLiquidacion().reduce((a, b) => b.items.length > a.items.length ? b : a);
+    const muestra = {
+      diseno: disenos.length ? '<span class="lq-muestra diseno"><span class="lq-mf">' + foto(disenos[0]) + '</span><span class="lq-mt">' +
+        [...new Set(disenos[0].vars.map(x => x.modelo))].reverse().slice(0, 3).map(t => '<i>' + t + '</i>').join('') + '</span></span>' : '',
+      modelo: '<span class="lq-muestra modelo"><i>' + top.label + '</i><span class="lq-mfs">' +
+        top.items.slice(0, 3).map(it => '<span class="lq-mf">' + foto(it) + '</span>').join('') + '</span></span>',
+    };
     const opcion = (modo, tit, txt) =>
-      '<button class="lq-modo" onclick="abrirLiquidacion(\'Fundas\', null, \'' + modo + '\')"><b>' + tit + '</b><span>' + txt + '</span></button>';
+      '<button class="lq-modo" onclick="abrirLiquidacion(\'Fundas\', null, \'' + modo + '\')">' + muestra[modo] +
+        '<span class="lq-modo-txt"><b>' + tit + '</b><span>' + txt + '</span></span></button>';
     return '<div class="lq-wrap">' +
       '<div class="lq-top">' + flecha + titulo + '<span class="lq-ey">Fundas</span></div>' +
       '<div class="lq-pregunta">¿Cómo querés ver las fundas en oferta?</div>' +
