@@ -216,13 +216,13 @@
   .lq-modo-txt { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
   .lq-modo-txt b { font-size: 16px; }
   .lq-modo-txt > span { font-size: 13px; color: var(--text-muted); line-height: 1.45; }
-  .lq-muestra { flex-shrink: 0; width: 104px; display: flex; gap: 6px; padding: 8px; border-radius: 8px; background: var(--bg); }
-  .lq-muestra i { font-style: normal; font-size: 10px; font-weight: 700; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 5px; padding: 2px 5px; white-space: nowrap; text-align: center; }
+  .lq-muestra { flex-shrink: 0; width: 126px; display: flex; gap: 6px; padding: 6px; border-radius: 8px; background: var(--bg); }
+  .lq-muestra i { font-style: normal; font-size: 10px; font-weight: 700; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 5px; padding: 2px 4px; white-space: nowrap; text-align: center; }
   .lq-mf { display: block; background: #fff; border-radius: 5px; overflow: hidden; }
   .lq-mf img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .lq-muestra.diseno { align-items: center; }
-  .lq-muestra.diseno .lq-mf { width: 46px; height: 62px; flex-shrink: 0; }
-  .lq-mt { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .lq-muestra.diseno .lq-mf { width: 40px; height: 60px; flex-shrink: 0; }
+  .lq-mt { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
   .lq-muestra.modelo { flex-direction: column; align-items: stretch; }
   .lq-mfs { display: flex; gap: 4px; }
   .lq-mfs .lq-mf { flex: 1; height: 40px; }
@@ -3110,10 +3110,18 @@ function renderLiquidacion(q) {
     // varios modelos / un modelo con varias fundas (pedido de Darío, 1-11).
     const disenos = indiceLiqDisenos();
     const foto = it => gridImgTag(getImagenVariante(it.p, it.vars[0].color), it.p.name || '', 'modelo', 120);
-    const top = indiceLiquidacion().reduce((a, b) => b.items.length > a.items.length ? b : a);
+    // Con modelos nuevos (16 Pro Max, 16 Pro, 16...): el 11 se ve viejo (Darío).
+    // Diseño: el que tiene los 3 modelos más nuevos. Modelo: el más nuevo con 3 fundas o más.
+    const nuevos = it => [...new Set(it.vars.map(x => x.modelo))].slice(0, 3);
+    const puntaje = it => { const ms = nuevos(it); return ms.length < 3 ? 0 : ms.reduce((a, t) => a + variantSortKey('iPhone ' + t), 0); };
+    const dMuestra = disenos.slice().sort((a, b) => puntaje(b) - puntaje(a))[0];
+    const modelosLiq = indiceLiquidacion();
+    // El mismo modelo que encabeza la muestra de diseño (16 Pro Max), si tiene 3 fundas.
+    const top = (dMuestra && modelosLiq.find(m => m.label === 'iPhone ' + nuevos(dMuestra)[0] && m.items.length >= 3))
+      || modelosLiq.find(m => m.items.length >= 3) || modelosLiq[0];
     const muestra = {
-      diseno: disenos.length ? '<span class="lq-muestra diseno"><span class="lq-mf">' + foto(disenos[0]) + '</span><span class="lq-mt">' +
-        [...new Set(disenos[0].vars.map(x => x.modelo))].reverse().slice(0, 3).map(t => '<i>' + t + '</i>').join('') + '</span></span>' : '',
+      diseno: dMuestra ? '<span class="lq-muestra diseno"><span class="lq-mf">' + foto(dMuestra) + '</span><span class="lq-mt">' +
+        nuevos(dMuestra).map(t => '<i>' + t + '</i>').join('') + '</span></span>' : '',
       modelo: '<span class="lq-muestra modelo"><i>' + top.label + '</i><span class="lq-mfs">' +
         top.items.slice(0, 3).map(it => '<span class="lq-mf">' + foto(it) + '</span>').join('') + '</span></span>',
     };
