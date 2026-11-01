@@ -196,6 +196,7 @@
   .lq-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
   .lq-chip.active small { color: #D1D5DB; }
   .lq-wrap { grid-column: 1 / -1; width: 100%; }
+  .product-price small.desde { font-size: 12px; font-weight: 500; color: var(--text-muted); }
   /* Adentro del Cyber BDI no va la publicidad de arriba: con un modelo de pocas
      fundas la página no alcanza a bajar y las fundas quedaban al fondo. */
   body.en-liq #banners-section { display: none !important; }
@@ -205,10 +206,6 @@
   /* Todos los modelos a la vista, sin deslizar (pedido de Darío, 1-11). */
   .lq-wrap .lq-chips { padding-bottom: 10px; }
   .lq-wrap .lq-chip { padding: 6px 9px; font-size: 12.5px; }
-  /* En la compu los renglones van en columnas (siguen siendo renglones: foto
-     chica, nombre, precio y cantidad); en el celular, uno debajo del otro.
-     Van en columnas de diario (se llena una y sigue la otra) para que una funda
-     con varios colores no deje un hueco al lado. */
   .lq-pregunta { font-size: 17px; font-weight: 700; margin: 6px 0 12px; }
   .lq-modos { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; max-width: 760px; }
   .lq-modo { display: flex; flex-direction: row; align-items: center; gap: 14px; text-align: left; padding: 16px; border: 1.5px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); color: var(--text); font-family: inherit; cursor: pointer; }
@@ -229,28 +226,10 @@
   .lq-seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 999px; padding: 3px; margin-bottom: 10px; background: var(--surface); }
   .lq-seg button { border: 0; background: none; font-family: inherit; font-size: 13px; font-weight: 600; color: var(--text-muted); padding: 6px 14px; border-radius: 999px; cursor: pointer; }
   .lq-seg button.active { background: var(--accent); color: #fff; }
-  .lq-pre em { font-style: normal; font-size: 11px; color: var(--text-muted); }
-  .lq-vp { color: var(--text); }
-  .lq-vermas { border: 0; background: none; font-family: inherit; font-size: 12px; font-weight: 600; color: var(--precio-dif); padding: 4px 0; cursor: pointer; text-align: left; }
-  .lq-resto { display: flex; flex-direction: column; gap: 2px; }
-  .lq-resto[hidden] { display: none; }
   .lq-cartel { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; padding: 16px 18px; border-radius: var(--radius); border: 0; background: var(--accent); color: #fff; font-family: inherit; text-align: left; cursor: pointer; }
   .lq-cartel b { display: block; font-size: 16px; margin-bottom: 2px; }
   .lq-cartel span { font-size: 13px; color: #D1D5DB; }
   .lq-cartel .lq-cartel-ir { background: #EA580C; color: #fff; font-weight: 700; padding: 8px 14px; border-radius: 8px; white-space: nowrap; }
-  .lq-lista { column-width: 360px; column-gap: 8px; }
-  .lq-lista .lq-r { break-inside: avoid; margin-bottom: 6px; }
-  @media (max-width: 600px) { .lq-lista { column-width: auto; columns: 1; } .lq-lista .lq-r { margin-bottom: 4px; } }
-  .lq-r { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 4px 8px 4px 4px; display: grid; grid-template-columns: 48px 1fr auto; gap: 2px 10px; align-items: center; min-width: 0; }
-  .lq-r .pm-foto { width: 48px; height: 48px; }
-  .lq-med { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
-  .lq-nom { font-size: 13px; font-weight: 700; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .lq-pre { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
-  .lq-pre b { font-size: 15px; }
-  .lq-pre s { font-size: 11px; color: var(--text-hint); }
-  .lq-colores { grid-column: 2 / -1; display: flex; flex-direction: column; gap: 2px; padding-bottom: 2px; }
-  .lq-var { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--text-muted); min-width: 0; }
-  .lq-var > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
  
   .view-label-wrap { display: flex; flex-direction: column; gap: 3px; flex-shrink: 0; }
   .view-label { font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; text-align: center; }
@@ -2718,7 +2697,9 @@ function dibujarProductos() {
   const enFundas = categoria === 'FUNDAS' || categoria === 'boton:Fundas';
   const cartel = enFundas && !q ? cartelOfertasFundas() : '';
   if (categoria === 'liq') {
-    grid.classList.remove('variants-grid', 'lista-grid', 'lista-foto');
+    grid.classList.add('variants-grid');
+    grid.classList.toggle('lista-grid', viewMode === 'lista' || viewMode === 'lista2');
+    grid.classList.toggle('lista-foto', viewMode === 'lista2');
     grid.innerHTML = renderLiquidacion(q);
     return;
   }
@@ -3068,19 +3049,6 @@ function abrirLiquidacion(cat, key, modo) {
   const ref = $('cat-chips');
   if (ref) window.scrollTo(0, Math.max(0, ref.getBoundingClientRect().top + window.scrollY - (document.querySelector('header')?.offsetHeight || 0) - 8));
 }
-function qtyLiqHTML(p, v, precio, nombre, img) {
-  const id = p.id || p.product_id;
-  const cartKey = id + '-' + v.size_id;
-  const qty = cart[cartKey]?.qty || 0;
-  const vs = getStockVariante(v);
-  const chArgs = '\'' + cartKey + '\',' + id + ',\'' + nombre.replace(/'/g, "\\'") + '\',' + precio + ',' + v.size_id + ',\'' +
-    v.size.replace(/'/g, "\\'").replace(/"/g, '&quot;') + '\',\'' + (img || '').replace(/'/g, "\\'") + '\'';
-  return '<div class="pm-qty">' +
-    '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1)">−</button>' +
-    '<input class="modal-vqty-num" type="number" inputmode="numeric" onclick="event.stopPropagation()" id="q-m-' + cartKey + '" value="' + qty + '" min="0"' + (vs !== null ? ' max="' + vs + '"' : '') + ' />' +
-    '<button class="modal-vqty-btn plus"' + (vs !== null && qty >= vs ? ' disabled' : '') + ' onclick="chQty(' + chArgs + ',1)">+</button>' +
-  '</div>';
-}
 function renderLiquidacion(q) {
   const cats = categoriasLiquidacion();
   const titulo = '<div class="pm-title">' + LIQ_NOMBRE + '</div>';
@@ -3157,15 +3125,17 @@ function renderLiquidacion(q) {
       x.label + '</button>').join('') : ''; // sin "N diseños": ocupaba lugar y "1 diseño" quedaba pobre (Darío, 1-11)
   const items = q ? m.items.filter(it => (it.p.name || '').toLowerCase().includes(q)) : m.items;
   const desde = items.length ? Math.min(...items.map(it => it.precio)) : 0;
-  const renglones = items.map(it => renglonLiq(it, !porModelo)).join('');
+  // Las tarjetas son las de Fundas (Darío: la lista con foto chica parecía una
+  // planilla), cada una solo con los modelos en oferta: por modelo, el elegido.
+  const tarjetas = renderVariantesGrid(items.map(it => ({ ...it.p, variantes: it.vars.map(x => x.v) })), true);
+  // La cabecera ocupa todo el ancho; las tarjetas van sueltas en la grilla.
   return '<div class="lq-wrap">' +
     '<div class="lq-top">' + flecha + titulo + '<span class="lq-ey">' + cat.nombre + '</span></div>' +
     selModo +
     (chips ? '<div class="lq-chips">' + chips + '</div>' : '') +
-    '<div class="pm-sub" style="margin-bottom:8px">' + (porModelo ? m.label + ' · ' : '') + items.length + (items.length === 1 ? ' diseño' : ' diseños') + (items.length ? ' desde ' + formatPrecio(desde) : '') + '</div>' +
-    (renglones ? '<div class="lq-lista">' + renglones + '</div>'
-               : '<div class="state-msg"><h3>Sin resultados</h3><p>Nada coincide con la búsqueda.</p></div>') +
-  '</div>';
+    '<div class="pm-sub">' + (porModelo ? m.label + ' · ' : '') + items.length + (items.length === 1 ? ' diseño' : ' diseños') + (items.length ? ' desde ' + formatPrecio(desde) : '') + '</div>' +
+  '</div>' +
+  (tarjetas || '<div class="lq-wrap"><div class="state-msg"><h3>Sin resultados</h3><p>Nada coincide con la búsqueda.</p></div></div>');
 }
 
 // Fundas del Cyber por diseño: cada funda una vez, con los modelos (y colores) en
@@ -3194,46 +3164,6 @@ function indiceLiqDisenos() {
   return items.sort((a, b) => b.u - a.u);
 }
 
-// Un renglón: foto chica, nombre, precio (el normal tachado) y la cantidad. Si la
-// funda va en varios colores o modelos, cada uno en su línea. Por diseño, la
-// línea dice el modelo; si los precios no son todos iguales, cada línea lleva el
-// suyo. Con muchas líneas se muestran 4 y el resto con "Ver más".
-function renglonLiq(it, conModelo) {
-  const p = it.p, id = p.id || p.product_id;
-  const nombre = p.name || p.nombre || p.product_name || 'Sin nombre';
-  const base = getPrecio(p);
-  // Tachado: el precio normal de la funda (o el de referencia, si es mayor).
-  const viejo = Math.max(getPrecioAnterior(p) || 0, base || 0);
-  const img = getImagenVariante(p, it.vars[0].color);
-  const imgEsc = (img || '').replace(/'/g, "\\'");
-  const precioDe = x => getPrecioVariante(id, x.v.size_id, base);
-  const variosPrecios = new Set(it.vars.map(precioDe)).size > 1;
-  const linea = x => {
-    const vs = getStockVariante(x.v);
-    const poca = vs !== null && vs <= 2 ? '<span class="pm-poca">Últimas ' + vs + '</span>' : '';
-    const txt = conModelo && x.modelo ? x.modelo + (x.color ? ' · ' + x.color : '') : x.color;
-    return [txt, variosPrecios ? '<b class="lq-vp">' + formatPrecio(precioDe(x)) + '</b>' : '', poca].filter(Boolean).join(' · ');
-  };
-  const uno = it.vars.length === 1;
-  const lineaHTML = x => '<div class="lq-var"><span>' + linea(x) + '</span>' + qtyLiqHTML(p, x.v, precioDe(x), nombre, getImagenVariante(p, x.color) || img) + '</div>';
-  const VISIBLES = 4;
-  const mas = it.vars.length - VISIBLES;
-  const colores = mas > 1
-    ? it.vars.slice(0, VISIBLES).map(lineaHTML).join('') +
-      '<div class="lq-resto" hidden>' + it.vars.slice(VISIBLES).map(lineaHTML).join('') + '</div>' +
-      '<button class="lq-vermas" onclick="this.previousElementSibling.hidden=false;this.remove()">Ver ' + mas + ' modelos más</button>'
-    : it.vars.map(lineaHTML).join('');
-  return '<div class="lq-r">' +
-    '<div class="pm-foto" onclick="abrirFotoModelo(' + id + ',\'' + imgEsc + '\')">' + gridImgTag(img, nombre, 'modelo', 200) + '</div>' +
-    '<div class="lq-med"><span class="lq-nom">' + nombre + '</span>' +
-      '<span class="lq-pre">' + (variosPrecios ? '<em>desde</em> ' : '') + '<b>' + formatPrecio(it.precio) + '</b>' + (viejo > it.precio ? '<s>' + formatPrecio(viejo) + '</s>' : '') + '</span>' +
-      (uno && linea(it.vars[0]) ? '<span class="pm-variante">' + linea(it.vars[0]) + '</span>' : '') +
-    '</div>' +
-    (uno ? qtyLiqHTML(p, it.vars[0].v, precioDe(it.vars[0]), nombre, img)
-         : '<span></span><div class="lq-colores">' + colores + '</div>') +
-  '</div>';
-}
-
 // Fundas de temporada: lo que está en oferta no va en la lista de siempre (va en
 // el Cyber BDI). Una funda en oferta solo en algunos modelos queda acá con los
 // demás. Buscando sí aparece todo, para que nadie se quede sin encontrar algo.
@@ -3253,7 +3183,9 @@ function cartelOfertasFundas() {
     '<span class="lq-cartel-ir">Ver fundas en oferta →</span></button>';
 }
 
-function renderCardVariantRows(id, dims, selectedColor, nomEsc, precio, imgEsc) {
+// `ref`: el precio contra el que se marca un modelo con precio distinto (en el
+// Cyber BDI, el de oferta que más se repite). Sin él, el precio de la funda.
+function renderCardVariantRows(id, dims, selectedColor, nomEsc, precio, imgEsc, ref) {
   const filtered = dims.filter(d => d.dim1 === selectedColor && (getStockVariante(d) === null || getStockVariante(d) > 0));
   if (!filtered.length) return '<div style="padding:6px 4px;font-size:12px;color:var(--text-muted)">Sin stock para esta selección.</div>';
   const especial = dims.some(d => precioVarianteOverride(id, d.size_id) !== null);
@@ -3274,7 +3206,7 @@ function renderCardVariantRows(id, dims, selectedColor, nomEsc, precio, imgEsc) 
         '<div class="modal-variant-name" style="font-size:12px">' + modeloCorto(v.dim2, id) + '</div>' +
         sTxt +
       '</div>' +
-      (vPrecio !== precio ? '<div class="modal-variant-price dif">' + formatPrecio(vPrecio) + '</div>' : '') +
+      (vPrecio !== (ref || precio) ? '<div class="modal-variant-price dif">' + formatPrecio(vPrecio) + '</div>' : '') +
       '<div class="modal-vqty-wrap">' +
         '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1);event.stopPropagation()">−</button>' +
         '<input class="modal-vqty-num" type="number" inputmode="numeric" onclick="event.stopPropagation()" id="q-m-' + cartKey + '" value="' + currentQty + '" min="0"' + maxAttr + ' />' +
@@ -3292,10 +3224,13 @@ function setCardColor(id, color) {
   const rowsEl = $('vcard-variants-' + id);
   if (!rowsEl) return;
   const s = cardVariantState[id];
-  rowsEl.innerHTML = renderCardVariantRows(id, s.dims, color, s.nomEsc, s.precio, s.imgEsc);
+  rowsEl.innerHTML = renderCardVariantRows(id, s.dims, color, s.nomEsc, s.precio, s.imgEsc, s.ref);
 }
 
-function renderVariantesGrid(prods) {
+// `oferta`: para el Cyber BDI. La tarjeta es la misma de Fundas, pero arriba va
+// el precio de oferta (con "desde" si los modelos no valen todos lo mismo) y el
+// normal tachado.
+function renderVariantesGrid(prods, oferta) {
   const cards = [];
   for (const p of prods) {
     const id = p.id || p.product_id;
@@ -3320,13 +3255,15 @@ function renderVariantesGrid(prods) {
 
     const dims = parseVariantDimensions(variantes);
     let variantsHTML = '';
+    // En oferta, cada modelo muestra su precio solo si no es el que más se repite.
+    const precioRef = oferta ? precioModaVariantes(id, variantes, precio) : precio;
 
     if (dims) {
       // 2D: pills de color + filas de modelos con cantidad
       const colors = [...new Set(dims.map(d => d.dim1))];
       const prev = cardVariantState[id]?.selectedColor;
       const selectedColor = (prev && colors.includes(prev)) ? prev : colors[0];
-      cardVariantState[id] = { dims, selectedColor, nomEsc, precio, imgEsc };
+      cardVariantState[id] = { dims, selectedColor, nomEsc, precio, imgEsc, ref: oferta ? precioRef : null };
 
       variantsHTML =
         '<div class="vcard-colors" id="vcard-colors-' + id + '">' +
@@ -3335,7 +3272,7 @@ function renderVariantesGrid(prods) {
           ).join('') +
         '</div>' +
         '<div class="vcard-variants" id="vcard-variants-' + id + '">' +
-          renderCardVariantRows(id, dims, selectedColor, nomEsc, precio, imgEsc) +
+          renderCardVariantRows(id, dims, selectedColor, nomEsc, precio, imgEsc, oferta ? precioRef : null) +
         '</div>';
     } else if (variantes.length > 0) {
       // 1D: todas las variantes con cantidad
@@ -3356,7 +3293,7 @@ function renderVariantesGrid(prods) {
               '<div class="modal-variant-name" style="font-size:12px">' + modeloCorto(v.size, id) + '</div>' +
               sTxt +
             '</div>' +
-            (vPrecio !== precio ? '<div class="modal-variant-price dif">' + formatPrecio(vPrecio) + '</div>' : '') +
+            (vPrecio !== precioRef ? '<div class="modal-variant-price dif">' + formatPrecio(vPrecio) + '</div>' : '') +
             '<div class="modal-vqty-wrap">' +
               '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1);event.stopPropagation()">−</button>' +
               '<input class="modal-vqty-num" type="number" inputmode="numeric" onclick="event.stopPropagation()" id="q-m-' + cartKey + '" value="' + currentQty + '" min="0"' + maxAttr + ' />' +
@@ -3378,7 +3315,16 @@ function renderVariantesGrid(prods) {
       '</div>';
     }
 
-    const precioHTML = especial
+    const ofPrecios = oferta && variantes.length ? variantes.map(v => getPrecioVariante(id, v.size_id, precio)) : null;
+    const ofMin = ofPrecios ? Math.min(...ofPrecios) : precio;
+    const ofViejo = Math.max(precioAnt || 0, precio || 0);
+    const ofPct = oferta ? getDescuentoPct(ofMin, ofViejo) : 0;
+    const precioHTML = oferta
+      ? '<div class="product-price-wrap" style="margin-top:4px">' +
+          (ofPct > 0 ? '<span class="product-price-old">' + formatPrecio(ofViejo) + '</span>' : '') +
+          '<span class="product-price">' + (ofPrecios && new Set(ofPrecios).size > 1 ? '<small class="desde">desde </small>' : '') + formatPrecio(ofMin) + '</span>' +
+        '</div>'
+      : especial
       ? '<div class="product-price" style="margin-top:4px">' + formatPrecio(getPrecio(p)) + '</div>'
       : pctDisc > 0
       ? '<div class="product-price-wrap" style="margin-top:4px"><span class="product-price-old">' + formatPrecio(precioAnt) + '</span><span class="product-price">' + formatPrecio(precio) + '</span><span class="product-discount-badge">-' + pctDisc + '%</span></div>'
@@ -3388,7 +3334,8 @@ function renderVariantesGrid(prods) {
     cards.push(
       '<div class="product-card' + (dims ? ' con-colores' : '') + '" style="cursor:default">' +
         '<div class="product-img-wrap" style="cursor:pointer" onclick="abrirDesdeCard(' + id + ',this)">' +
-          (esOferta(p) ? '<div class="product-img-badge oferta">OFERTA</div>' : pctDisc > 0 ? '<div class="product-img-badge">-' + pctDisc + '%</div>' : '') +
+          (oferta ? (ofPct > 0 ? '<div class="product-img-badge oferta">-' + ofPct + '%</div>' : '')
+                  : esOferta(p) ? '<div class="product-img-badge oferta">OFERTA</div>' : pctDisc > 0 ? '<div class="product-img-badge">-' + pctDisc + '%</div>' : '') +
           nuevoBadge(id) +
           gridImgTag(img, nombre, 'card', 400) +
           imgsBadge(imgs) +
