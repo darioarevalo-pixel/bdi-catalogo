@@ -196,6 +196,9 @@
   .lq-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
   .lq-chip.active small { color: #D1D5DB; }
   .lq-wrap { grid-column: 1 / -1; width: 100%; }
+  /* Adentro del Cyber BDI no va la publicidad de arriba: con un modelo de pocas
+     fundas la página no alcanza a bajar y las fundas quedaban al fondo. */
+  body.en-liq #banners-section { display: none !important; }
   .lq-top { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
   .lq-top .pm-title { flex: 1; }
   .lq-top .lq-ey { color: #EA580C; }
@@ -2677,6 +2680,7 @@ function dibujarProductos() {
     grid.innerHTML = renderPorModelo();
     return;
   }
+  document.body.classList.toggle('en-liq', categoria === 'liq');
   if (categoria === 'liq') {
     grid.classList.remove('variants-grid', 'lista-grid', 'lista-foto');
     grid.innerHTML = renderLiquidacion(q);
