@@ -195,14 +195,20 @@
   .lq-chip small { display: block; font-weight: 500; font-size: 11px; color: var(--text-muted); }
   .lq-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
   .lq-chip.active small { color: #D1D5DB; }
-  .lq-wrap { grid-column: 1 / -1; max-width: 720px; width: 100%; }
+  .lq-wrap { grid-column: 1 / -1; width: 100%; }
   .lq-top { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
   .lq-top .pm-title { flex: 1; }
   .lq-top .lq-ey { color: #EA580C; }
   /* Todos los modelos a la vista, sin deslizar (pedido de Darío, 1-11). */
   .lq-wrap .lq-chips { padding-bottom: 10px; }
   .lq-wrap .lq-chip { padding: 6px 9px; font-size: 12.5px; }
-  .lq-lista { display: flex; flex-direction: column; gap: 4px; }
+  /* En la compu los renglones van en columnas (siguen siendo renglones: foto
+     chica, nombre, precio y cantidad); en el celular, uno debajo del otro.
+     Van en columnas de diario (se llena una y sigue la otra) para que una funda
+     con varios colores no deje un hueco al lado. */
+  .lq-lista { column-width: 360px; column-gap: 8px; }
+  .lq-lista .lq-r { break-inside: avoid; margin-bottom: 6px; }
+  @media (max-width: 600px) { .lq-lista { column-width: auto; columns: 1; } .lq-lista .lq-r { margin-bottom: 4px; } }
   .lq-r { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 4px 8px 4px 4px; display: grid; grid-template-columns: 48px 1fr auto; gap: 2px 10px; align-items: center; min-width: 0; }
   .lq-r .pm-foto { width: 48px; height: 48px; }
   .lq-med { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
