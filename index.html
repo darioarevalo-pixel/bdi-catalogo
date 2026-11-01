@@ -190,11 +190,6 @@
   .cat-chip.liq.active { background: #EA580C; border-color: #EA580C; }
   .cat-chip.liq.active::before { background: #fff; }
   .lq-ey { font-size: 11px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: #FDBA74; }
-  .lq-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-  .lq-chip { font-family: inherit; font-size: 13px; font-weight: 600; line-height: 1.2; border-radius: 8px; padding: 7px 11px; cursor: pointer; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); text-align: left; flex-shrink: 0; }
-  .lq-chip small { display: block; font-weight: 500; font-size: 11px; color: var(--text-muted); }
-  .lq-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .lq-chip.active small { color: #D1D5DB; }
   .lq-wrap { grid-column: 1 / -1; width: 100%; }
   .product-price small.desde { font-size: 12px; font-weight: 500; color: var(--text-muted); }
   /* Adentro del Cyber BDI no va la publicidad de arriba: con un modelo de pocas
@@ -203,9 +198,6 @@
   .lq-top { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
   .lq-top .pm-title { flex: 1; }
   .lq-top .lq-ey { color: #EA580C; }
-  /* Todos los modelos a la vista, sin deslizar (pedido de Darío, 1-11). */
-  .lq-wrap .lq-chips { padding-bottom: 10px; }
-  .lq-wrap .lq-chip { padding: 6px 9px; font-size: 12.5px; }
   .lq-pregunta { font-size: 17px; font-weight: 700; margin: 6px 0 12px; }
   .lq-modos { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; max-width: 760px; }
   .lq-modo { display: flex; flex-direction: row; align-items: center; gap: 14px; text-align: left; padding: 16px; border: 1.5px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); color: var(--text); font-family: inherit; cursor: pointer; }
@@ -2699,7 +2691,7 @@ function dibujarProductos() {
   if (categoria === 'liq') {
     // El formato de Fundas, solo cuando hay tarjetas: en la elección de categoría
     // y en la pregunta de cómo verlas, esa grilla las desarmaba en el celular.
-    const conTarjetas = !!liqCat && (liqCat !== 'Fundas' || !!liqModo);
+    const conTarjetas = !!liqCat && (liqCat !== 'Fundas' || liqModo === 'diseno');
     grid.classList.toggle('variants-grid', conTarjetas);
     grid.classList.toggle('lista-grid', conTarjetas && (viewMode === 'lista' || viewMode === 'lista2'));
     grid.classList.toggle('lista-foto', conTarjetas && viewMode === 'lista2');
@@ -2850,8 +2842,13 @@ function abrirFotoModelo(id, imgSrc) {
   openLightbox(idx);
 }
 
-function renderPorModelo() {
-  const { modelos, filasPorModelo } = construirIndiceModelos();
+// `indice`, `sel` y `elegir` permiten usar esta misma pantalla en el Cyber BDI
+// (Darío: "Por modelo de celular" igual que "Elegí tu modelo"). Sin ellos, el
+// catálogo de siempre.
+function renderPorModelo(indice, sel, elegir) {
+  const { modelos, filasPorModelo } = indice || construirIndiceModelos();
+  const elegido = indice ? sel : modeloSel;
+  const fn = elegir || 'setModeloSel';
 
   if (!modelos.length) {
     return '<div class="pm-wrap"><div class="state-msg"><div class="icon">⊘</div>' +
@@ -2859,9 +2856,9 @@ function renderPorModelo() {
   }
 
   // Estado 1: selector de modelos.
-  if (!modeloSel || !filasPorModelo[modeloSel]) {
+  if (!elegido || !filasPorModelo[elegido]) {
     const btns = modelos.map(m =>
-      '<button class="pm-modelo-btn" onclick="setModeloSel(\'' + m.key.replace(/'/g, "\\'") + '\')">' +
+      '<button class="pm-modelo-btn" onclick="' + fn + '(\'' + m.key.replace(/'/g, "\\'") + '\')">' +
         '<span class="pm-modelo-nombre">' + m.label + '</span>' +
         '<span class="pm-modelo-count">' + m.count + (m.count === 1 ? ' diseño' : ' diseños') + '</span>' +
       '</button>'
@@ -2874,8 +2871,8 @@ function renderPorModelo() {
   }
 
   // Estado 2: filas tipo Excel para el modelo elegido.
-  const modelo = modelos.find(m => m.key === modeloSel);
-  const filas = pmOrdenarFilas(filasPorModelo[modeloSel]);
+  const modelo = modelos.find(m => m.key === elegido);
+  const filas = pmOrdenarFilas(filasPorModelo[elegido]);
   const filasHTML = filas.map(f => {
     const p = f.p;
     const v = f.v;
@@ -2927,7 +2924,7 @@ function renderPorModelo() {
 
   return '<div class="pm-wrap">' +
     '<div class="pm-head">' +
-      '<button class="pm-back" onclick="setModeloSel(null)">← Modelos</button>' +
+      '<button class="pm-back" onclick="' + fn + '(null)">← Modelos</button>' +
       '<div class="pm-title">' + (modelo ? modelo.label : '') + '</div>' +
       '<div class="pm-sub">' + (modelo ? modelo.count : filas.length) + (modelo && modelo.count === 1 ? ' diseño' : ' diseños') +
         (modelo && modelo.filas !== modelo.count ? ' · ' + modelo.filas + ' opciones' : '') + '</div>' +
@@ -3115,30 +3112,48 @@ function renderLiquidacion(q) {
         '<button class="' + (liqModo === 'modelo' ? 'active' : '') + '" onclick="abrirLiquidacion(\'Fundas\', null, \'modelo\')">Por modelo de celular</button>' +
       '</div>'
     : '';
-  // Paso 3: la lista. Por modelo: botones de modelo (arranca en el que tiene más
-  // diseños) y cada renglón dice solo el color. Por diseño (y en las demás
-  // categorías): cada producto una vez, con sus modelos debajo.
-  const porModelo = esFundas && liqModo === 'modelo';
-  const modelos = porModelo ? indiceLiquidacion() : null;
-  const m = porModelo ? (modelos.find(x => x.key === liqModelo) || modelos.reduce((a, b) => b.items.length > a.items.length ? b : a))
-          : esFundas ? { label: 'Fundas', items: indiceLiqDisenos() }
-          : { label: cat.nombre, items: cat.items };
-  const chips = porModelo ? modelos.map(x =>
-    '<button class="lq-chip' + (x === m ? ' active' : '') + '" onclick="abrirLiquidacion(\'Fundas\',\'' + esc(x.key) + '\')">' +
-      x.label + '</button>').join('') : ''; // sin "N diseños": ocupaba lugar y "1 diseño" quedaba pobre (Darío, 1-11)
+  // Por modelo de celular: la misma pantalla que "Elegí tu modelo", con las
+  // fundas en oferta (primero se elige el modelo, después la tabla).
+  if (esFundas && liqModo === 'modelo') {
+    return '<div class="lq-wrap">' +
+      '<div class="lq-top">' + flecha + titulo + '<span class="lq-ey">Fundas</span></div>' + selModo +
+    '</div>' + renderPorModelo(indiceLiqFilas(), liqModelo, 'elegirModeloLiq');
+  }
+  // Por diseño (y en las demás categorías): cada producto una vez, con sus modelos.
+  const m = esFundas ? { items: indiceLiqDisenos() } : { items: cat.items };
   const items = q ? m.items.filter(it => (it.p.name || '').toLowerCase().includes(q)) : m.items;
   const desde = items.length ? Math.min(...items.map(it => it.precio)) : 0;
   // Las tarjetas son las de Fundas (Darío: la lista con foto chica parecía una
-  // planilla), cada una solo con los modelos en oferta: por modelo, el elegido.
+  // planilla), cada una solo con los modelos en oferta.
   const tarjetas = renderVariantesGrid(items.map(it => ({ ...it.p, variantes: it.vars.map(x => x.v) })), true);
   // La cabecera ocupa todo el ancho; las tarjetas van sueltas en la grilla.
   return '<div class="lq-wrap">' +
     '<div class="lq-top">' + flecha + titulo + '<span class="lq-ey">' + cat.nombre + '</span></div>' +
     selModo +
-    (chips ? '<div class="lq-chips">' + chips + '</div>' : '') +
-    '<div class="pm-sub">' + (porModelo ? m.label + ' · ' : '') + items.length + (items.length === 1 ? ' diseño' : ' diseños') + (items.length ? ' desde ' + formatPrecio(desde) : '') + '</div>' +
+    '<div class="pm-sub">' + items.length + (items.length === 1 ? ' diseño' : ' diseños') + (items.length ? ' desde ' + formatPrecio(desde) : '') + '</div>' +
   '</div>' +
   (tarjetas || '<div class="lq-wrap"><div class="state-msg"><h3>Sin resultados</h3><p>Nada coincide con la búsqueda.</p></div></div>');
+}
+
+// Las fundas en oferta con la forma que pide renderPorModelo: modelos del más
+// nuevo al más viejo y una fila por funda y color.
+function indiceLiqFilas() {
+  const modelos = indiceLiquidacion().slice().sort((a, b) => variantSortKey(b.label) - variantSortKey(a.label));
+  const filasPorModelo = {};
+  modelos.forEach(m => {
+    filasPorModelo[m.key] = [];
+    m.items.forEach(it => it.vars.forEach(x => filasPorModelo[m.key].push({ p: it.p, v: x.v, color: x.color, modelLabel: m.label })));
+  });
+  return {
+    modelos: modelos.map(m => ({ key: m.key, label: m.label, count: m.items.length, filas: filasPorModelo[m.key].length })),
+    filasPorModelo
+  };
+}
+function elegirModeloLiq(key) {
+  liqModelo = key;
+  renderProductos();
+  const ref = $('cat-chips');
+  if (ref) window.scrollTo(0, Math.max(0, ref.getBoundingClientRect().top + window.scrollY - (document.querySelector('header')?.offsetHeight || 0) - 8));
 }
 
 // Fundas del Cyber por diseño: cada funda una vez, con los modelos (y colores) en
