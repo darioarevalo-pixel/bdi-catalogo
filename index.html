@@ -180,6 +180,44 @@
     .pm-nombre { font-size: 13px; }
     .pm-precio { font-size: 13px; min-width: 58px; }
   }
+
+  /* Liquidación (1-11-2026): botón propio en las categorías, franja arriba de
+     "Todo" y una sección por modelo de iPhone, una funda por renglón y un solo
+     precio por funda (el del modelo elegido, con el normal tachado). Darío pidió
+     renglones uno debajo del otro, ni cuadrícula ni carrusel. */
+  .cat-chip.liq { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
+  .cat-chip.liq::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #EA580C; }
+  .cat-chip.liq.active { background: #EA580C; border-color: #EA580C; }
+  .cat-chip.liq.active::before { background: #fff; }
+  .lq-franja { grid-column: 1 / -1; background: var(--accent); color: #fff; border-radius: var(--radius); padding: 16px 16px 14px; display: flex; flex-direction: column; gap: 10px; }
+  .lq-ey { font-size: 11px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: #FDBA74; }
+  .lq-franja h3 { margin: 0; font-size: 22px; line-height: 1.15; letter-spacing: -0.4px; }
+  .lq-franja p { margin: 0; font-size: 13px; color: #D1D5DB; }
+  .lq-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .lq-chip { font-family: inherit; font-size: 13px; font-weight: 600; line-height: 1.2; border-radius: 8px; padding: 7px 11px; cursor: pointer; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); text-align: left; flex-shrink: 0; }
+  .lq-chip small { display: block; font-weight: 500; font-size: 11px; color: var(--text-muted); }
+  .lq-franja .lq-chip { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.22); color: #fff; }
+  .lq-franja .lq-chip small { color: #D1D5DB; }
+  .lq-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .lq-chip.active small { color: #D1D5DB; }
+  .lq-wrap { grid-column: 1 / -1; max-width: 720px; width: 100%; }
+  .lq-top { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .lq-top .pm-title { flex: 1; }
+  .lq-top .lq-ey { color: #EA580C; }
+  .lq-wrap .lq-chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; padding-bottom: 10px; }
+  .lq-wrap .lq-chips::-webkit-scrollbar { display: none; }
+  .lq-lista { display: flex; flex-direction: column; gap: 4px; }
+  .lq-r { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 4px 8px 4px 4px; display: grid; grid-template-columns: 48px 1fr auto; gap: 2px 10px; align-items: center; min-width: 0; }
+  .lq-r .pm-foto { width: 48px; height: 48px; }
+  .lq-med { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+  .lq-nom { font-size: 13px; font-weight: 700; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lq-pre { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+  .lq-pre b { font-size: 15px; }
+  .lq-pre s { font-size: 11px; color: var(--text-hint); }
+  .lq-colores { grid-column: 2 / -1; display: flex; flex-direction: column; gap: 2px; padding-bottom: 2px; }
+  .lq-var { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--text-muted); min-width: 0; }
+  .lq-var > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  @media (max-width: 600px) { .lq-wrap .lq-chips { margin-left: -16px; margin-right: -16px; padding-left: 16px; padding-right: 16px; } .lq-franja h3 { font-size: 20px; } }
   .view-label-wrap { display: flex; flex-direction: column; gap: 3px; flex-shrink: 0; }
   .view-label { font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; text-align: center; }
   .vcard-colors { display: flex; flex-wrap: wrap; gap: 5px; padding: 6px 10px 2px; }
@@ -1059,6 +1097,7 @@ try {
 let prevViewMode = viewMode; // modo al que volver al salir de "por modelo" (en el celular, la lista)
 let modeloSel = null;          // modelo de iPhone elegido en la vista "por modelo" (null = mostrar selector)
 let pmSort = 'nuevo';          // orden dentro de un modelo: 'nuevo' | 'viejo' | 'precio-asc' | 'precio-desc'
+let liqModelo = null;          // modelo elegido en la Liquidación (null = el que tiene más diseños)
 let references = null;
 let adminConfig = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, mostrarCupones: false, minPurchase: 0, referencePrices: {}, variantPrices: {}, newProducts: [], cupones: [], ofertaMargen: 0, descuentoBase: 15, excepciones: {}, apagados: [], codigosAcceso: [], topes: {}, descuentoMax: {}, descuentoMaxNota: '', avisarDescuentoMax: false };
 let cuponAplicado = null; // cupón aplicado en el carrito (objeto) o null
@@ -1870,6 +1909,7 @@ function nombreBoton(cat) {
 // un botón de arriba ("boton:Accesorios", que junta varias).
 function coincideCategoria(p) {
   if (categoria === 'todas') return true;
+  if (categoria === 'liq') return true; // la Liquidación se dibuja aparte (renderLiquidacion)
   const cat = p.category || '';
   if (categoria.startsWith('boton:')) return nombreBoton(cat) === categoria.slice(6);
   return cat === categoria;
@@ -1886,8 +1926,10 @@ function renderCatChips(orderedCats) {
   botones.sort((x, y) => lugar(x) - lugar(y));
   const activo = categoria === 'todas' ? null
     : categoria.startsWith('boton:') ? categoria.slice(6) : nombreBoton(categoria);
+  const enLiq = categoria === 'liq';
   cont.innerHTML =
-    '<button class="cat-chip' + (activo === null ? ' active' : '') + '" onclick="setCategoria(\'todas\')">Todo</button>' +
+    (indiceLiquidacion().length ? '<button class="cat-chip liq' + (enLiq ? ' active' : '') + '" onclick="abrirLiquidacion(null)">Liquidación</button>' : '') +
+    '<button class="cat-chip' + (activo === null && !enLiq ? ' active' : '') + '" onclick="setCategoria(\'todas\')">Todo</button>' +
     botones.map(n =>
       '<button class="cat-chip' + (activo === n ? ' active' : '') + '" onclick="setCategoria(\'boton:' + n.replace(/'/g, "\\'") + '\')">' + n + '</button>'
     ).join('');
@@ -2632,6 +2674,13 @@ function dibujarProductos() {
     grid.innerHTML = renderPorModelo();
     return;
   }
+  if (categoria === 'liq') {
+    grid.classList.remove('variants-grid', 'lista-grid', 'lista-foto');
+    grid.innerHTML = renderLiquidacion(q);
+    return;
+  }
+  // La franja de la Liquidación va arriba de todo, solo en "Todo" y sin búsqueda.
+  const franja = (categoria === 'todas' && !q) ? franjaLiquidacionHTML() : '';
   grid.classList.toggle('variants-grid', viewMode === 'variants');
   grid.classList.toggle('lista-grid', viewMode === 'lista' || viewMode === 'lista2');
   grid.classList.toggle('lista-foto', viewMode === 'lista2');
@@ -2640,10 +2689,10 @@ function dibujarProductos() {
     return;
   }
   if (viewMode === 'variants' || viewMode === 'lista' || viewMode === 'lista2') {
-    grid.innerHTML = renderVariantesGrid(prods);
+    grid.innerHTML = franja + renderVariantesGrid(prods);
     return;
   }
-  grid.innerHTML = prods.map(p => {
+  grid.innerHTML = franja + prods.map(p => {
     const id = p.id || p.product_id;
     const nombre = p.name || p.nombre || p.product_name || 'Sin nombre';
     const cod = p.code || p.sku || p.codigo || '';
@@ -2866,6 +2915,160 @@ function renderPorModelo() {
       '</select>' +
     '</div>' +
     '<div class="pm-tabla">' + filasHTML + '</div>' +
+  '</div>';
+}
+
+// --- Liquidación ------------------------------------------------------------
+// Liquidación = lo que el catálogo ya marca OFERTA (margen menor a ofertaMargen),
+// mirado modelo por modelo: una funda puede estar entera o solo en algunos
+// modelos (los de precio especial). Se mide con el precio de lista, no con el del
+// cliente con código, así la sección es la misma para todos.
+// Para el Cyber: LIQ_EVENTO = 'Cyber' suma la palabra a la franja; '' la saca.
+const LIQ_EVENTO = 'Cyber';
+function varianteEnLiquidacion(p, v) {
+  const umbral = parseFloat(adminConfig.ofertaMargen) || 0;
+  if (umbral <= 0) return false;
+  const id = p.id || p.product_id;
+  const especial = precioVarianteOverride(id, v.size_id);
+  if (p.unit_cost === undefined) return especial !== null ? !!(p._ofertaVar && p._ofertaVar[v.size_id]) : !!p._oferta;
+  const costo = parseFloat(p.unit_cost || 0);
+  const precio = especial !== null ? especial : parseFloat(p.wholesaler_price || p.precio_mayorista || 0);
+  if (costo <= 0 || precio <= 0) return false;
+  return ((precio - costo) / precio * 100) < umbral;
+}
+// "iPhone 11 - Negro" → [iPhone 11 · Negro]. "iPhone 12 / 12 Pro" es UNA funda
+// que sirve para los dos: va en los dos modelos.
+function modelosDeVariante(size) {
+  const mc = extraerModeloColor(size);
+  if (!mc) return [];
+  const otro = mc.color && /^\d+\s*(pro\s*max|pro|plus|mini)?$/i.test(mc.color.trim());
+  const color = otro || !mc.color ? null : mc.color.charAt(0).toUpperCase() + mc.color.slice(1).toLowerCase();
+  const out = [{ ...modeloClave(mc.modelStr), color }];
+  if (otro) out.push({ ...modeloClave('iPhone ' + mc.color.trim()), color: null });
+  return out;
+}
+// Modelos con fundas en liquidación, el que tiene más diseños primero. Cada
+// modelo trae sus fundas (las que más unidades tienen primero, así lo de 1 o 2
+// queda al final) y, de cada funda, sus colores.
+let liqCache = null;
+function indiceLiquidacion() {
+  if (liqCache && liqCache.prods === allProducts && liqCache.cfg === adminConfig && liqCache.cod === codigoAplicado) return liqCache.modelos;
+  const grupos = {};
+  for (const p of allProducts) {
+    if (!/funda/i.test(p.category || '')) continue;
+    const id = p.id || p.product_id;
+    const ocultas = (adminConfig.hiddenVariants || {})[String(id)] || [];
+    for (const v of (p.variantes || [])) {
+      if (ocultas.some(h => h == v.size_id)) continue;
+      const vs = getStockVariante(v);
+      if (vs !== null && vs <= 0) continue;
+      if (!varianteEnLiquidacion(p, v)) continue;
+      for (const m of modelosDeVariante(v.size)) {
+        const g = grupos[m.key] = grupos[m.key] || { key: m.key, label: m.label, porId: {} };
+        const it = g.porId[id] = g.porId[id] || { p, vars: [], u: 0 };
+        it.vars.push({ v, color: m.color });
+        it.u += vs || 0;
+      }
+    }
+  }
+  const modelos = Object.values(grupos).map(g => {
+    const items = Object.values(g.porId).sort((a, b) => b.u - a.u);
+    items.forEach(it => {
+      const base = getPrecio(it.p), id = it.p.id || it.p.product_id;
+      it.precio = Math.min(...it.vars.map(x => getPrecioVariante(id, x.v.size_id, base)));
+    });
+    return { key: g.key, label: g.label, items, desde: Math.min(...items.map(it => it.precio)) };
+  }).sort((a, b) => b.items.length - a.items.length || variantSortKey(b.label) - variantSortKey(a.label));
+  liqCache = { prods: allProducts, cfg: adminConfig, cod: codigoAplicado, modelos };
+  return modelos;
+}
+function abrirLiquidacion(key) {
+  liqModelo = key;
+  setCategoria('liq');
+  // Bajar hasta los botones de categorías: si no, en el celular la publicidad de
+  // arriba tapa la lista y parece que no pasó nada. El margen es por la barra fija.
+  const ref = $('cat-chips');
+  if (ref) window.scrollTo(0, Math.max(0, ref.getBoundingClientRect().top + window.scrollY - (document.querySelector('header')?.offsetHeight || 0) - 8));
+}
+function franjaLiquidacionHTML() {
+  const modelos = indiceLiquidacion();
+  if (!modelos.length) return '';
+  // "Desde" sale de los modelos de los botones: una funda de iPhone 6 a $550
+  // con 2 unidades no es lo que el cliente va a encontrar al tocar.
+  const disenos = new Set(), desde = Math.min(...modelos.slice(0, 5).map(m => m.desde));
+  modelos.forEach(m => m.items.forEach(it => disenos.add(it.p.id || it.p.product_id)));
+  const chip = (m, txt, sub) => '<button class="lq-chip" onclick="abrirLiquidacion(\'' + m.key.replace(/'/g, "\\'") + '\')">' + txt + '<small>' + sub + '</small></button>';
+  const resto = modelos.slice(5);
+  const numeros = [...new Set(resto.map(m => (m.label.match(/\d+/) || [m.label.replace(/^iPhone\s*/, '')])[0]))]
+    .sort((a, b) => (parseInt(a) || 99) - (parseInt(b) || 99));
+  const listaNum = numeros.length > 1 ? numeros.slice(0, -1).join(', ') + ' y ' + numeros[numeros.length - 1] : numeros.join('');
+  return '<div class="lq-franja">' +
+    '<span class="lq-ey">Liquidación' + (LIQ_EVENTO ? ' ' + LIQ_EVENTO : '') + '</span>' +
+    '<h3>Fundas desde ' + formatPrecio(desde) + '</h3>' +
+    '<p>' + disenos.size + ' diseños. Elegí tu modelo:</p>' +
+    '<div class="lq-chips">' +
+      modelos.slice(0, 5).map(m => chip(m, m.label, m.items.length + (m.items.length === 1 ? ' diseño' : ' diseños') + ' · desde ' + formatPrecio(m.desde))).join('') +
+      (resto.length ? chip(resto[0], 'Otros modelos', listaNum) : '') +
+    '</div>' +
+  '</div>';
+}
+function qtyLiqHTML(p, v, precio, nombre, img) {
+  const id = p.id || p.product_id;
+  const cartKey = id + '-' + v.size_id;
+  const qty = cart[cartKey]?.qty || 0;
+  const vs = getStockVariante(v);
+  const chArgs = '\'' + cartKey + '\',' + id + ',\'' + nombre.replace(/'/g, "\\'") + '\',' + precio + ',' + v.size_id + ',\'' +
+    v.size.replace(/'/g, "\\'").replace(/"/g, '&quot;') + '\',\'' + (img || '').replace(/'/g, "\\'") + '\'';
+  return '<div class="pm-qty">' +
+    '<button class="modal-vqty-btn minus" onclick="chQty(' + chArgs + ',-1)">−</button>' +
+    '<input class="modal-vqty-num" type="number" inputmode="numeric" onclick="event.stopPropagation()" id="q-m-' + cartKey + '" value="' + qty + '" min="0"' + (vs !== null ? ' max="' + vs + '"' : '') + ' />' +
+    '<button class="modal-vqty-btn plus"' + (vs !== null && qty >= vs ? ' disabled' : '') + ' onclick="chQty(' + chArgs + ',1)">+</button>' +
+  '</div>';
+}
+function renderLiquidacion(q) {
+  const modelos = indiceLiquidacion();
+  if (!modelos.length) {
+    return '<div class="lq-wrap"><div class="state-msg"><div class="icon">⊘</div><h3>No hay fundas en liquidación</h3></div></div>';
+  }
+  const m = modelos.find(x => x.key === liqModelo) || modelos[0];
+  const chips = modelos.map(x =>
+    '<button class="lq-chip' + (x === m ? ' active' : '') + '" onclick="abrirLiquidacion(\'' + x.key.replace(/'/g, "\\'") + '\')">' +
+      x.label + '<small>' + x.items.length + (x.items.length === 1 ? ' diseño' : ' diseños') + '</small></button>').join('');
+  const items = q ? m.items.filter(it => (it.p.name || '').toLowerCase().includes(q)) : m.items;
+  const renglones = items.map(it => {
+    const p = it.p, id = p.id || p.product_id;
+    const nombre = p.name || p.nombre || p.product_name || 'Sin nombre';
+    const base = getPrecio(p);
+    // Tachado: el precio normal de la funda (o el de referencia, si es mayor).
+    const viejo = Math.max(getPrecioAnterior(p) || 0, base || 0);
+    const img = getImagenVariante(p, it.vars[0].color);
+    const imgEsc = (img || '').replace(/'/g, "\\'");
+    // El modelo ya está elegido arriba: el renglón solo dice el color y si quedan pocas.
+    const linea = x => {
+      const vs = getStockVariante(x.v);
+      const poca = vs !== null && vs <= 2 ? '<span class="pm-poca">Últimas ' + vs + '</span>' : '';
+      return [x.color, poca].filter(Boolean).join(' · ');
+    };
+    const precioDe = x => getPrecioVariante(id, x.v.size_id, base);
+    const uno = it.vars.length === 1;
+    return '<div class="lq-r">' +
+      '<div class="pm-foto" onclick="abrirFotoModelo(' + id + ',\'' + imgEsc + '\')">' + gridImgTag(img, nombre, 'modelo', 200) + '</div>' +
+      '<div class="lq-med"><span class="lq-nom">' + nombre + '</span>' +
+        '<span class="lq-pre"><b>' + formatPrecio(it.precio) + '</b>' + (viejo > it.precio ? '<s>' + formatPrecio(viejo) + '</s>' : '') + '</span>' +
+        (uno && linea(it.vars[0]) ? '<span class="pm-variante">' + linea(it.vars[0]) + '</span>' : '') +
+      '</div>' +
+      (uno ? qtyLiqHTML(p, it.vars[0].v, precioDe(it.vars[0]), nombre, img)
+           : '<span></span><div class="lq-colores">' + it.vars.map(x =>
+               '<div class="lq-var"><span>' + linea(x) + '</span>' + qtyLiqHTML(p, x.v, precioDe(x), nombre, getImagenVariante(p, x.color) || img) + '</div>').join('') + '</div>') +
+    '</div>';
+  }).join('');
+  return '<div class="lq-wrap">' +
+    '<div class="lq-top"><button class="pm-back" onclick="setCategoria(\'todas\')">←</button>' +
+      '<div class="pm-title">Liquidación</div>' + (LIQ_EVENTO ? '<span class="lq-ey">' + LIQ_EVENTO + '</span>' : '') + '</div>' +
+    '<div class="lq-chips">' + chips + '</div>' +
+    '<div class="pm-sub" style="margin-bottom:8px">' + m.label + ' · ' + m.items.length + (m.items.length === 1 ? ' diseño' : ' diseños') + ' desde ' + formatPrecio(m.desde) + '</div>' +
+    (renglones ? '<div class="lq-lista">' + renglones + '</div>'
+               : '<div class="state-msg"><h3>Sin resultados</h3><p>Ninguna funda de ' + m.label + ' coincide con la búsqueda.</p></div>') +
   '</div>';
 }
 
