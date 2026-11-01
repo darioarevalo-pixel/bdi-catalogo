@@ -199,8 +199,9 @@
   .lq-top { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
   .lq-top .pm-title { flex: 1; }
   .lq-top .lq-ey { color: #EA580C; }
-  .lq-wrap .lq-chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; padding-bottom: 10px; }
-  .lq-wrap .lq-chips::-webkit-scrollbar { display: none; }
+  /* Todos los modelos a la vista, sin deslizar (pedido de Darío, 1-11). */
+  .lq-wrap .lq-chips { padding-bottom: 10px; }
+  .lq-wrap .lq-chip { padding: 6px 9px; font-size: 12.5px; }
   .lq-lista { display: flex; flex-direction: column; gap: 4px; }
   .lq-r { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 4px 8px 4px 4px; display: grid; grid-template-columns: 48px 1fr auto; gap: 2px 10px; align-items: center; min-width: 0; }
   .lq-r .pm-foto { width: 48px; height: 48px; }
@@ -212,7 +213,7 @@
   .lq-colores { grid-column: 2 / -1; display: flex; flex-direction: column; gap: 2px; padding-bottom: 2px; }
   .lq-var { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--text-muted); min-width: 0; }
   .lq-var > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  @media (max-width: 600px) { .lq-wrap .lq-chips { margin-left: -16px; margin-right: -16px; padding-left: 16px; padding-right: 16px; } }
+ 
   .view-label-wrap { display: flex; flex-direction: column; gap: 3px; flex-shrink: 0; }
   .view-label { font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; text-align: center; }
   .vcard-colors { display: flex; flex-wrap: wrap; gap: 5px; padding: 6px 10px 2px; }
@@ -2972,7 +2973,7 @@ function indiceLiquidacion() {
       it.precio = Math.min(...it.vars.map(x => getPrecioVariante(id, x.v.size_id, base)));
     });
     return { key: g.key, label: g.label, items, desde: Math.min(...items.map(it => it.precio)) };
-  }).sort((a, b) => b.items.length - a.items.length || variantSortKey(b.label) - variantSortKey(a.label));
+  }).sort((a, b) => variantSortKey(b.label) - variantSortKey(a.label) || a.label.localeCompare(b.label)); // del más nuevo al más viejo
   liqCache = { prods: allProducts, cfg: adminConfig, cod: codigoAplicado, modelos };
   return modelos;
 }
@@ -3053,10 +3054,11 @@ function renderLiquidacion(q) {
         '</button>').join('') + '</div>' +
     '</div>';
   }
-  // Paso 2: en Fundas, el modelo (arranca en el que tiene más diseños). En las
-  // demás categorías no hay modelo: va la lista directa.
+  // Paso 2: en Fundas, el modelo (arranca en el que tiene más diseños, aunque
+  // los botones vayan del más nuevo al más viejo). En las demás categorías no
+  // hay modelo: va la lista directa.
   const modelos = cat.nombre === 'Fundas' ? indiceLiquidacion() : null;
-  const m = modelos ? (modelos.find(x => x.key === liqModelo) || modelos[0])
+  const m = modelos ? (modelos.find(x => x.key === liqModelo) || modelos.reduce((a, b) => b.items.length > a.items.length ? b : a))
                     : { label: cat.nombre, items: cat.items, desde: cat.desde };
   const chips = modelos ? modelos.map(x =>
     '<button class="lq-chip' + (x === m ? ' active' : '') + '" onclick="abrirLiquidacion(\'Fundas\',\'' + esc(x.key) + '\')">' +
