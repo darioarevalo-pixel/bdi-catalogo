@@ -2784,8 +2784,9 @@ function dibujarProductos() {
     return;
   }
   document.body.classList.toggle('en-liq', categoria === 'liq');
-  // Al terminar las fundas de temporada, el cartel que lleva a las de oferta.
-  const enFundas = categoria === 'FUNDAS' || categoria === 'boton:Fundas';
+  // Al terminar las fundas de temporada (y al final de Todo), el cartel que lleva
+  // a las de oferta: en Todo tampoco están, así que también hay que avisar.
+  const enFundas = categoria === 'FUNDAS' || categoria === 'boton:Fundas' || categoria === 'todas';
   const cartel = enFundas && !q ? cartelOfertasFundas() : '';
   if (categoria === 'liq') {
     // El formato de Fundas, solo cuando hay tarjetas: en la elección de categoría
