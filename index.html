@@ -1757,6 +1757,9 @@ function renderBanners() {
   const banners = (adminConfig.banners || [])
     .filter(b => b && b.activo !== false && b.imagen)
     .sort((a, b) => (a.orden || 0) - (b.orden || 0));
+  // Mientras haya Cyber, su banner va primero y abre la sección acá mismo. Se
+  // apaga solo cuando cyber.json queda sin productos (no hay que tocar el panel).
+  if (Object.keys(cyberPrecios).length) banners.unshift({ imagen: '/cyber-banner.jpg', titulo: LIQ_NOMBRE, cyber: true });
   if (!banners.length) { section.style.display = 'none'; section.innerHTML = ''; return; }
   section.style.display = 'block';
   section.className = 'banners-section';
@@ -1768,11 +1771,13 @@ function renderBanners() {
     const linkEsc = (b.link || '').replace(/"/g, '&quot;');
     const bgDiv = '<div class="banner-slide-bg" style="background-image:url(\'' + imgCss + '\')"></div>';
     const inner = '<img class="banner-img" src="' + imgEsc + '" alt="' + titleEsc + '" loading="lazy">';
-    const wrapped = linkEsc
+    const wrapped = b.cyber
+      ? '<a href="#" onclick="abrirLiquidacion(null);return false">' + inner + '</a>'
+      : linkEsc
       ? '<a href="' + linkEsc + '" target="_blank" rel="noopener">' + inner + '</a>'
       : '<div class="banner-inner">' + inner + '</div>';
-    const titleHtml = titleEsc ? '<div class="banner-title">' + titleEsc + '</div>' : '';
-    return '<div class="banner-slide' + (i === 0 ? ' active' : '') + (linkEsc ? ' has-link' : '') + '" data-idx="' + i + '">' +
+    const titleHtml = titleEsc && !b.cyber ? '<div class="banner-title">' + titleEsc + '</div>' : '';
+    return '<div class="banner-slide' + (i === 0 ? ' active' : '') + (linkEsc || b.cyber ? ' has-link' : '') + '" data-idx="' + i + '">' +
       bgDiv + wrapped + titleHtml +
     '</div>';
   }).join('');
