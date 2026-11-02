@@ -2418,12 +2418,25 @@ function normColor(s) {
 // color). Si no hay, cae a la foto principal del producto. Solo se usa en la
 // vista "por modelo" para mostrar la funda del color exacto de la fila.
 function getImagenVariante(p, color) {
+  return imagenDeColor(p, color) || getImagenes(p)[0] || null;
+}
+// La foto de UN color, o null si no se sabe cuál es. Primero la que TiendaNube
+// tiene vinculada a ese color; si no hay vínculo (pasa con Simple y Regular, 1-11),
+// la foto cuyo nombre de archivo dice el color: "simple-case-black-…jpg" → NEGRO.
+const COLOR_EN = { negro: 'black', blanco: 'white', azul: 'blue', naranja: 'orange', gris: 'gray grey',
+  marron: 'brown', rosa: 'pink', verde: 'green', violeta: 'violet purple', lila: 'lilac', rojo: 'red',
+  plata: 'silver', plateado: 'silver', dorado: 'gold', celeste: 'light-blue lightblue', amarillo: 'yellow' };
+function imagenDeColor(p, color) {
+  if (!color) return null;
   const entry = tnLookup(p);
-  if (color && entry?.varImgByColor) {
-    const src = entry.varImgByColor[normColor(color)];
-    if (src) return src;
-  }
-  return getImagenes(p)[0] || null;
+  const c = normColor(color);
+  if (entry?.varImgByColor?.[c]) return entry.varImgByColor[c];
+  const nombres = [c.replace(/ /g, '-'), ...(COLOR_EN[c] || '').split(' ').filter(Boolean)];
+  const fotos = (entry?.imgs || []).concat(getImagenes(p));
+  return fotos.find(u => {
+    const archivo = String(u).toLowerCase().split('/').pop();
+    return nombres.some(n => new RegExp('(^|-)' + n + '(-|\\.)').test(archivo));
+  }) || null;
 }
 
 function getDescripcionTN(p) {
@@ -3303,6 +3316,11 @@ function setCardColor(id, color) {
   cardVariantState[id].selectedColor = color;
   const pillsEl = $('vcard-colors-' + id);
   if (pillsEl) pillsEl.querySelectorAll('.vdim-pill').forEach(p => p.classList.toggle('active', p.dataset.dim === color));
+  // La foto de la tarjeta pasa a la del color elegido, si se sabe cuál es.
+  const prod = allProducts.find(x => (x.id || x.product_id) == id);
+  const fotoColor = prod && imagenDeColor(prod, color);
+  const img = pillsEl && pillsEl.closest('.product-card')?.querySelector('.product-img-wrap img');
+  if (fotoColor && img) { img.src = thumbTN(fotoColor, 400); img.dataset.orig = fotoColor; }
   const rowsEl = $('vcard-variants-' + id);
   if (!rowsEl) return;
   const s = cardVariantState[id];
