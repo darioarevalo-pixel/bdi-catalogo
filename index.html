@@ -3023,7 +3023,10 @@ function categoriasLiquidacion() {
   if (modelos.length) {
     const ids = new Set();
     modelos.forEach(m => m.items.forEach(it => ids.add(it.p.id || it.p.product_id)));
-    cats.push({ nombre: 'Fundas', disenos: ids.size, desde: Math.min(...modelos.map(m => m.desde)) });
+    // El «desde» sin los modelos anteriores al 11 (la Silicone de iPhone 6 a $550
+    // prometía un precio que casi nadie puede aprovechar). Darío, 1-11-2026.
+    const actuales = modelos.filter(m => !modeloAnteriorAl11(m.label));
+    cats.push({ nombre: 'Fundas', disenos: ids.size, desde: Math.min(...(actuales.length ? actuales : modelos).map(m => m.desde)) });
   }
   const otras = {};
   for (const p of allProducts) {
@@ -3132,7 +3135,7 @@ function renderLiquidacion(q) {
   // Por diseño (y en las demás categorías): cada producto una vez, con sus modelos.
   const m = esFundas ? { items: indiceLiqDisenos() } : { items: cat.items };
   const items = q ? m.items.filter(it => (it.p.name || '').toLowerCase().includes(q)) : m.items;
-  const desde = items.length ? Math.min(...items.map(it => it.precio)) : 0;
+  const desde = items.length ? desdeSinModelosViejos(items) : 0;
   // Las tarjetas son las de Fundas (Darío: la lista con foto chica parecía una
   // planilla), cada una solo con los modelos en oferta.
   const tarjetas = renderVariantesGrid(items.map(it => ({ ...it.p, variantes: it.vars.map(x => x.v) })), true);
@@ -3143,6 +3146,20 @@ function renderLiquidacion(q) {
     '<div class="pm-sub">' + items.length + (items.length === 1 ? ' diseño' : ' diseños') + (items.length ? ' desde ' + formatPrecio(desde) : '') + '</div>' +
   '</div>' +
   (tarjetas || '<div class="lq-wrap"><div class="state-msg"><h3>Sin resultados</h3><p>Nada coincide con la búsqueda.</p></div></div>');
+}
+
+function modeloAnteriorAl11(label) {
+  const k = variantSortKey(label);
+  return k > 0 && k < variantSortKey('iPhone 11');
+}
+// Precio más bajo de una lista del Cyber sin contar los modelos anteriores al 11.
+function desdeSinModelosViejos(items) {
+  const ps = [];
+  items.forEach(it => {
+    const id = it.p.id || it.p.product_id, base = getPrecio(it.p);
+    it.vars.forEach(x => { if (!modeloAnteriorAl11(x.v.size)) ps.push(getPrecioVariante(id, x.v.size_id, base)); });
+  });
+  return ps.length ? Math.min(...ps) : Math.min(...items.map(it => it.precio));
 }
 
 // Las fundas en oferta con la forma que pide renderPorModelo: modelos del más
