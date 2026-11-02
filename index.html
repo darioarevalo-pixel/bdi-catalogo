@@ -452,9 +452,9 @@
   .vdim-pill.sw, .vdim-pill.sw:hover, .vdim-pill.sw.active { width: 26px; height: 26px; padding: 0 !important; border-radius: 50%; background: var(--sw); border: 2px solid var(--surface); box-shadow: 0 0 0 1.5px var(--border-strong); flex: 0 0 auto; }
   .vdim-pill.sw.active { box-shadow: 0 0 0 2.5px var(--accent); }
   .vdim-pill.sw:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-  .sw-nombre { align-self: center; font-size: 12px; font-weight: 600; color: var(--text); margin-left: 2px; }
+  .sw-nombre { color: var(--text); }
   .vcard-colors.con-sw { gap: 7px; align-items: center; }
-  .vcard-colors.con-sw::before { content: 'Color'; }
+  .vcard-colors.con-sw::before { content: 'Color: ' attr(data-color); }
   .modal-variant-row { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: var(--radius-sm); border: 1px solid var(--border); }
   .modal-variant-row:hover { border-color: var(--border-strong); background: var(--bg); }
   .modal-variant-info { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
@@ -1437,12 +1437,15 @@ function botonesColor(colores, elegido, onclick, estiloTexto) {
     return sw
       ? '<button class="vdim-pill sw' + (c === elegido ? ' active' : '') + '" style="--sw:' + colorSw(c) + '" data-dim="' + d + '" title="' + nombreColor(c) + '" aria-label="' + nombreColor(c) + '" onclick="' + js + '"></button>'
       : '<button class="vdim-pill' + (c === elegido ? ' active' : '') + '"' + (estiloTexto ? ' style="' + estiloTexto + '"' : '') + ' data-dim="' + d + '" onclick="' + js + '">' + c + '</button>';
-  }).join('') + (sw ? '<span class="sw-nombre">' + nombreColor(elegido) + '</span>' : '');
+  }).join('');
 }
 function marcarColor(cont, color) {
   if (!cont) return;
   cont.querySelectorAll('.vdim-pill').forEach(p => p.classList.toggle('active', p.dataset.dim === color));
-  const n = cont.querySelector('.sw-nombre');
+  // El nombre va en el título («Color: Gris»), no al lado de los circulitos:
+  // así un nombre largo no agrega una fila y la tarjeta no salta (Darío, 1-11).
+  if (cont.classList.contains('con-sw')) cont.dataset.color = nombreColor(color);
+  const n = cont.previousElementSibling?.querySelector('.sw-nombre');
   if (n) n.textContent = nombreColor(color);
 }
 
@@ -3406,7 +3409,7 @@ function renderVariantesGrid(prods, ofertaTodas) {
       cardVariantState[id] = { dims, selectedColor, nomEsc, precio, imgEsc, ref: oferta ? precioRef : null };
 
       variantsHTML =
-        '<div class="vcard-colors' + (colors.every(colorSw) ? ' con-sw' : '') + '" id="vcard-colors-' + id + '">' +
+        '<div class="vcard-colors' + (colors.every(colorSw) ? ' con-sw" data-color="' + nombreColor(selectedColor).replace(/"/g,'&quot;') : '') + '" id="vcard-colors-' + id + '">' +
           botonesColor(colors, selectedColor, c => 'setCardColor(' + id + ',\'' + c + '\');event.stopPropagation()', 'font-size:11px;padding:3px 10px') +
         '</div>' +
         '<div class="vcard-variants" id="vcard-variants-' + id + '">' +
@@ -3739,7 +3742,7 @@ function abrirModal(id) {
     variantDimsCache[id] = { dims, selectedDim1: firstGroup, nomEsc, precio, imgEsc };
 
     wrap.innerHTML =
-      '<div class="modal-variants-label">' + dim1Label + '</div>' +
+      '<div class="modal-variants-label">' + dim1Label + (groups.every(colorSw) ? ': <span class="sw-nombre">' + nombreColor(firstGroup) + '</span>' : '') + '</div>' +
       '<div class="vdim-pills" id="vdim-pills-' + id + '">' +
         botonesColor(groups, firstGroup, g => 'setVariantDim(' + id + ',\'' + g + '\')') +
       '</div>' +
