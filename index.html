@@ -196,6 +196,33 @@
      fundas la página no alcanza a bajar y las fundas quedaban al fondo. */
   body.en-liq #banners-section { display: none !important; }
   .lq-top { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  /* Paso 1 del Cyber: tarjetas de categoría que se acomodan a cuántas hay.
+     1 → una grande a lo ancho · 2 → dos lado a lado · 3 → una grande y dos abajo ·
+     4 o más → de a dos. */
+  .lq-cats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .lq-cat { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1.5px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); color: var(--text); font-family: inherit; cursor: pointer; text-align: left; min-width: 0; transition: all 0.15s; }
+  .lq-cat:hover { border-color: #EA580C; box-shadow: var(--shadow); }
+  .lq-cat-fotos { display: flex; gap: 6px; background: var(--bg); border-radius: 8px; padding: 6px; }
+  .lq-cat-fotos .lq-mf { flex: 1; aspect-ratio: 2 / 3; min-width: 0; }
+  .lq-cat-nombre { font-size: 16px; font-weight: 700; }
+  .lq-cat-info { font-size: 12px; color: var(--text-muted); }
+  .lq-cat-desde { font-size: 15px; font-weight: 700; color: #EA580C; }
+  .lq-cat-ir { display: none; }
+  .lq-cats.n1, .lq-cats.n3 .lq-cat:first-child { grid-column: 1 / -1; }
+  .lq-cats.n1 { grid-template-columns: 1fr; }
+  .lq-cats.n1 .lq-cat { padding: 16px; gap: 12px; }
+  .lq-cats.n1 .lq-cat-fotos .lq-mf { aspect-ratio: 3 / 4; }
+  .lq-cats.n1 .lq-cat-nombre { font-size: 22px; }
+  .lq-cats.n1 .lq-cat-info { font-size: 14px; }
+  .lq-cats.n1 .lq-cat-desde { font-size: 20px; }
+  .lq-cats.n1 .lq-cat-ir, .lq-cats.n3 .lq-cat:first-child .lq-cat-ir { display: block; text-align: center; padding: 11px; border-radius: 10px; background: #EA580C; color: #fff; font-weight: 700; font-size: 14px; }
+  .lq-cats.n3 .lq-cat:first-child .lq-cat-nombre { font-size: 19px; }
+  @media (min-width: 700px) {
+    .lq-cats.n1 { max-width: 560px; }
+    .lq-cats.n4, .lq-cats.nm { grid-template-columns: repeat(4, 1fr); }
+    .lq-cats.n3 { grid-template-columns: repeat(3, 1fr); }
+    .lq-cats.n3 .lq-cat:first-child { grid-column: auto; }
+  }
   .lq-top .pm-title { flex: 1; }
   .lq-top .lq-ey { color: #EA580C; }
   .lq-pregunta { font-size: 17px; font-weight: 700; margin: 6px 0 12px; }
@@ -3072,14 +3099,24 @@ function renderLiquidacion(q) {
   const cat = cats.find(c => c.nombre === liqCat);
   // Paso 1: elegir la categoría.
   if (!cat) {
+    // Cada categoría con fotos de lo que tiene (lo de más stock). Con una sola,
+    // la tarjeta va grande: el botón chico solo se veía perdido (Darío, 1-11).
+    const fotos = c => (c.nombre === 'Fundas' ? indiceLiqDisenos() : c.items).slice(0, 3)
+      .map(it => '<span class="lq-mf">' + gridImgTag(getImagenVariante(it.p, it.vars[0].color), it.p.name || '', 'modelo', 200) + '</span>').join('');
+    const n = cats.length;
     return '<div class="lq-wrap">' +
       '<div class="lq-top"><button class="pm-back" onclick="setCategoria(\'todas\')">←</button>' + titulo + '</div>' +
-      '<div class="pm-sub" style="margin-bottom:10px">Elegí qué estás buscando</div>' +
-      '<div class="pm-modelos">' + cats.map(c =>
-        '<button class="pm-modelo-btn" onclick="abrirLiquidacion(\'' + esc(c.nombre) + '\')">' +
-          '<span class="pm-modelo-nombre">' + c.nombre + '</span>' +
-          '<span class="pm-modelo-count">' + c.disenos + (c.nombre === 'Fundas' ? (c.disenos === 1 ? ' diseño' : ' diseños') : (c.disenos === 1 ? ' producto' : ' productos')) + ' · desde ' + formatPrecio(c.desde) + '</span>' +
-        '</button>').join('') + '</div>' +
+      '<div class="pm-sub" style="margin-bottom:10px">' + (n === 1 ? 'Precios especiales por tiempo limitado' : 'Elegí qué estás buscando') + '</div>' +
+      '<div class="lq-cats ' + (n <= 4 ? 'n' + n : 'nm') + '">' + cats.map(c => {
+        const cuantos = c.disenos + (c.nombre === 'Fundas' ? (c.disenos === 1 ? ' diseño' : ' diseños') : (c.disenos === 1 ? ' producto' : ' productos'));
+        return '<button class="lq-cat" onclick="abrirLiquidacion(\'' + esc(c.nombre) + '\')">' +
+          '<span class="lq-cat-fotos">' + fotos(c) + '</span>' +
+          '<span class="lq-cat-nombre">' + c.nombre + '</span>' +
+          '<span class="lq-cat-info">' + cuantos + ' en oferta</span>' +
+          '<span class="lq-cat-desde">desde ' + formatPrecio(c.desde) + '</span>' +
+          '<span class="lq-cat-ir">Ver ' + c.nombre.toLowerCase() + ' en oferta →</span>' +
+        '</button>';
+      }).join('') + '</div>' +
     '</div>';
   }
   // Paso 2 (solo Fundas): cómo quiere verlas. Darío: las dos formas sirven y
