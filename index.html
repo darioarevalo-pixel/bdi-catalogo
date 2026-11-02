@@ -1107,6 +1107,12 @@ let liqModelo = null;          // modelo elegido en Fundas (null = el que tiene 
 let liqModo = null;            // Fundas del Cyber: 'diseno' | 'modelo' | null (null = preguntar)
 let references = null;
 let adminConfig = { hiddenProducts: [], hiddenVariants: {}, hiddenCategories: [], categoryOrder: [], productOrder: {}, hideNoStock: false, mostrarCupones: false, minPurchase: 0, referencePrices: {}, variantPrices: {}, newProducts: [], cupones: [], ofertaMargen: 0, descuentoBase: 15, excepciones: {}, apagados: [], codigosAcceso: [], topes: {}, descuentoMax: {}, descuentoMaxNota: '', avisarDescuentoMax: false };
+// Precios del Cyber BDI por producto: { id: { precio, todos? } } (cyber.json).
+let cyberPrecios = {};
+function cyberDe(id) {
+  const c = cyberPrecios[String(id)];
+  return c && c.precio > 0 ? c : null;
+}
 let cuponAplicado = null; // cupón aplicado en el carrito (objeto) o null
 
 // Lo que el stock le fue sacando del carrito mientras armaba ESTE pedido.
@@ -1650,6 +1656,10 @@ async function cargarConfig() {
       const loaded = await r.json();
       adminConfig = { ...adminConfig, ...loaded };
     }
+  } catch(e) {}
+  try {
+    const r = await fetch('/cyber.json', { cache: 'no-store' });
+    if (r.ok) cyberPrecios = (await r.json()).productos || {};
   } catch(e) {}
   aplicarMinimoFAQ();
 }
@@ -2218,11 +2228,17 @@ function getPrecio(p, ignorarTecho) {
 function precioVarianteOverride(id, sizeId) {
   const vp = (adminConfig.variantPrices || {})[id + '-' + sizeId];
   const n = parseFloat(vp);
-  return (vp !== undefined && vp !== null && vp !== '' && !isNaN(n) && n > 0) ? n : null;
+  const propio = (vp !== undefined && vp !== null && vp !== '' && !isNaN(n) && n > 0) ? n : null;
+  // En el Cyber manda su precio; el modelo que ya estaba más barato (11 / 12 /
+  // 12 Pro) se queda con el suyo, salvo que el diseño diga «todos».
+  const c = cyberDe(id);
+  if (!c) return propio;
+  return (propio !== null && !c.todos) ? Math.min(c.precio, propio) : c.precio;
 }
 function getPrecioVariante(id, sizeId, base, ignorarTecho) {
   const o = precioVarianteOverride(id, sizeId);
   if (o === null) return base; // sin precio especial: usa el del producto (ya con lista mejor)
+  if (cyberDe(id)) return o; // el precio del Cyber es final: no suma el descuento del código
   // Con precio especial de variante: si hay código, también recibe el descuento,
   // con piso en el costo del producto. Sin código, queda a su precio.
   const p = (allProducts || []).find(x => (x.id || x.product_id) == id);
@@ -2509,6 +2525,7 @@ function getPrecioAnterior(p) {
 // cuenta hecha como sí/no en `_oferta` (y `_ofertaVar` por variante con precio
 // especial). Con código sí llega el costo, y el cálculo es el de siempre.
 function esOferta(p) {
+  if (cyberDe(p.id || p.product_id)) return true;
   const umbral = parseFloat(adminConfig.ofertaMargen) || 0;
   if (umbral <= 0) return false;
   if (p.unit_cost === undefined) return !!p._oferta;
@@ -2522,6 +2539,7 @@ function esOferta(p) {
 // el costo del producto. Así se protege una variante al costo aunque el producto
 // en general tenga buen margen.
 function cartItemOferta(i) {
+  if (cyberDe(i.id)) return true;
   const umbral = parseFloat(adminConfig.ofertaMargen) || 0;
   if (umbral <= 0) return false;
   const p = allProducts.find(x => (x.id || x.product_id) == i.id);
@@ -2940,23 +2958,15 @@ function renderPorModelo(indice, sel, elegir) {
   '</div>';
 }
 
-// --- Liquidación ------------------------------------------------------------
-// Liquidación = lo que el catálogo ya marca OFERTA (margen menor a ofertaMargen),
-// mirado modelo por modelo: una funda puede estar entera o solo en algunos
-// modelos (los de precio especial). Se mide con el precio de lista, no con el del
-// cliente con código, así la sección es la misma para todos.
+// --- Cyber BDI ----------------------------------------------------------------
+// Entran los diseños que eligió Darío, COMPLETOS (todos los modelos), cada uno con
+// el precio que él puso (cyber.json). Ya no se arma solo por margen: eso metía
+// fundas como la Star de iPhone 11, que va más barata por ser modelo viejo y no
+// por estar en oferta (1-11-2026). Para apagarlo: dejar cyber.json sin productos.
 // Nombre del botón y de la sección. Pasado el Cyber se cambia acá y listo.
 const LIQ_NOMBRE = 'Cyber BDI';
 function varianteEnLiquidacion(p, v) {
-  const umbral = parseFloat(adminConfig.ofertaMargen) || 0;
-  if (umbral <= 0) return false;
-  const id = p.id || p.product_id;
-  const especial = precioVarianteOverride(id, v.size_id);
-  if (p.unit_cost === undefined) return especial !== null ? !!(p._ofertaVar && p._ofertaVar[v.size_id]) : !!p._oferta;
-  const costo = parseFloat(p.unit_cost || 0);
-  const precio = especial !== null ? especial : parseFloat(p.wholesaler_price || p.precio_mayorista || 0);
-  if (costo <= 0 || precio <= 0) return false;
-  return ((precio - costo) / precio * 100) < umbral;
+  return !!cyberDe(p.id || p.product_id);
 }
 // "iPhone 11 - Negro" → [iPhone 11 · Negro]. "iPhone 12 / 12 Pro" es UNA funda
 // que sirve para los dos: va en los dos modelos.
@@ -3248,10 +3258,12 @@ function setCardColor(id, color) {
 // `oferta`: para el Cyber BDI. La tarjeta es la misma de Fundas, pero arriba va
 // el precio de oferta (con "desde" si los modelos no valen todos lo mismo) y el
 // normal tachado.
-function renderVariantesGrid(prods, oferta) {
+function renderVariantesGrid(prods, ofertaTodas) {
   const cards = [];
   for (const p of prods) {
     const id = p.id || p.product_id;
+    // Lo del Cyber se ve igual fuera de su sección (por ejemplo, buscando).
+    const oferta = ofertaTodas || !!cyberDe(id);
     const nombre = p.name || p.nombre || p.product_name || 'Sin nombre';
     const cod = p.code || p.sku || p.codigo || '';
     const precio = getPrecio(p);
@@ -3575,7 +3587,17 @@ function abrirModal(id) {
   const precioAntModal = getPrecioAnterior(p);
   const pctDiscModal = getDescuentoPct(precio, precioAntModal);
   $('modal-price').classList.remove('dif');
-  if (especial) {
+  const cy = cyberDe(id);
+  if (cy) {
+    // Cyber BDI: su precio (con «desde» si algún modelo va más barato) y el normal tachado.
+    const ps = variantes.map(v => getPrecioVariante(id, v.size_id, precio));
+    const min = ps.length ? Math.min(...ps) : cy.precio;
+    const viejo = Math.max(precioAntModal || 0, precio || 0);
+    const pct = getDescuentoPct(min, viejo);
+    $('modal-price').innerHTML = (pct > 0 ? '<span class="modal-price-old">' + formatPrecio(viejo) + '</span>' : '') +
+      '<span class="modal-price-current">' + (new Set(ps).size > 1 ? '<small class="desde">desde </small>' : '') + formatPrecio(min) + '</span>' +
+      (pct > 0 ? '<span class="modal-discount-badge">-' + pct + '%</span>' : '');
+  } else if (especial) {
     $('modal-price').textContent = formatPrecio(getPrecio(p));
   } else if (pctDiscModal > 0) {
     $('modal-price').innerHTML =
@@ -3585,7 +3607,7 @@ function abrirModal(id) {
   } else {
     $('modal-price').textContent = formatPrecio(precio);
   }
-  if (esOferta(p)) $('modal-price').insertAdjacentHTML('beforeend', ' <span class="modal-discount-badge oferta">OFERTA</span>');
+  if (!cy && esOferta(p)) $('modal-price').insertAdjacentHTML('beforeend', ' <span class="modal-discount-badge oferta">OFERTA</span>');
   $('modal-price').style.display = 'block';
 
   // Descripción

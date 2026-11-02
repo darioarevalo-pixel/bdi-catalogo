@@ -1,0 +1,421 @@
+{
+ "_nota": "Precios del Cyber BDI cargados por Darío el 1-nov-2026 (página «Precios para el Cyber BDI»). Cada producto entra COMPLETO con este precio; los modelos que ya tenían un precio especial más bajo lo mantienen, salvo «todos». Para apagar el Cyber: dejar productos vacío.",
+ "productos": {
+  "237832": {
+   "precio": 5990,
+   "nombre": "Border Case"
+  },
+  "256850": {
+   "precio": 990,
+   "nombre": "Print Case"
+  },
+  "308523": {
+   "precio": 1990,
+   "nombre": "Patch Case"
+  },
+  "337213": {
+   "precio": 1490,
+   "nombre": "Blur Case"
+  },
+  "337215": {
+   "precio": 990,
+   "nombre": "Hit Case"
+  },
+  "337217": {
+   "precio": 1490,
+   "nombre": "Ripple Case"
+  },
+  "348522": {
+   "precio": 1670,
+   "nombre": "Bubble Case"
+  },
+  "348523": {
+   "precio": 1490,
+   "nombre": "Bun Case"
+  },
+  "411260": {
+   "precio": 1490,
+   "nombre": "Vibe Case"
+  },
+  "469396": {
+   "precio": 550,
+   "nombre": "Silicone Case Mayorista"
+  },
+  "481244": {
+   "precio": 1990,
+   "nombre": "Smoky Case Green"
+  },
+  "481245": {
+   "precio": 1990,
+   "nombre": "Smoky Case Gray"
+  },
+  "481246": {
+   "precio": 2490,
+   "nombre": "Gum Case Uv"
+  },
+  "481247": {
+   "precio": 2490,
+   "nombre": "Gum Case Black"
+  },
+  "481248": {
+   "precio": 2490,
+   "nombre": "Gum Case Silver"
+  },
+  "481249": {
+   "precio": 2490,
+   "nombre": "Gum Case Midnight"
+  },
+  "481251": {
+   "precio": 2490,
+   "nombre": "Fluffy Case"
+  },
+  "481253": {
+   "precio": 1990,
+   "nombre": "Snake Case Black"
+  },
+  "481254": {
+   "precio": 1990,
+   "nombre": "Snake Case Silver"
+  },
+  "481255": {
+   "precio": 1990,
+   "nombre": "Snake Case Pink"
+  },
+  "607139": {
+   "precio": 1490,
+   "nombre": "Worn Case Black"
+  },
+  "607140": {
+   "precio": 1490,
+   "nombre": "Worn Case B&W"
+  },
+  "607141": {
+   "precio": 1490,
+   "nombre": "Worn Case Brown"
+  },
+  "607142": {
+   "precio": 1490,
+   "nombre": "Worn Case Gray"
+  },
+  "607143": {
+   "precio": 1490,
+   "nombre": "Worn Case Blue"
+  },
+  "607145": {
+   "precio": 1690,
+   "nombre": "Carey Case"
+  },
+  "607146": {
+   "precio": 1590,
+   "nombre": "Striped Case"
+  },
+  "607148": {
+   "precio": 5990,
+   "nombre": "Chrome Case Black"
+  },
+  "607149": {
+   "precio": 5990,
+   "nombre": "Chrome Case Silver"
+  },
+  "607150": {
+   "precio": 2490,
+   "nombre": "Snake Case Gold"
+  },
+  "640917": {
+   "precio": 1290,
+   "nombre": "Retro Case"
+  },
+  "640919": {
+   "precio": 1490,
+   "nombre": "Coffer Case"
+  },
+  "640921": {
+   "precio": 1490,
+   "nombre": "Weave Case Black",
+   "todos": true
+  },
+  "640922": {
+   "precio": 1490,
+   "nombre": "Weave Case Brown",
+   "todos": true
+  },
+  "640923": {
+   "precio": 1490,
+   "nombre": "Weave Case Cherry",
+   "todos": true
+  },
+  "640924": {
+   "precio": 1490,
+   "nombre": "Weave Case Purple",
+   "todos": true
+  },
+  "640925": {
+   "precio": 2490,
+   "nombre": "Gum Case Cherry"
+  },
+  "640926": {
+   "precio": 1990,
+   "nombre": "Dented Case Black"
+  },
+  "640927": {
+   "precio": 1990,
+   "nombre": "Dented Case Silver"
+  },
+  "640928": {
+   "precio": 1990,
+   "nombre": "Dented Case Rose Gold"
+  },
+  "640929": {
+   "precio": 1990,
+   "nombre": "Dented Case Blue"
+  },
+  "640930": {
+   "precio": 1990,
+   "nombre": "Dented Case Violet"
+  },
+  "640931": {
+   "precio": 1490,
+   "nombre": "Acid Case"
+  },
+  "640932": {
+   "precio": 1490,
+   "nombre": "Zebra Case"
+  },
+  "640933": {
+   "precio": 1490,
+   "nombre": "Paradise Case"
+  },
+  "640935": {
+   "precio": 990,
+   "nombre": "Magsafe Case Cherry"
+  },
+  "640936": {
+   "precio": 990,
+   "nombre": "Magsafe Case Black"
+  },
+  "640937": {
+   "precio": 990,
+   "nombre": "Magsafe Case White"
+  },
+  "640938": {
+   "precio": 990,
+   "nombre": "Magsafe Case Pink"
+  },
+  "640939": {
+   "precio": 990,
+   "nombre": "Magsafe Case Gray"
+  },
+  "640940": {
+   "precio": 990,
+   "nombre": "Magsafe Case Brown"
+  },
+  "640941": {
+   "precio": 990,
+   "nombre": "Magsafe Case Green"
+  },
+  "640942": {
+   "precio": 4990,
+   "nombre": "Bag Case Gray"
+  },
+  "640943": {
+   "precio": 4990,
+   "nombre": "Bag Case White"
+  },
+  "805286": {
+   "precio": 1990,
+   "nombre": "Snaky Case Black"
+  },
+  "805287": {
+   "precio": 2990,
+   "nombre": "Snaky Case Silver"
+  },
+  "805288": {
+   "precio": 2990,
+   "nombre": "Snaky Case Pink"
+  },
+  "805289": {
+   "precio": 1990,
+   "nombre": "Matte Magsafe Case Black"
+  },
+  "805290": {
+   "precio": 1990,
+   "nombre": "Matte Magsafe Case Blue"
+  },
+  "805291": {
+   "precio": 1990,
+   "nombre": "Matte Magsafe Case Pink"
+  },
+  "805292": {
+   "precio": 1990,
+   "nombre": "Matte Magsafe Case Purple"
+  },
+  "805296": {
+   "precio": 1490,
+   "nombre": "Sakura Case"
+  },
+  "831723": {
+   "precio": 990,
+   "nombre": "Iconic Green"
+  },
+  "831727": {
+   "precio": 990,
+   "nombre": "Iconic Brown"
+  },
+  "831728": {
+   "precio": 1290,
+   "nombre": "Iconic Lavander"
+  },
+  "831729": {
+   "precio": 1990,
+   "nombre": "Glowy Case Pink"
+  },
+  "831730": {
+   "precio": 1990,
+   "nombre": "Glowy Case White"
+  },
+  "831731": {
+   "precio": 1990,
+   "nombre": "Magsafe Case Meadow"
+  },
+  "831736": {
+   "precio": 1990,
+   "nombre": "Motion Case Gray"
+  },
+  "831987": {
+   "precio": 1990,
+   "nombre": "Dot Case Green"
+  },
+  "835373": {
+   "precio": 1990,
+   "nombre": "Motion Case Cream"
+  },
+  "910897": {
+   "precio": 2490,
+   "nombre": "Magnetic Case Gray"
+  },
+  "937288": {
+   "precio": 2490,
+   "nombre": "Heart Case"
+  },
+  "937294": {
+   "precio": 1990,
+   "nombre": "Frame Case"
+  },
+  "1001612": {
+   "precio": 2290,
+   "nombre": "Berry Case"
+  },
+  "1001614": {
+   "precio": 2490,
+   "nombre": "Flutter Case"
+  },
+  "1001615": {
+   "precio": 2490,
+   "nombre": "Golden Case"
+  },
+  "1001617": {
+   "precio": 1990,
+   "nombre": "Space Crystal Case"
+  },
+  "1001618": {
+   "precio": 1990,
+   "nombre": "Space Gray Case"
+  },
+  "1001619": {
+   "precio": 2490,
+   "nombre": "Violet Case"
+  },
+  "1006898": {
+   "precio": 2990,
+   "nombre": "Ag Glass Case Black"
+  },
+  "1006903": {
+   "precio": 1490,
+   "nombre": "Marble Case Black"
+  },
+  "1006904": {
+   "precio": 1490,
+   "nombre": "Marble Case Blue"
+  },
+  "1006905": {
+   "precio": 1490,
+   "nombre": "Marble Case Rose"
+  },
+  "1007125": {
+   "precio": 1490,
+   "nombre": "Flux Case Black"
+  },
+  "1007126": {
+   "precio": 1490,
+   "nombre": "Flux Case Blue"
+  },
+  "1007127": {
+   "precio": 1490,
+   "nombre": "Flux Case Gold"
+  },
+  "1007128": {
+   "precio": 1490,
+   "nombre": "Flux Case Pink"
+  },
+  "1007129": {
+   "precio": 1490,
+   "nombre": "Flux Case Silver"
+  },
+  "1007130": {
+   "precio": 1990,
+   "nombre": "Glitter Case Black"
+  },
+  "1007131": {
+   "precio": 1990,
+   "nombre": "Glitter Case Pink"
+  },
+  "1007132": {
+   "precio": 1990,
+   "nombre": "Glitter Case Silver"
+  },
+  "1007133": {
+   "precio": 1490,
+   "nombre": "Prism Case Black"
+  },
+  "1007134": {
+   "precio": 1490,
+   "nombre": "Prism Case Gold"
+  },
+  "1007135": {
+   "precio": 1490,
+   "nombre": "Prism Case Pink"
+  },
+  "1007136": {
+   "precio": 1490,
+   "nombre": "Prism Case Silver"
+  },
+  "1007137": {
+   "precio": 1990,
+   "nombre": "Soft Case Black"
+  },
+  "1007138": {
+   "precio": 1990,
+   "nombre": "Soft Case Light Blue"
+  },
+  "1007139": {
+   "precio": 2490,
+   "nombre": "Soft Case Silver"
+  },
+  "1010587": {
+   "precio": 2490,
+   "nombre": "Twist Case"
+  },
+  "1013178": {
+   "precio": 1990,
+   "nombre": "Soft Case Pink"
+  },
+  "1044564": {
+   "precio": 1990,
+   "nombre": "Space Aqua Case"
+  },
+  "1044565": {
+   "precio": 1990,
+   "nombre": "Space Pink Case"
+  }
+ }
+}

@@ -1,5 +1,9 @@
 const { kvGet, kvCmd } = require('./_kv');
 const { claveDelPanelOk } = require('./_admin');
+// Precios del Cyber BDI (los mismos que lee el catálogo). Si el archivo falta o
+// está roto, no hay Cyber: el control de precios queda como siempre.
+let CYBER = {};
+try { CYBER = require('../cyber.json').productos || {}; } catch (e) { CYBER = {}; }
 
 const API_BASE = 'https://www.gestionnube.com/api/v1';
 // Sin respaldo: ver la nota larga en api/config.js. Si ADMIN_PASSWORD no está
@@ -858,6 +862,11 @@ function pisoDeRenglon(item, p, cfg, afloje) {
     const fijo = positivo(exc.valor);
     if (fijo > 0) piso = (piso > 0) ? Math.min(piso, fijo) : fijo;
   }
+
+  // Cyber BDI: precio puesto a mano por Darío, puede estar por debajo del costo.
+  // Es final (el catálogo no le suma el descuento del código).
+  const cy = positivo((CYBER[String(id)] || {}).precio);
+  if (cy > 0) piso = (piso > 0) ? Math.min(piso, cy) : cy;
 
   if (item.size_id !== undefined && item.size_id !== null) {
     const vp = positivo((cfg && cfg.variantPrices || {})[id + '-' + item.size_id]);
