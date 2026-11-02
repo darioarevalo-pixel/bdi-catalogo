@@ -447,6 +447,14 @@
   .vdim-pill { padding: 5px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; letter-spacing: 0.3px; cursor: pointer; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--text-muted); transition: all 0.15s; font-family: inherit; }
   .vdim-pill:hover { border-color: var(--accent); color: var(--accent); }
   .vdim-pill.active { background: var(--accent); border-color: var(--accent); color: white; }
+  /* Color como circulito (Darío, 1-11: el texto alargaba la tarjeta). Solo cuando
+     TODOS los colores del producto se reconocen; si no, quedan los botones de texto. */
+  .vdim-pill.sw, .vdim-pill.sw:hover, .vdim-pill.sw.active { width: 26px; height: 26px; padding: 0 !important; border-radius: 50%; background: var(--sw); border: 2px solid var(--surface); box-shadow: 0 0 0 1.5px var(--border-strong); flex: 0 0 auto; }
+  .vdim-pill.sw.active { box-shadow: 0 0 0 2.5px var(--accent); }
+  .vdim-pill.sw:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .sw-nombre { align-self: center; font-size: 12px; font-weight: 600; color: var(--text); margin-left: 2px; }
+  .vcard-colors.con-sw { gap: 7px; align-items: center; }
+  .vcard-colors.con-sw::before { content: 'Color'; }
   .modal-variant-row { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: var(--radius-sm); border: 1px solid var(--border); }
   .modal-variant-row:hover { border-color: var(--border-strong); background: var(--bg); }
   .modal-variant-info { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
@@ -1408,6 +1416,36 @@ function sortVariantsByModel(variantes) {
   });
 }
 
+// Colores que se pueden dibujar como circulito. Nombre normalizado → color.
+const COLOR_SW = {
+  'negro': '#1c1c1e', 'black': '#1c1c1e', 'gris': '#8e8e93', 'gray': '#8e8e93', 'grey': '#8e8e93', 'dark grey': '#4a4a4f',
+  'silver': '#c9ccd1', 'plata': '#c9ccd1', 'plateado': '#c9ccd1', 'blanco': '#f7f7f7', 'white': '#f7f7f7', 'off white': '#efe8da',
+  'azul': '#2f6fd6', 'blue': '#2f6fd6', 'light blue': '#9fd0f0', 'celeste': '#9fd0f0', 'azul titanium': '#4b5d73', 'natural titanium': '#bdb6a8',
+  'rosa': '#f2a7c3', 'pink': '#f2a7c3', 'rose': '#e8b4b8', 'rosa viejo': '#c98f95', 'rose red': '#c2185b',
+  'marron': '#7b5235', 'brown': '#7b5235', 'beige': '#e3d2b4', 'cherry': '#8b1e2d', 'rojo': '#d32f2f', 'red': '#d32f2f',
+  'naranja': '#f28c28', 'orange': '#f28c28', 'violeta': '#8e5bd0', 'violet': '#8e5bd0', 'purple': '#8e5bd0', 'lila': '#c3a6e8',
+  'verde': '#3fa34d', 'green': '#3fa34d', 'verde agua': '#6fd3c1', 'gold': '#d4af37', 'dorado': '#d4af37', 'yellow': '#f5d442', 'amarillo': '#f5d442',
+  'transparente': 'repeating-conic-gradient(#d9d9de 0 25%, #fff 0 50%) 50% / 10px 10px',
+};
+const colorSw = c => COLOR_SW[normColor(c)] || null;
+const nombreColor = c => { const t = String(c || '').toLowerCase(); return t.charAt(0).toUpperCase() + t.slice(1); };
+// Botones de color: circulitos si se reconocen todos, si no los de texto de siempre.
+function botonesColor(colores, elegido, onclick, estiloTexto) {
+  const sw = colores.length > 0 && colores.every(colorSw);
+  return colores.map(c => {
+    const d = c.replace(/"/g, '&quot;'), js = onclick(c.replace(/'/g, "\\'"));
+    return sw
+      ? '<button class="vdim-pill sw' + (c === elegido ? ' active' : '') + '" style="--sw:' + colorSw(c) + '" data-dim="' + d + '" title="' + nombreColor(c) + '" aria-label="' + nombreColor(c) + '" onclick="' + js + '"></button>'
+      : '<button class="vdim-pill' + (c === elegido ? ' active' : '') + '"' + (estiloTexto ? ' style="' + estiloTexto + '"' : '') + ' data-dim="' + d + '" onclick="' + js + '">' + c + '</button>';
+  }).join('') + (sw ? '<span class="sw-nombre">' + nombreColor(elegido) + '</span>' : '');
+}
+function marcarColor(cont, color) {
+  if (!cont) return;
+  cont.querySelectorAll('.vdim-pill').forEach(p => p.classList.toggle('active', p.dataset.dim === color));
+  const n = cont.querySelector('.sw-nombre');
+  if (n) n.textContent = nombreColor(color);
+}
+
 function parseVariantDimensions(variantes) {
   const seps = [' / ', ' - '];
   let sep = null;
@@ -1634,7 +1672,7 @@ function renderVariantRowsHTML(productId, dims, selectedDim1, nomEsc, precio, im
 function setVariantDim(productId, dim1) {
   variantDimsCache[productId].selectedDim1 = dim1;
   const pills = $('vdim-pills-' + productId);
-  if (pills) pills.querySelectorAll('.vdim-pill').forEach(p => p.classList.toggle('active', p.dataset.dim === dim1));
+  marcarColor(pills, dim1);
   const rows = $('vdim-rows-' + productId);
   if (!rows) return;
   const { dims, nomEsc, precio, imgEsc } = variantDimsCache[productId];
@@ -3315,7 +3353,7 @@ function setCardColor(id, color) {
   if (!cardVariantState[id]) return;
   cardVariantState[id].selectedColor = color;
   const pillsEl = $('vcard-colors-' + id);
-  if (pillsEl) pillsEl.querySelectorAll('.vdim-pill').forEach(p => p.classList.toggle('active', p.dataset.dim === color));
+  marcarColor(pillsEl, color);
   // La foto de la tarjeta pasa a la del color elegido, si se sabe cuál es.
   const prod = allProducts.find(x => (x.id || x.product_id) == id);
   const fotoColor = prod && imagenDeColor(prod, color);
@@ -3368,10 +3406,8 @@ function renderVariantesGrid(prods, ofertaTodas) {
       cardVariantState[id] = { dims, selectedColor, nomEsc, precio, imgEsc, ref: oferta ? precioRef : null };
 
       variantsHTML =
-        '<div class="vcard-colors" id="vcard-colors-' + id + '">' +
-          colors.map(c =>
-            '<button class="vdim-pill' + (c === selectedColor ? ' active' : '') + '" style="font-size:11px;padding:3px 10px" data-dim="' + c.replace(/"/g,'&quot;') + '" onclick="setCardColor(' + id + ',\'' + c.replace(/'/g,"\\'") + '\');event.stopPropagation()">' + c + '</button>'
-          ).join('') +
+        '<div class="vcard-colors' + (colors.every(colorSw) ? ' con-sw' : '') + '" id="vcard-colors-' + id + '">' +
+          botonesColor(colors, selectedColor, c => 'setCardColor(' + id + ',\'' + c + '\');event.stopPropagation()', 'font-size:11px;padding:3px 10px') +
         '</div>' +
         '<div class="vcard-variants" id="vcard-variants-' + id + '">' +
           renderCardVariantRows(id, dims, selectedColor, nomEsc, precio, imgEsc, oferta ? precioRef : null) +
@@ -3705,9 +3741,7 @@ function abrirModal(id) {
     wrap.innerHTML =
       '<div class="modal-variants-label">' + dim1Label + '</div>' +
       '<div class="vdim-pills" id="vdim-pills-' + id + '">' +
-        groups.map(g =>
-          '<button class="vdim-pill' + (g === firstGroup ? ' active' : '') + '" data-dim="' + g.replace(/"/g,'&quot;') + '" onclick="setVariantDim(' + id + ',\'' + g.replace(/'/g,"\\'") + '\')">' + g + '</button>'
-        ).join('') +
+        botonesColor(groups, firstGroup, g => 'setVariantDim(' + id + ',\'' + g + '\')') +
       '</div>' +
       '<div class="modal-variants-label no-border">' + dim2Label + '</div>' +
       '<div class="modal-variant-rows" id="vdim-rows-' + id + '">' +
