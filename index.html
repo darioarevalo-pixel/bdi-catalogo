@@ -142,7 +142,7 @@
   .btn-por-modelo.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
   /* Vista "Ver por modelo" ------------------------------------------------- */
-  .pm-wrap { grid-column: 1 / -1; }
+  .pm-wrap { grid-column: 1 / -1; min-width: 0; }
   .pm-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 1rem; }
   .pm-title { font-size: 18px; font-weight: 700; }
   .pm-sub { font-size: 13px; color: var(--text-muted); }
@@ -156,6 +156,10 @@
   .pm-modelo-count { font-size: 12px; color: var(--text-muted); }
   /* Filas tipo Excel */
   .pm-tabla { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--surface); }
+  .pm-tabla:empty { display: none; }
+  .pm-grupo { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; margin: 1.5rem 0 .6rem; padding-left: 10px; border-left: 4px solid #ea580c; }
+  .pm-grupo b { font-size: 16px; font-weight: 700; color: #ea580c; }
+  .pm-grupo span { font-size: 13px; color: var(--text-muted); }
   .pm-fila { display: flex; align-items: center; gap: 12px; padding: 6px 12px; border-bottom: 1px solid var(--border); min-height: 56px; }
   .pm-fila:last-child { border-bottom: none; }
   .pm-fila:nth-child(even) { background: var(--bg); }
@@ -177,7 +181,7 @@
   @media (max-width: 640px) {
     .pm-fila { gap: 8px; padding: 6px 8px; }
     .pm-foto { width: 42px; height: 42px; }
-    .pm-nombre { font-size: 13px; }
+    .pm-nombre { font-size: 13px; white-space: normal; }
     .pm-precio { font-size: 13px; min-width: 58px; }
   }
 
@@ -1599,10 +1603,9 @@ function construirIndiceModelos() {
     const id = p.id || p.product_id;
     const hiddenVars = (adminConfig.hiddenVariants || {})[String(id)] || [];
     // Mismo filtro por-variante que renderVariantesGrid: sin ocultas y con stock.
-    // Lo que está en oferta va en el Cyber BDI, no acá.
+    // Lo del Cyber BDI también va acá: renderPorModelo lo pone abajo de todo.
     const variantes = (p.variantes || []).filter(v => {
       if (hiddenVars.some(hid => hid == v.size_id)) return false;
-      if (varianteEnLiquidacion(p, v)) return false;
       const vs = getStockVariante(v);
       return vs === null || vs > 0;
     });
@@ -1616,6 +1619,14 @@ function construirIndiceModelos() {
       (filasPorModelo[key] = filasPorModelo[key] || []).push({
         p, v, color: mc.color, modelLabel: label
       });
+      // "iPhone 12 / 12 Pro" es una sola funda que sirve para los dos modelos.
+      const segundo = modelosDeVariante(v.size)[1];
+      if (segundo) {
+        labelDeKey[segundo.key] = segundo.label;
+        (filasPorModelo[segundo.key] = filasPorModelo[segundo.key] || []).push({
+          p, v, color: null, modelLabel: segundo.label
+        });
+      }
     }
   }
 
@@ -2980,7 +2991,7 @@ function renderPorModelo(indice, sel, elegir) {
   // Estado 2: filas tipo Excel para el modelo elegido.
   const modelo = modelos.find(m => m.key === elegido);
   const filas = pmOrdenarFilas(filasPorModelo[elegido]);
-  const filasHTML = filas.map(f => {
+  const filaHTML = f => {
     const p = f.p;
     const v = f.v;
     const id = p.id || p.product_id;
@@ -3027,7 +3038,16 @@ function renderPorModelo(indice, sel, elegir) {
         '<button class="modal-vqty-btn plus"' + (atMax ? ' disabled' : '') + ' onclick="chQty(' + chArgs + ',1)">+</button>' +
       '</div>' +
     '</div>';
-  }).join('');
+  };
+  // Primero las de precio regular y abajo las del Cyber BDI, cada grupo con el
+  // orden elegido. Dentro del Cyber BDI son todas de oferta: va sin separar.
+  const esCyber = f => !indice && !!cyberDe(f.p.id || f.p.product_id);
+  const filasCyber = filas.filter(esCyber);
+  const filasHTML = '<div class="pm-tabla">' + filas.filter(f => !esCyber(f)).map(filaHTML).join('') + '</div>' +
+    (filasCyber.length
+      ? '<div class="pm-grupo"><b>' + LIQ_NOMBRE + '</b><span>Precios especiales por tiempo limitado</span></div>' +
+        '<div class="pm-tabla">' + filasCyber.map(filaHTML).join('') + '</div>'
+      : '');
 
   return '<div class="pm-wrap">' +
     '<div class="pm-head">' +
@@ -3043,7 +3063,7 @@ function renderPorModelo(indice, sel, elegir) {
           .join('').replace('value="' + pmSort + '"', 'value="' + pmSort + '" selected') +
       '</select>' +
     '</div>' +
-    '<div class="pm-tabla">' + filasHTML + '</div>' +
+    filasHTML +
   '</div>';
 }
 
