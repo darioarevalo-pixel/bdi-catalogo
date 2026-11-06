@@ -463,6 +463,12 @@
   .pedido-main { flex: 1; min-width: 0; }
   .pedido-cliente { font-weight: 600; color: var(--text); font-size: 15px; }
   .pedido-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .aparatos-resumen { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .aparato-caja { flex: 1 1 130px; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: 8px; }
+  .aparato-nombre { font-size: 12px; color: var(--text-muted); }
+  .aparato-pedidos { font-size: 18px; font-weight: 700; color: var(--text); margin-top: 2px; }
+  .aparato-pct { font-size: 12px; font-weight: 500; color: var(--text-muted); }
+  .aparato-monto { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
   .pedido-total { font-weight: 700; color: var(--text); font-size: 15px; white-space: nowrap; }
   .pedido-ver { flex-shrink: 0; padding: 7px 16px; background: var(--accent); color: #fff; border-radius: var(--radius-sm); text-decoration: none; font-size: 13px; font-weight: 600; }
   .pedido-ver:hover { opacity: 0.9; }
@@ -2888,6 +2894,26 @@ function fmtFechaPedido(iso) {
          ' ' + d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
 }
 
+// Desde qué aparato confirmaron los clientes. El dato existe desde el 1-11-2026:
+// los pedidos anteriores y los cargados desde el panel no lo tienen y no se cuentan.
+const APARATOS = { celular: 'Celular', compu: 'Compu', tablet: 'Tablet' };
+
+function resumenAparatos(pedidos) {
+  const conDato = pedidos.filter(p => APARATOS[p.aparato]);
+  if (!conDato.length) return '';
+  const cajas = Object.keys(APARATOS).map(a => {
+    const delAparato = conDato.filter(p => p.aparato === a);
+    if (!delAparato.length && a === 'tablet') return '';
+    const monto = delAparato.reduce((t, p) => t + (Number(p.total) || 0), 0);
+    return `<div class="aparato-caja">
+      <div class="aparato-nombre">${APARATOS[a]}</div>
+      <div class="aparato-pedidos">${delAparato.length} <span class="aparato-pct">${Math.round(delAparato.length / conDato.length * 100)}%</span></div>
+      <div class="aparato-monto">${fmtAR(monto)}</div>
+    </div>`;
+  }).join('');
+  return `<div class="aparatos-resumen">${cajas}</div>`;
+}
+
 function renderPedidos() {
   const cont = $('pedidos-list');
   if (!cont) return;
@@ -2903,13 +2929,13 @@ function renderPedidos() {
     cont.innerHTML = '<div class="loading-state">' + (q ? 'Sin resultados.' : 'Todavía no hay pedidos.') + '</div>';
     return;
   }
-  cont.innerHTML = lista.map(p => `
+  cont.innerHTML = resumenAparatos(allPedidos) + lista.map(p => `
     <div class="pedido-item" id="pedido-item-${idFaltantes(p.id)}">
       <div class="pedido-row">
         <div class="pedido-main">
           <div class="pedido-cliente">${notaEsc(p.cliente) || 'Sin nombre'}</div>
           <div class="pedido-meta">N° ${notaEsc(p.id)} · ${fmtFechaPedido(p.fecha)}${p.telefono ? ' · ' + notaEsc(p.telefono) : ''}</div>
-          <div class="pedido-meta">${p.nItems} ítem${p.nItems === 1 ? '' : 's'}${p.pago ? ' · ' + notaEsc(p.pago) : ''}${p.entrega ? ' · ' + notaEsc(p.entrega) : ''}</div>
+          <div class="pedido-meta">${p.nItems} ítem${p.nItems === 1 ? '' : 's'}${p.pago ? ' · ' + notaEsc(p.pago) : ''}${p.entrega ? ' · ' + notaEsc(p.entrega) : ''}${APARATOS[p.aparato] ? ' · ' + APARATOS[p.aparato] : ''}</div>
           ${p.email ? `<div class="pedido-meta">${p.mailEnviado ? '✉️ Mail enviado a ' + notaEsc(p.email) + ' · ' + fmtFechaPedido(p.mailEnviado) : '✉️ Mail SIN enviar · ' + notaEsc(p.email)}${p.avisoEnviado ? ' · aviso ✓' : ''}</div>` : ''}
           ${p.nFaltantes ? `<button class="pedido-falt-chip" onclick="verFaltantes('${encodeURIComponent(p.id)}')">⚠ ${p.nFaltantes} sin stock — ver qué se cayó</button>` : ''}
         </div>
