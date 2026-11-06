@@ -3019,7 +3019,7 @@ function renderCarritos() {
     cont.innerHTML = '<div class="loading-state">' + (q || soloTel ? 'Sin resultados.' : 'No hay carritos sin terminar.') + '</div>';
     return;
   }
-  cont.innerHTML = lista.map(c => {
+  cont.innerHTML = resumenAparatos(allCarritos) + lista.map(c => {
     const id = idFaltantes(c.cid);
     const nombre = c.cliente || c.codigoCliente || 'Sin datos';
     const despues = pedidoPosterior(c);
@@ -3030,7 +3030,7 @@ function renderCarritos() {
         <div class="pedido-main">
           <div class="pedido-cliente">${notaEsc(nombre)}</div>
           <div class="pedido-meta">${haceCuanto(c.actualizado)}${c.telefono ? ' · ' + notaEsc(c.telefono) : ''}${c.email ? ' · ' + notaEsc(c.email) : ''}</div>
-          <div class="pedido-meta">${c.unidades} unidad${c.unidades === 1 ? '' : 'es'} · ${c.items.length} producto${c.items.length === 1 ? '' : 's'}${c.codigo ? ' · código ' + notaEsc(c.codigo) : ''}${c.llegoADatos ? ' · llegó a cerrar la compra' : ''}</div>
+          <div class="pedido-meta">${c.unidades} unidad${c.unidades === 1 ? '' : 'es'} · ${c.items.length} producto${c.items.length === 1 ? '' : 's'}${c.codigo ? ' · código ' + notaEsc(c.codigo) : ''}${c.llegoADatos ? ' · llegó a cerrar la compra' : ''}${APARATOS[c.aparato] ? ' · ' + APARATOS[c.aparato] : ''}</div>
           ${despues ? `<div class="pedido-meta" style="color:var(--success, #16a34a);font-weight:600">✓ Después hizo el pedido N° ${notaEsc(despues.id)}</div>` : ''}
           ${!despues && recien ? `<div class="pedido-meta">Puede estar armándolo todavía.</div>` : ''}
         </div>

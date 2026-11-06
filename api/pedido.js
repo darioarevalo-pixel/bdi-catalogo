@@ -267,7 +267,7 @@ async function pedidosParaElPanel() {
   return valor;
 }
 
-async function guardarCarrito(b) {
+async function guardarCarrito(b, ua) {
   const cid = String(b.cid || '');
   if (!/^[a-z0-9]{16,40}$/.test(cid)) return { status: 400, body: { error: 'Carrito inválido' } };
   const key = 'carrito:' + cid;
@@ -311,6 +311,8 @@ async function guardarCarrito(b) {
     codigo: texto(b.codigo, 40),
     codigoCliente: texto(b.codigoCliente, 120),
     llegoADatos: !!b.llegoADatos || !!(antes && antes.llegoADatos),
+    // Desde qué aparato lo está armando (el último con el que lo tocó). Desde el 6-11-2026.
+    aparato: aparatoDe(ua),
     items,
     unidades: items.reduce((s, i) => s + i.cantidad, 0),
     total: Math.round(items.reduce((s, i) => s + i.cantidad * i.precio, 0)),
@@ -788,7 +790,7 @@ module.exports = async (req, res) => {
 
     // Guardar el carrito mientras el cliente lo arma: POST /api/pedido?accion=carrito
     if (req.method === 'POST' && req.query.accion === 'carrito') {
-      const r = await guardarCarrito(req.body || {});
+      const r = await guardarCarrito(req.body || {}, req.headers['user-agent']);
       return res.status(r.status || 200).json(r.body);
     }
 
