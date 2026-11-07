@@ -1,4 +1,5 @@
 const { kvGet, kvCmd } = require('./_kv');
+const ERP_CORTE = require('./_erp-corte');
 const { claveDelPanelOk } = require('./_admin');
 // Precios del Cyber BDI (los mismos que lee el catálogo). Si el archivo falta o
 // está roto, no hay Cyber: el control de precios queda como siempre.
@@ -103,7 +104,7 @@ function cuantoEsperar(headers, data) {
 
 async function gnFetch(path, token) {
   await esperarTurnoDeRitmo();
-  const r = await fetch(API_BASE + path, {
+  const r = await fetch(ERP_CORTE.baseDe(token, API_BASE) + path, {
     headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
   });
   const text = await r.text();
@@ -1150,7 +1151,7 @@ module.exports = async (req, res) => {
         // quedó caliente, que es el trabajo principal del robot. Se informa el
         // problema sin dar por fallada la corrida entera.
         try {
-          const gn = await leerCostosDeGN(process.env.GESTIONNUBE_TOKEN);
+          const gn = await leerCostosDeGN((await ERP_CORTE.erpManda()) ? process.env.ERP_LLAVE_CATALOGO : process.env.GESTIONNUBE_TOKEN);
           costos = gn.completo && gn.productos.length
             ? await guardarCostos(gn.productos)
             : { guardados: 0, motivo: 'no se pudieron leer los costos de Gestión Nube' };
@@ -1177,7 +1178,9 @@ module.exports = async (req, res) => {
     }
   }
 
-  const token = process.env.GESTIONNUBE_TOKEN;
+  // Desde el corte de BDI, el catálogo lee y vende en el ERP (ver api/_erp-corte.js).
+  const erpManda = await ERP_CORTE.erpManda();
+  const token = erpManda ? process.env.ERP_LLAVE_CATALOGO : process.env.GESTIONNUBE_TOKEN;
   if (!token) return res.status(500).json({ error: 'Token no configurado en el servidor' });
 
   const apiPath = req.query._path || '/';
@@ -1195,7 +1198,7 @@ module.exports = async (req, res) => {
 
   const qsObj = Object.fromEntries(Object.entries(req.query).filter(([k]) => k !== '_path' && k !== 'con_costo'));
   const qs = new URLSearchParams(qsObj);
-  const url = API_BASE + apiPath + (qs.toString() ? '?' + qs.toString() : '');
+  const url = ERP_CORTE.baseDe(token, API_BASE) + apiPath + (qs.toString() ? '?' + qs.toString() : '');
 
   // ¿Es un pedido? Se compara contra `ruta` (la ruta sin query) y NO contra
   // apiPath: mandando "_path=/ventas?x" el portero de arriba dejaba pasar el
@@ -1320,6 +1323,13 @@ module.exports = async (req, res) => {
       opts.body = JSON.stringify(esConfirmarPedido ? paraGN : req.body);
     }
     if (esConfirmarPedido) marcar('precios');
+
+    // Desde el corte, el pedido nace en el ERP y GN ya no se entera.
+    if (esConfirmarPedido && erpManda) {
+      const creado = await ERP_CORTE.crearPedido({ pedido: paraGN, datosErp: paraElERP(paraERP), esAdmin });
+      marcar('crearVenta');
+      return res.status(creado.status).json(creado.cuerpo);
+    }
 
     // ⚠️ ACÁ SE CREA LA VENTA. Iba sin ninguna red: un corte pasajero de GN le
     // llegaba crudo al cliente ("Demasiadas solicitudes desde esta dirección",

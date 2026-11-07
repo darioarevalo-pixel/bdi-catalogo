@@ -718,7 +718,7 @@
         <label class="pm-cliente-label">Nombre del cliente
           <input type="text" id="pm-cliente" placeholder="Ej: Distribuidora López" />
         </label>
-        <button class="btn-save pm-confirmar" id="pm-confirmar-btn" onclick="pmConfirmar()">Confirmar pedido en Gestión Nube</button>
+        <button class="btn-save pm-confirmar" id="pm-confirmar-btn" onclick="pmConfirmar()">Confirmar pedido</button>
         <div id="pm-resultado" class="pm-resultado"></div>
       </div>
     </div>
@@ -3686,9 +3686,9 @@ async function pmConfirmar() {
     if (!confirm('Ojo: este pedido se mete en el stock que guardaste para la tienda online.\n\n' +
                  detalle + '\n\n¿Lo cargás igual?')) return;
   }
-  if (!confirm('¿Crear esta venta en Gestión Nube? Se va a descontar el stock.')) return;
+  if (!confirm('¿Crear esta venta? Se va a descontar el stock.')) return;
   const btn = $('pm-confirmar-btn');
-  btn.disabled = true; btn.textContent = 'Creando en GN…';
+  btn.disabled = true; btn.textContent = 'Creando…';
   $('pm-resultado').textContent = '';
   try {
     const ref = await pmFetchReferences();
@@ -3735,13 +3735,13 @@ async function pmConfirmar() {
         msg = 'Error al crear la venta: ' + (data.error || r.status);
       }
       $('pm-resultado').innerHTML = '<span class="pm-error">⚠ ' + msg.replace(/</g, '&lt;').replace(/\n/g, '<br>') + '</span>';
-      btn.disabled = false; btn.textContent = 'Confirmar pedido en Gestión Nube';
+      btn.disabled = false; btn.textContent = 'Confirmar pedido';
       return;
     }
     const pedidoId = (data.data && (data.data.number || data.data.id)) || data.id || data.number || null;
     let pedidoUrl = '';
     if (pedidoId) {
-      const det = { id: pedidoId, fecha: new Date().toISOString(), cliente, total: pmLineas.reduce((s, l) => s + l.precio * l.cant, 0), items: pmLineas.map(l => ({ nombre: l.nombre, variante: l.sizeName || '', cantidad: l.cant, precio: l.precio, img: l.img || '' })) };
+      const det = { id: pedidoId, ...(data.data && data.data.erp ? { erp: true } : {}), fecha: new Date().toISOString(), cliente, total: pmLineas.reduce((s, l) => s + l.precio * l.cant, 0), items: pmLineas.map(l => ({ nombre: l.nombre, variante: l.sizeName || '', cantidad: l.cant, precio: l.precio, img: l.img || '' })) };
       // El link lleva la clave que devuelve el servidor: sin ella el pedido no abre.
       try {
         const rp = await fetch('/api/pedido', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword }, body: JSON.stringify(det) });
@@ -3749,14 +3749,14 @@ async function pmConfirmar() {
         pedidoUrl = location.origin + '/pedido/' + pedidoId + (dp.k ? '?k=' + dp.k : '');
       } catch (e) {}
     }
-    $('pm-resultado').innerHTML = '<span class="pm-ok">✅ Pedido creado en Gestión Nube' + (pedidoId ? ' — N° ' + pedidoId : '') + '.</span>' +
+    $('pm-resultado').innerHTML = '<span class="pm-ok">✅ Pedido creado' + (pedidoId ? ' — N° ' + pedidoId : '') + '.</span>' +
       (pedidoUrl ? ' <a href="' + pedidoUrl + '" target="_blank">Ver / compartir link del pedido</a>' : '');
     pmLineas = []; $('pm-cliente').value = '';
     pmRender();
   } catch (e) {
     $('pm-resultado').innerHTML = '<span class="pm-error">⚠ Error: ' + e.message + '</span>';
   }
-  btn.disabled = false; btn.textContent = 'Confirmar pedido en Gestión Nube';
+  btn.disabled = false; btn.textContent = 'Confirmar pedido';
 }
 
 // ===== Nota de pedido (documento manual para productos fuera del sistema) =====
