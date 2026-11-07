@@ -833,6 +833,7 @@ module.exports = async (req, res) => {
 
   // Diagnóstico: qué variables de entorno relevantes ve la función (solo presencia, sin valores)
   if (req.query?.envcheck === '1') {
+    if (!(await exigirUsuario(req, res, 'envcheck'))) return;
     const has = n => !!process.env[n];
     return res.status(200).json({ store: storeKey, env: {
       GESTIONNUBE_TOKEN_ZATTIA: has('GESTIONNUBE_TOKEN_ZATTIA'),
@@ -848,6 +849,9 @@ module.exports = async (req, res) => {
 
   // ── Verificación de ventas: cancelada en TN pero activa en GN ──
   if (req.query?.verificar_ventas === '1') {
+    // 🔒 7-nov-2026: estaba abierto y devolvía nombre del cliente + total de cada venta. El Monitor
+    // ya lo llama con apiFetch (lib/verif-ventas/cliente.ts), así que viaja la credencial.
+    if (!(await exigirUsuario(req, res, 'verificar ventas'))) return;
     if (!cfg.gnToken) return res.status(500).json({ error: `Falta el token de Gestión Nube para ${storeKey} (GESTIONNUBE_TOKEN${storeKey === 'zattia' ? '_ZATTIA' : ''}).` });
     const from = req.query.from, to = req.query.to;
     if (!from || !to) return res.status(400).json({ error: 'Faltan from/to (YYYY-MM-DD)' });
