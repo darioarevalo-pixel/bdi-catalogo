@@ -718,6 +718,9 @@
         <label class="pm-cliente-label">Nombre del cliente
           <input type="text" id="pm-cliente" placeholder="Ej: Distribuidora López" />
         </label>
+        <label class="pm-cliente-label">Teléfono del cliente
+          <input type="tel" id="pm-telefono" placeholder="Ej: 11 2345 6789" autocomplete="off" />
+        </label>
         <button class="btn-save pm-confirmar" id="pm-confirmar-btn" onclick="pmConfirmar()">Confirmar pedido</button>
         <div id="pm-resultado" class="pm-resultado"></div>
       </div>
@@ -3675,6 +3678,12 @@ async function pmConfirmar() {
   if (!pmLineas.length) { alert('El pedido está vacío.'); return; }
   const cliente = $('pm-cliente').value.trim();
   if (!cliente) { alert('Ingresá el nombre del cliente.'); $('pm-cliente').focus(); return; }
+  // El teléfono es con lo que el ERP reconoce al cliente: con un número conocido el pedido entra y reserva solo;
+  // sin él, queda «sin entrar» hasta abrirlo desde el panel de WhatsApp. Misma regla que el catálogo (8 a 15 dígitos).
+  const telefono = $('pm-telefono').value.trim();
+  const telDigitos = telefono.replace(/\D/g, '');
+  if (!telefono) { alert('Ingresá el teléfono del cliente.'); $('pm-telefono').focus(); return; }
+  if (telDigitos.length < 8 || telDigitos.length > 15) { alert('El teléfono parece incorrecto (' + telDigitos.length + ' dígitos). Revisalo.'); $('pm-telefono').focus(); return; }
   // Aviso de protección de stock: acá NO se bloquea (a diferencia del catálogo).
   // Este es el camino del pedido grande por WhatsApp que carga el dueño, y el
   // dueño a veces quiere vender igual. Se muestra qué se lleva de lo guardado.
@@ -3703,12 +3712,12 @@ async function pmConfirmar() {
       client_id: 563310,
       channel_id: channelId, sale_type_id: saleTypeId, currency_id: currencyId, store_id: storeId,
       sale_state_id: 1, discount_inventory: true,
-      comments: 'Pedido mayorista (admin) — ' + cliente,
+      comments: 'Pedido mayorista (admin) — ' + cliente + ' · Tel: ' + telefono,
       items: pmLineas.map(l => ({ product_id: l.id, ...(l.sizeId ? { size_id: l.sizeId } : {}), quantity: l.cant, unit_price: l.precio })),
       // Para el ERP (el proxy lo saca antes de mandarle el pedido a GN).
       erp: {
         clave: (window.crypto && typeof crypto.randomUUID === 'function') ? crypto.randomUUID() : 'p-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12),
-        contacto: { nombre: cliente },
+        contacto: { nombre: cliente, telefono },
       },
     };
     // La contraseña le dice al proxy que esta venta es del admin: se verifica el
@@ -3751,7 +3760,7 @@ async function pmConfirmar() {
     }
     $('pm-resultado').innerHTML = '<span class="pm-ok">✅ Pedido creado' + (pedidoId ? ' — N° ' + pedidoId : '') + '.</span>' +
       (pedidoUrl ? ' <a href="' + pedidoUrl + '" target="_blank">Ver / compartir link del pedido</a>' : '');
-    pmLineas = []; $('pm-cliente').value = '';
+    pmLineas = []; $('pm-cliente').value = ''; $('pm-telefono').value = '';
     pmRender();
   } catch (e) {
     $('pm-resultado').innerHTML = '<span class="pm-error">⚠ Error: ' + e.message + '</span>';
