@@ -194,26 +194,18 @@
   .cat-chip.liq.active { background: #DC2626; border-color: #DC2626; color: #fff; }
   .cat-chip.liq.active::before { background: #fff; }
   .cat-chip.lote.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-  /* Lotes de fundas: tarjeta propia (no .product-card, para que no la toquen las vistas). */
-  .lote-card { background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; }
-  /* Mismo tamaño de foto que las tarjetas de Fundas (.product-img-wrap). */
-  .lote-img { cursor: zoom-in; width: 100%; height: 160px; flex-shrink: 0; background: #fff; overflow: hidden; display: flex; align-items: center; justify-content: center; }
-  .lote-img img { width: 100%; height: 100%; object-fit: contain; display: block; }
-  .lote-info { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
-  .lote-tag { font-size: 10px; font-weight: 700; letter-spacing: .06em; color: var(--accent); }
-  .lote-nombre { font-size: 14px; font-weight: 600; }
-  .lote-mods { display: flex; flex-wrap: wrap; gap: 3px; }
-  .lote-mods span { font-size: 11px; background: var(--accent-light); border-radius: 5px; padding: 1px 5px; }
-  .lote-precio { display: flex; gap: 8px; align-items: baseline; }
-  .lote-precio s { color: var(--text-muted); font-size: 12px; }
-  .lote-precio b { font-size: 18px; }
-  .lote-cada { color: var(--text-muted); font-size: 12px; }
-  .lote-btn { font: inherit; font-size: 13px; font-weight: 600; background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 9px; cursor: pointer; margin-top: 2px; }
+  /* Lotes de fundas: la misma tarjeta que una funda (.product-card), con la
+     etiqueta LOTE, la cantidad por modelo en vez de − / + y un botón abajo. */
+  .badge-lote-inline { display: inline-block; width: fit-content; align-self: flex-start; margin-bottom: 3px; font-size: 9px; font-weight: 700; letter-spacing: .05em; background: var(--accent); color: #fff; border-radius: 4px; padding: 2px 5px; }
+  .lista-foto .badge-lote-inline, .lista-grid .badge-lote-inline { display: inline-block; order: 2; flex: 0 0 auto; align-self: center; }
+  .lista-foto .badge-lote-inline, .lista-grid .badge-lote-inline { margin-bottom: 0; }
+  .lote-card .product-price small.cu { font-size: 12px; font-weight: 500; color: var(--text-muted); }
+  .lote-card .modal-variant-row { min-height: 26px; }
+  .lote-cant { font-size: 13px; font-weight: 600; color: var(--text-muted); padding-right: 6px; font-variant-numeric: tabular-nums; }
+  .lote-btn { font: inherit; font-size: 13px; font-weight: 600; background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 9px; cursor: pointer; margin: 6px 10px 10px; }
   .lote-btn.dentro { background: var(--stock-ok-bg); color: var(--stock-ok); border: 1px solid var(--stock-ok); }
+  .lista-grid .lote-btn { grid-column: 1 / -1; margin: 8px 0 0; }
   .lote-expl { grid-column: 1 / -1; background: var(--accent-light); border-radius: var(--radius); padding: 10px 14px; font-size: 13px; color: #111827; }
-  .lista-grid .lote-card { display: grid; grid-template-columns: 92px 1fr; column-gap: 12px; padding: 10px; align-items: start; }
-  .lista-grid .lote-img { width: 92px; height: 92px; border-radius: 8px; }
-  .lista-grid .lote-info { padding: 0; }
   .lq-ey { font-size: 11px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: #FCA5A5; }
   .lq-wrap { grid-column: 1 / -1; width: 100%; }
   .product-price small.desde { font-size: 12px; font-weight: 500; color: var(--text-muted); }
@@ -2152,18 +2144,28 @@ function tarjetaLote(p) {
   const total = l.precio * n;
   const normal = getPrecio(p) * n;
   const dentro = loteEnCarrito(p);
-  return '<div class="lote-card">' +
-    '<div class="lote-img" onclick="abrirFotoModelo(' + id + ')">' + gridImgTag(img, nombre, 'card', 400) + '</div>' +
-    '<div class="lote-info">' +
-      '<div class="lote-tag">LOTE · ' + n + ' FUNDAS</div>' +
-      '<div class="lote-nombre">' + nombre + '</div>' +
-      '<div class="lote-mods">' + porModelo.map(x => '<span>' + x.m + (x.q > 1 ? ' ×' + x.q : '') + '</span>').join('') + '</div>' +
-      '<div class="lote-precio">' + (normal > total ? '<s>' + formatPrecio(normal) + '</s>' : '') + '<b>' + formatPrecio(total) + '</b></div>' +
-      '<div class="lote-cada">' + formatPrecio(l.precio) + ' cada funda</div>' +
-      (dentro
-        ? '<button class="lote-btn dentro" onclick="quitarLote(' + id + ');event.stopPropagation()">✓ Lote en tu pedido · Quitar</button>'
-        : '<button class="lote-btn" onclick="agregarLote(' + id + ');event.stopPropagation()">Agregar lote completo</button>') +
+  // Misma forma que la tarjeta de una funda (Darío 10-nov): nombre con la
+  // etiqueta LOTE, el precio por funda donde va el precio, los modelos en
+  // renglones con la cantidad en vez de − / +, y abajo un solo botón con el total.
+  const rows = porModelo.map(x =>
+    '<div class="modal-variant-row"><div class="modal-variant-info"><div class="modal-variant-name" style="font-size:12px">' + x.m + '</div></div>' +
+    '<div class="lote-cant">×' + x.q + '</div></div>').join('');
+  const unitHTML = (getPrecio(p) > l.precio ? '<span class="product-price-old">' + formatPrecio(getPrecio(p)) + '</span>' : '') +
+    '<span class="product-price">' + formatPrecio(l.precio) + '<small class="cu"> c/u</small></span>';
+  return '<div class="product-card lote-card">' +
+    '<div class="product-img-wrap" style="cursor:zoom-in" onclick="abrirFotoModelo(' + id + ')">' +
+      gridImgTag(img, nombre, 'card', 400) +
     '</div>' +
+    '<div class="product-body">' +
+      '<span class="badge-lote-inline">LOTE</span>' +
+      '<div class="product-name">' + nombre + '</div>' +
+      '<div class="product-price-wrap" style="margin-top:4px">' + unitHTML + '</div>' +
+    '</div>' +
+    '<div class="precio-lista"><div class="product-price-wrap">' + unitHTML + '</div></div>' +
+    '<div class="vcard-variants">' + rows + '</div>' +
+    (dentro
+      ? '<button class="lote-btn dentro" onclick="quitarLote(' + id + ');event.stopPropagation()">✓ Lote en tu pedido · Quitar</button>'
+      : '<button class="lote-btn" onclick="agregarLote(' + id + ');event.stopPropagation()">Agregar lote · ' + n + ' fundas · ' + formatPrecio(total) + '</button>') +
   '</div>';
 }
 function cartelLotes() {
