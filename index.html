@@ -709,17 +709,14 @@
     /* Tarjetas de fundas en el celular, más cortas (Darío 10-nov: cada % que se
        acorta el catálogo suma lectura). 1) Botones − y + de 28 px (antes 32): cada
        renglón de modelo baja de ~37 a ~33 px. El número sigue en 16 px para que el
-       iPhone no haga zoom. 2) «Última 1» deja de ir abajo del modelo: al lado, en
-       la misma línea, un circulito naranja con lo que queda. */
+       iPhone no haga zoom. 2) «Última 1» sigue abajo del modelo, pero más chico (10 px):
+       se probó un circulito con el número al lado y parecía un aviso de notificación. */
     .lista-foto .modal-vqty-btn { width: 28px; height: 28px; --vq-len: 11px; --vq-bar: 1.7px; }
     .lista-foto .modal-vqty-num { width: 34px; height: 28px; }
     .lista-foto .modal-vqty-wrap { gap: 4px; }
     .lista-foto .vcard-variants .modal-variant-row { padding: 1px 2px; gap: 3px; }
-    .lista-foto .modal-variant-info { flex-direction: row; align-items: baseline; flex-wrap: nowrap; gap: 0; }
-    .lista-foto .modal-variant-info { align-items: center; }
-    .lista-foto .modal-variant-info:has(.modal-variant-stock) .modal-variant-name { flex: 0 0 auto; white-space: nowrap; }
-    .lista-foto .modal-variant-stock { font-size: 0; line-height: 0; }
-    .lista-foto .modal-variant-stock::after { content: attr(data-n); display: inline-block; margin-left: 3px; min-width: 15px; padding: 0 3px; border-radius: 8px; background: var(--warning); color: #fff; font-size: 10px; font-weight: 700; line-height: 16px; text-align: center; }
+    .lista-foto .modal-variant-info { flex-direction: column; align-items: flex-start; gap: 0; }
+    .lista-foto .modal-variant-stock { font-size: 10px; line-height: 1.1; }
   }
 
   /* Botón y modal de Preguntas Frecuentes */
