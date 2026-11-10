@@ -4202,7 +4202,17 @@ function renderCartItems() {
 
   body.innerHTML = Object.values(groups).map(g => {
     const subtotal = g.variantes.reduce((s, v) => s + v.precio * v.qty, 0);
-    const varRows = g.variantes.map(v => {
+    // Un lote va en UN renglón: se compra entero, así que no se cambian cantidades
+    // modelo por modelo; solo se quita completo. Al pedido llegan funda por funda.
+    const esLote = !!loteDe(g.id);
+    const fundasLote = g.variantes.reduce((s, v) => s + v.qty, 0);
+    const varRows = esLote
+      ? '<div class="cart-variant-row">' +
+          '<span class="cart-variant-name">Lote completo · ' + fundasLote + ' fundas</span>' +
+          '<span class="cart-variant-qty">' + formatPrecio(subtotal) + '</span>' +
+          '<button class="cart-item-del" title="Quitar el lote" onclick="quitarLote(' + g.id + ')">×</button>' +
+        '</div>'
+      : g.variantes.map(v => {
       const cartKey = v.sizeId ? v.id + '-' + v.sizeId : String(v.id);
       const label = v.varNombre || 'Sin variante';
       return '<div class="cart-variant-row">' +
@@ -4220,7 +4230,7 @@ function renderCartItems() {
         '<div class="cart-item-name">' + g.nombre + '</div>' +
         notaDescuentoHTML(g) +
         varRows +
-        (g.variantes.length > 1 ? '<div class="cart-item-subtotal">' + formatPrecio(subtotal) + '</div>' : '') +
+        (g.variantes.length > 1 && !esLote ? '<div class="cart-item-subtotal">' + formatPrecio(subtotal) + '</div>' : '') +
       '</div>' +
     '</div>';
   }).join('') + '<button type="button" class="cart-vaciar" onclick="vaciarCarrito()">Vaciar carrito</button>';
