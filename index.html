@@ -1692,7 +1692,7 @@ function renderVariantRowsHTML(productId, dims, selectedDim1, nomEsc, precio, im
   return filtered.map(v => {
     const vs = getStockVariante(v);
     const pocas = vs !== null && vs <= 2;
-    const sTxt = pocas ? '<div class="modal-variant-stock low">Últimas ' + vs + '</div>' : '';
+    const sTxt = pocas ? '<div class="modal-variant-stock low">' + ultimasTxt(vs) + '</div>' : '';
     const maxAttr = vs !== null ? ' max="' + vs + '"' : '';
     const vnEsc = v.dim2.replace(/'/g,"\\'").replace(/"/g,'&quot;');
     const fullVnEsc = v.size.replace(/'/g,"\\'").replace(/"/g,'&quot;');
@@ -2324,6 +2324,8 @@ function getTopeVariante(v) {
 // grilla, la ficha, "Ver por modelo", el filtro de con-stock y el máximo de los
 // +/−. Devuelve SIEMPRE el stock ya descontado el tope, así el cliente ve
 // "Sin stock" a secas y nunca se entera de que hay mercadería reservada.
+// «Última 1» / «Últimas 2»: con una sola, en singular (antes decía «Últimas 1»).
+function ultimasTxt(n) { return (n === 1 ? 'Última ' : 'Últimas ') + n; }
 function getStockVariante(v) {
   if (!v.stock_por_tienda || !v.stock_por_tienda.length) return null;
   // Un depósito puede venir REPETIDO (varios renglones de inventario del mismo
@@ -2353,7 +2355,7 @@ function stockClass(stock) {
 function stockText(stock) {
   if (stock === null) return 'Disponible';
   if (stock === 0) return 'Sin stock';
-  if (stock <= 5) return 'Últimas ' + stock;
+  if (stock <= 5) return ultimasTxt(stock);
   return stock + ' disp.';
 }
 
@@ -3156,7 +3158,7 @@ function renderPorModelo(indice, sel, elegir) {
       '<div class="pm-foto" onclick="abrirFotoModelo(' + id + ',\'' + imgEsc + '\')">' + fotoHTML + '</div>' +
       '<div class="pm-info">' +
         '<div class="pm-nombre">' + nombre + '</div>' +
-        '<div class="pm-variante">' + varLabel + (pocas ? ' · <span class="pm-poca">Últimas ' + vs + '</span>' : '') + '</div>' +
+        '<div class="pm-variante">' + varLabel + (pocas ? ' · <span class="pm-poca">' + ultimasTxt(vs) + '</span>' : '') + '</div>' +
       '</div>' +
       precioHTML +
       '<div class="pm-qty">' +
@@ -3491,7 +3493,7 @@ function renderCardVariantRows(id, dims, selectedColor, nomEsc, precio, imgEsc, 
     const vPrecio = getPrecioVariante(id, v.size_id, precio);
     const chArgs = '\'' + cartKey + '\',' + id + ',\'' + nomEsc + '\',' + vPrecio + ',' + v.size_id + ',\'' + fullVnEsc + '\',\'' + imgEsc + '\'';
     const pocas = vs !== null && vs <= 2;
-    const sTxt = pocas ? '<div class="modal-variant-stock low">Últimas ' + vs + '</div>' : '';
+    const sTxt = pocas ? '<div class="modal-variant-stock low">' + ultimasTxt(vs) + '</div>' : '';
     return '<div class="modal-variant-row">' +
       '<div class="modal-variant-info">' +
         '<div class="modal-variant-name" style="font-size:12px">' + modeloCorto(v.dim2, id) + '</div>' +
@@ -3582,7 +3584,7 @@ function renderVariantesGrid(prods, ofertaTodas) {
           const maxAttr = vs !== null ? ' max="' + vs + '"' : '';
           const atMax = vs !== null && currentQty >= vs;
           const pocas = vs !== null && vs <= 2;
-          const sTxt = pocas ? '<div class="modal-variant-stock low">Últimas ' + vs + '</div>' : '';
+          const sTxt = pocas ? '<div class="modal-variant-stock low">' + ultimasTxt(vs) + '</div>' : '';
           const vnEsc = v.size.replace(/'/g,"\\'").replace(/"/g,'&quot;');
           const vPrecio = getPrecioVariante(id, v.size_id, precio);
           const chArgs = '\'' + cartKey + '\',' + id + ',\'' + nomEsc + '\',' + vPrecio + ',' + v.size_id + ',\'' + vnEsc + '\',\'' + imgEsc + '\'';
@@ -3918,7 +3920,7 @@ function abrirModal(id) {
           const cartKey = id + '-' + v.size_id;
           const vnEsc = v.size.replace(/'/g,"\\'").replace(/"/g,'&quot;');
           const pocas = vs !== null && vs <= 2;
-          const sTxt = pocas ? '<div class="modal-variant-stock low">Últimas ' + vs + '</div>' : '';
+          const sTxt = pocas ? '<div class="modal-variant-stock low">' + ultimasTxt(vs) + '</div>' : '';
           const maxAttr = vs !== null ? ' max="' + vs + '"' : '';
           const currentQty = cart[cartKey]?.qty || 0;
           const atMax = vs !== null && currentQty >= vs;
