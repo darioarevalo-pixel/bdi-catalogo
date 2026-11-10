@@ -5,6 +5,9 @@ const { claveDelPanelOk } = require('./_admin');
 // está roto, no hay Cyber: el control de precios queda como siempre.
 let CYBER = {};
 try { CYBER = require('../cyber.json').productos || {}; } catch (e) { CYBER = {}; }
+// Lotes de fundas (lotes.json): mismo criterio, precio puesto a mano por Darío.
+let LOTES = {};
+try { LOTES = require('../lotes.json').productos || {}; } catch (e) { LOTES = {}; }
 
 const API_BASE = 'https://www.gestionnube.com/api/v1';
 // Sin respaldo: ver la nota larga en api/config.js. Si ADMIN_PASSWORD no está
@@ -868,6 +871,8 @@ function pisoDeRenglon(item, p, cfg, afloje) {
   // Es final (el catálogo no le suma el descuento del código).
   const cy = positivo((CYBER[String(id)] || {}).precio);
   if (cy > 0) piso = (piso > 0) ? Math.min(piso, cy) : cy;
+  const lote = positivo((LOTES[String(id)] || {}).precio);
+  if (lote > 0) piso = (piso > 0) ? Math.min(piso, lote) : lote;
 
   if (item.size_id !== undefined && item.size_id !== null) {
     const vp = positivo((cfg && cfg.variantPrices || {})[id + '-' + item.size_id]);

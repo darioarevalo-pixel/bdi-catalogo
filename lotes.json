@@ -1,0 +1,12 @@
+{
+ "_nota": "Lotes de fundas (Darío, 10-nov-2026). Cada diseño se vende ENTERO: el cliente se lleva todas las fundas que hay en el depósito, cada una a este precio. Precios cargados en la página «Precios para terminar diseños». Para sacar un lote: borrarlo de acá.",
+ "productos": {
+  "937285": { "precio": 1990, "nombre": "Apex Case" },
+  "831985": { "precio": 1990, "nombre": "Dot Case Black" },
+  "1038198": { "precio": 1990, "nombre": "Melted Case" },
+  "831986": { "precio": 1990, "nombre": "Dot Case Silver" },
+  "1038199": { "precio": 1990, "nombre": "Ocean Case" },
+  "937279": { "precio": 1990, "nombre": "Sweet Case" },
+  "831984": { "precio": 1990, "nombre": "Dot Case Pink" }
+ }
+}

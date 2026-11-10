@@ -193,6 +193,25 @@
   .cat-chip.liq::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #EA580C; }
   .cat-chip.liq.active { background: #EA580C; border-color: #EA580C; }
   .cat-chip.liq.active::before { background: #fff; }
+  .cat-chip.lote.active { background: #EA580C; border-color: #EA580C; color: #fff; }
+  /* Lotes de fundas: tarjeta propia (no .product-card, para que no la toquen las vistas). */
+  .lote-card { background: var(--surface); border: 1px solid #FDBA74; border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; }
+  .lote-img { cursor: zoom-in; aspect-ratio: 1; background: var(--bg); overflow: hidden; }
+  .lote-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .lote-info { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  .lote-tag { font-size: 10px; font-weight: 700; letter-spacing: .06em; color: #EA580C; }
+  .lote-nombre { font-size: 14px; font-weight: 600; }
+  .lote-mods { display: flex; flex-wrap: wrap; gap: 3px; }
+  .lote-mods span { font-size: 11px; background: var(--accent-light); border-radius: 5px; padding: 1px 5px; }
+  .lote-precio { display: flex; gap: 8px; align-items: baseline; }
+  .lote-precio s { color: var(--text-muted); font-size: 12px; }
+  .lote-precio b { font-size: 18px; }
+  .lote-cada { color: var(--text-muted); font-size: 12px; }
+  .lote-btn { font: inherit; font-size: 13px; font-weight: 600; background: #EA580C; color: #fff; border: 0; border-radius: 8px; padding: 9px; cursor: pointer; margin-top: 2px; }
+  .lote-btn.dentro { background: var(--stock-ok-bg); color: var(--stock-ok); border: 1px solid var(--stock-ok); }
+  .lote-expl { grid-column: 1 / -1; background: #FFF7ED; border-radius: var(--radius); padding: 10px 14px; font-size: 13px; color: #111827; }
+  .lista-grid .lote-card { display: grid; grid-template-columns: 110px 1fr; }
+  .lista-grid .lote-img { aspect-ratio: auto; min-height: 110px; height: 100%; }
   .lq-ey { font-size: 11px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: #FDBA74; }
   .lq-wrap { grid-column: 1 / -1; width: 100%; }
   .product-price small.desde { font-size: 12px; font-weight: 500; color: var(--text-muted); }
@@ -1152,6 +1171,16 @@ function cyberDe(id) {
   const c = cyberPrecios[String(id)];
   return c && c.precio > 0 ? c : null;
 }
+// Lotes de fundas (lotes.json, Darío 10-nov-2026): diseños que se venden ENTEROS.
+// El cliente se lleva todas las fundas que hay en el depósito, cada una al precio
+// del lote. Sirve para lo que queda con un poco de cada modelo y para lo que entra
+// desproporcionado. Tienen su categoría «Lotes» y también aparecen en Fundas.
+let lotesPrecios = {};
+function loteDe(id) {
+  const l = lotesPrecios[String(id)];
+  return l && l.precio > 0 ? l : null;
+}
+const LOTES_NOMBRE = 'Lotes';
 let cuponAplicado = null; // cupón aplicado en el carrito (objeto) o null
 
 // Lo que el stock le fue sacando del carrito mientras armaba ESTE pedido.
@@ -1601,6 +1630,7 @@ function construirIndiceModelos() {
 
   for (const p of fundas) {
     const id = p.id || p.product_id;
+    if (loteDe(id)) continue; // los lotes no se venden por modelo
     const hiddenVars = (adminConfig.hiddenVariants || {})[String(id)] || [];
     // Mismo filtro por-variante que renderVariantesGrid: sin ocultas y con stock.
     // Lo del Cyber BDI también va acá: renderPorModelo lo pone abajo de todo.
@@ -1741,6 +1771,10 @@ async function cargarConfig() {
   try {
     const r = await fetch('/cyber.json', { cache: 'no-store' });
     if (r.ok) cyberPrecios = (await r.json()).productos || {};
+  } catch(e) {}
+  try {
+    const r = await fetch('/lotes.json', { cache: 'no-store' });
+    if (r.ok) lotesPrecios = (await r.json()).productos || {};
   } catch(e) {}
   aplicarMinimoFAQ();
 }
@@ -2015,6 +2049,7 @@ function nombreBoton(cat) {
 function coincideCategoria(p) {
   if (categoria === 'todas') return true;
   if (categoria === 'liq') return true; // la Liquidación se dibuja aparte (renderLiquidacion)
+  if (categoria === 'lotes') return !!loteDe(p.id || p.product_id);
   const cat = p.category || '';
   if (categoria.startsWith('boton:')) return nombreBoton(cat) === categoria.slice(6);
   return cat === categoria;
@@ -2034,10 +2069,91 @@ function renderCatChips(orderedCats) {
   const enLiq = categoria === 'liq';
   cont.innerHTML =
     (categoriasLiquidacion().length ? '<button class="cat-chip liq' + (enLiq ? ' active' : '') + '" onclick="abrirLiquidacion(null)">' + LIQ_NOMBRE + '</button>' : '') +
-    '<button class="cat-chip' + (activo === null && !enLiq ? ' active' : '') + '" onclick="setCategoria(\'todas\')">Todo</button>' +
-    botones.map(n =>
+    '<button class="cat-chip' + (activo === null && !enLiq && categoria !== 'lotes' ? ' active' : '') + '" onclick="setCategoria(\'todas\')">Todo</button>' +
+    chipsConLotes(botones.map(n =>
       '<button class="cat-chip' + (activo === n ? ' active' : '') + '" onclick="setCategoria(\'boton:' + n.replace(/'/g, "\\'") + '\')">' + n + '</button>'
-    ).join('');
+    ), botones);
+}
+
+// El botón «Lotes» va justo después de Fundas (si no hay Fundas, al final), y solo
+// si hay algún lote con fundas en el depósito.
+function chipsConLotes(chips, botones) {
+  if (!hayLotes()) return chips.join('');
+  const chip = '<button class="cat-chip lote' + (categoria === 'lotes' ? ' active' : '') + '" onclick="setCategoria(\'lotes\')">' + LOTES_NOMBRE + '</button>';
+  const i = botones.indexOf('Fundas');
+  chips.splice(i < 0 ? chips.length : i + 1, 0, chip);
+  return chips.join('');
+}
+function hayLotes() {
+  return allProducts.some(p => loteDe(p.id || p.product_id) && variantesDeLote(p).length);
+}
+// Las fundas que forman el lote: las visibles con stock en el depósito.
+function variantesDeLote(p) {
+  const id = p.id || p.product_id;
+  const ocultas = (adminConfig.hiddenVariants || {})[String(id)] || [];
+  return sortVariantsByModel((p.variantes || []).filter(v => {
+    if (ocultas.some(h => h == v.size_id)) return false;
+    const vs = getStockVariante(v);
+    return vs !== null && vs > 0;
+  }));
+}
+function loteEnCarrito(p) {
+  const id = p.id || p.product_id;
+  const vars = variantesDeLote(p);
+  return vars.length > 0 && vars.every(v => (cart[id + '-' + v.size_id]?.qty || 0) >= getStockVariante(v));
+}
+// Suma TODAS las fundas del lote al carrito, cada una al precio del lote.
+function agregarLote(id) {
+  const p = allProducts.find(x => (x.id || x.product_id) == id);
+  const l = loteDe(id);
+  if (!p || !l) return;
+  const nombre = p.name || p.nombre || p.product_name || 'Sin nombre';
+  const img = getImagenes(p)[0] || '';
+  for (const v of variantesDeLote(p)) {
+    cart[id + '-' + v.size_id] = { id: parseInt(id), nombre, varNombre: nombreCompat(v.size, id), precio: l.precio, qty: getStockVariante(v), sizeId: v.size_id, img, lote: true };
+  }
+  updateCartUI();
+  renderProductos();
+}
+function quitarLote(id) {
+  Object.keys(cart).forEach(k => { if (cart[k].id == id) delete cart[k]; });
+  updateCartUI();
+  renderProductos();
+}
+function tarjetaLote(p) {
+  const id = p.id || p.product_id;
+  const l = loteDe(id);
+  const vars = variantesDeLote(p);
+  if (!l || !vars.length) return '';
+  const nombre = p.name || p.nombre || p.product_name || 'Sin nombre';
+  const img = getImagenes(p)[0] || null;
+  const n = vars.reduce((s, v) => s + getStockVariante(v), 0);
+  // Cuántas fundas de cada modelo (los colores se suman en su modelo).
+  const porModelo = [];
+  for (const v of vars) {
+    const m = modeloCorto(v.size, id);
+    const ya = porModelo.find(x => x.m === m);
+    if (ya) ya.q += getStockVariante(v); else porModelo.push({ m, q: getStockVariante(v) });
+  }
+  const total = l.precio * n;
+  const normal = getPrecio(p) * n;
+  const dentro = loteEnCarrito(p);
+  return '<div class="lote-card">' +
+    '<div class="lote-img" onclick="abrirFotoModelo(' + id + ')">' + gridImgTag(img, nombre, 'card', 400) + '</div>' +
+    '<div class="lote-info">' +
+      '<div class="lote-tag">LOTE · ' + n + ' FUNDAS</div>' +
+      '<div class="lote-nombre">' + nombre + '</div>' +
+      '<div class="lote-mods">' + porModelo.map(x => '<span>' + x.m + (x.q > 1 ? ' ×' + x.q : '') + '</span>').join('') + '</div>' +
+      '<div class="lote-precio">' + (normal > total ? '<s>' + formatPrecio(normal) + '</s>' : '') + '<b>' + formatPrecio(total) + '</b></div>' +
+      '<div class="lote-cada">' + formatPrecio(l.precio) + ' cada funda</div>' +
+      (dentro
+        ? '<button class="lote-btn dentro" onclick="quitarLote(' + id + ');event.stopPropagation()">✓ Lote en tu pedido · Quitar</button>'
+        : '<button class="lote-btn" onclick="agregarLote(' + id + ');event.stopPropagation()">Agregar lote completo</button>') +
+    '</div>' +
+  '</div>';
+}
+function cartelLotes() {
+  return '<div class="lote-expl"><b>Comprá el lote completo del diseño</b>: vienen fundas de distintos modelos, a mejor precio que sueltas.</div>';
 }
 
 function renderCatPills() {
@@ -2315,6 +2431,9 @@ function precioVarianteOverride(id, sizeId) {
   const vp = (adminConfig.variantPrices || {})[id + '-' + sizeId];
   const n = parseFloat(vp);
   const propio = (vp !== undefined && vp !== null && vp !== '' && !isNaN(n) && n > 0) ? n : null;
+  // Lote: todas las fundas al precio del lote, sin excepciones por modelo.
+  const lote = loteDe(id);
+  if (lote) return lote.precio;
   // En el Cyber manda su precio; el modelo que ya estaba más barato (11 / 12 /
   // 12 Pro) se queda con el suyo, salvo que el diseño diga «todos».
   const c = cyberDe(id);
@@ -2324,7 +2443,7 @@ function precioVarianteOverride(id, sizeId) {
 function getPrecioVariante(id, sizeId, base, ignorarTecho) {
   const o = precioVarianteOverride(id, sizeId);
   if (o === null) return base; // sin precio especial: usa el del producto (ya con lista mejor)
-  if (cyberDe(id)) return o; // el precio del Cyber es final: no suma el descuento del código
+  if (cyberDe(id) || loteDe(id)) return o; // el precio del Cyber (y el del lote) es final: no suma el descuento del código
   // Con precio especial de variante: si hay código, también recibe el descuento,
   // con piso en el costo del producto. Sin código, queda a su precio.
   const p = (allProducts || []).find(x => (x.id || x.product_id) == id);
@@ -2624,7 +2743,7 @@ function getPrecioAnterior(p) {
 // cuenta hecha como sí/no en `_oferta` (y `_ofertaVar` por variante con precio
 // especial). Con código sí llega el costo, y el cálculo es el de siempre.
 function esOferta(p) {
-  if (cyberDe(p.id || p.product_id)) return true;
+  if (cyberDe(p.id || p.product_id) || loteDe(p.id || p.product_id)) return true;
   const umbral = parseFloat(adminConfig.ofertaMargen) || 0;
   if (umbral <= 0) return false;
   if (p.unit_cost === undefined) return !!p._oferta;
@@ -2638,7 +2757,7 @@ function esOferta(p) {
 // el costo del producto. Así se protege una variante al costo aunque el producto
 // en general tenga buen margen.
 function cartItemOferta(i) {
-  if (cyberDe(i.id)) return true;
+  if (cyberDe(i.id) || loteDe(i.id)) return true;
   const umbral = parseFloat(adminConfig.ofertaMargen) || 0;
   if (umbral <= 0) return false;
   const p = allProducts.find(x => (x.id || x.product_id) == i.id);
@@ -2821,6 +2940,11 @@ function dibujarProductos() {
   grid.classList.toggle('lista-foto', viewMode === 'lista2');
   if (!prods.length) {
     grid.innerHTML = '<div class="state-msg"><div class="icon">⊘</div><h3>Sin resultados</h3><p>Probá con otro filtro o término de búsqueda.</p></div>';
+    return;
+  }
+  if (categoria === 'lotes') {
+    grid.classList.add('variants-grid');
+    grid.innerHTML = cartelLotes() + renderVariantesGrid(prods);
     return;
   }
   if (viewMode === 'variants' || viewMode === 'lista' || viewMode === 'lista2') {
@@ -3403,6 +3527,8 @@ function renderVariantesGrid(prods, ofertaTodas) {
   const cards = [];
   for (const p of prods) {
     const id = p.id || p.product_id;
+    // Un lote se ve como lote en todos lados (Fundas, Todo, buscando): no se vende suelto.
+    if (loteDe(id)) { const c = tarjetaLote(p); if (c) cards.push(c); continue; }
     // Lo del Cyber se ve igual fuera de su sección (por ejemplo, buscando).
     const oferta = ofertaTodas || !!cyberDe(id);
     const nombre = p.name || p.nombre || p.product_name || 'Sin nombre';
