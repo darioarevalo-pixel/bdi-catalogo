@@ -196,8 +196,9 @@
   .cat-chip.lote.active { background: var(--accent); border-color: var(--accent); color: #fff; }
   /* Lotes de fundas: tarjeta propia (no .product-card, para que no la toquen las vistas). */
   .lote-card { background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; }
-  .lote-img { cursor: zoom-in; aspect-ratio: 1; background: var(--bg); overflow: hidden; }
-  .lote-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  /* Mismo tamaño de foto que las tarjetas de Fundas (.product-img-wrap). */
+  .lote-img { cursor: zoom-in; width: 100%; height: 160px; flex-shrink: 0; background: #fff; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+  .lote-img img { width: 100%; height: 100%; object-fit: contain; display: block; }
   .lote-info { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
   .lote-tag { font-size: 10px; font-weight: 700; letter-spacing: .06em; color: var(--accent); }
   .lote-nombre { font-size: 14px; font-weight: 600; }
@@ -210,8 +211,9 @@
   .lote-btn { font: inherit; font-size: 13px; font-weight: 600; background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 9px; cursor: pointer; margin-top: 2px; }
   .lote-btn.dentro { background: var(--stock-ok-bg); color: var(--stock-ok); border: 1px solid var(--stock-ok); }
   .lote-expl { grid-column: 1 / -1; background: var(--accent-light); border-radius: var(--radius); padding: 10px 14px; font-size: 13px; color: #111827; }
-  .lista-grid .lote-card { display: grid; grid-template-columns: 110px 1fr; }
-  .lista-grid .lote-img { aspect-ratio: auto; min-height: 110px; height: 100%; }
+  .lista-grid .lote-card { display: grid; grid-template-columns: 92px 1fr; column-gap: 12px; padding: 10px; align-items: start; }
+  .lista-grid .lote-img { width: 92px; height: 92px; border-radius: 8px; }
+  .lista-grid .lote-info { padding: 0; }
   .lq-ey { font-size: 11px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: #FCA5A5; }
   .lq-wrap { grid-column: 1 / -1; width: 100%; }
   .product-price small.desde { font-size: 12px; font-weight: 500; color: var(--text-muted); }
