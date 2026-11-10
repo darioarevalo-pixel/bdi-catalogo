@@ -706,6 +706,20 @@
        (en vez de aplastarlo al costado). */
     .modal-variant-price.dif { order: 3; flex-basis: 100%; flex-direction: row; align-items: baseline; justify-content: flex-start; gap: 5px; margin-top: 1px; }
     .vcard-variants { padding: 0 5px 5px; gap: 2px; }
+    /* Tarjetas de fundas en el celular, más cortas (Darío 10-nov: cada % que se
+       acorta el catálogo suma lectura). 1) Botones − y + de 28 px (antes 32): cada
+       renglón de modelo baja de ~37 a ~33 px. El número sigue en 16 px para que el
+       iPhone no haga zoom. 2) «Última 1» deja de ir abajo del modelo: al lado, en
+       la misma línea, un circulito naranja con lo que queda. */
+    .lista-foto .modal-vqty-btn { width: 28px; height: 28px; --vq-len: 11px; --vq-bar: 1.7px; }
+    .lista-foto .modal-vqty-num { width: 34px; height: 28px; }
+    .lista-foto .modal-vqty-wrap { gap: 4px; }
+    .lista-foto .vcard-variants .modal-variant-row { padding: 1px 2px; gap: 3px; }
+    .lista-foto .modal-variant-info { flex-direction: row; align-items: baseline; flex-wrap: nowrap; gap: 0; }
+    .lista-foto .modal-variant-info { align-items: center; }
+    .lista-foto .modal-variant-info:has(.modal-variant-stock) .modal-variant-name { flex: 0 0 auto; white-space: nowrap; }
+    .lista-foto .modal-variant-stock { font-size: 0; line-height: 0; }
+    .lista-foto .modal-variant-stock::after { content: attr(data-n); display: inline-block; margin-left: 3px; min-width: 15px; padding: 0 3px; border-radius: 8px; background: var(--warning); color: #fff; font-size: 10px; font-weight: 700; line-height: 16px; text-align: center; }
   }
 
   /* Botón y modal de Preguntas Frecuentes */
@@ -1692,7 +1706,7 @@ function renderVariantRowsHTML(productId, dims, selectedDim1, nomEsc, precio, im
   return filtered.map(v => {
     const vs = getStockVariante(v);
     const pocas = vs !== null && vs <= 2;
-    const sTxt = pocas ? '<div class="modal-variant-stock low">' + ultimasTxt(vs) + '</div>' : '';
+    const sTxt = pocas ? '<div class="modal-variant-stock low" data-n="' + vs + '">' + ultimasTxt(vs) + '</div>' : '';
     const maxAttr = vs !== null ? ' max="' + vs + '"' : '';
     const vnEsc = v.dim2.replace(/'/g,"\\'").replace(/"/g,'&quot;');
     const fullVnEsc = v.size.replace(/'/g,"\\'").replace(/"/g,'&quot;');
@@ -3493,7 +3507,7 @@ function renderCardVariantRows(id, dims, selectedColor, nomEsc, precio, imgEsc, 
     const vPrecio = getPrecioVariante(id, v.size_id, precio);
     const chArgs = '\'' + cartKey + '\',' + id + ',\'' + nomEsc + '\',' + vPrecio + ',' + v.size_id + ',\'' + fullVnEsc + '\',\'' + imgEsc + '\'';
     const pocas = vs !== null && vs <= 2;
-    const sTxt = pocas ? '<div class="modal-variant-stock low">' + ultimasTxt(vs) + '</div>' : '';
+    const sTxt = pocas ? '<div class="modal-variant-stock low" data-n="' + vs + '">' + ultimasTxt(vs) + '</div>' : '';
     return '<div class="modal-variant-row">' +
       '<div class="modal-variant-info">' +
         '<div class="modal-variant-name" style="font-size:12px">' + modeloCorto(v.dim2, id) + '</div>' +
@@ -3584,7 +3598,7 @@ function renderVariantesGrid(prods, ofertaTodas) {
           const maxAttr = vs !== null ? ' max="' + vs + '"' : '';
           const atMax = vs !== null && currentQty >= vs;
           const pocas = vs !== null && vs <= 2;
-          const sTxt = pocas ? '<div class="modal-variant-stock low">' + ultimasTxt(vs) + '</div>' : '';
+          const sTxt = pocas ? '<div class="modal-variant-stock low" data-n="' + vs + '">' + ultimasTxt(vs) + '</div>' : '';
           const vnEsc = v.size.replace(/'/g,"\\'").replace(/"/g,'&quot;');
           const vPrecio = getPrecioVariante(id, v.size_id, precio);
           const chArgs = '\'' + cartKey + '\',' + id + ',\'' + nomEsc + '\',' + vPrecio + ',' + v.size_id + ',\'' + vnEsc + '\',\'' + imgEsc + '\'';
@@ -3920,7 +3934,7 @@ function abrirModal(id) {
           const cartKey = id + '-' + v.size_id;
           const vnEsc = v.size.replace(/'/g,"\\'").replace(/"/g,'&quot;');
           const pocas = vs !== null && vs <= 2;
-          const sTxt = pocas ? '<div class="modal-variant-stock low">' + ultimasTxt(vs) + '</div>' : '';
+          const sTxt = pocas ? '<div class="modal-variant-stock low" data-n="' + vs + '">' + ultimasTxt(vs) + '</div>' : '';
           const maxAttr = vs !== null ? ' max="' + vs + '"' : '';
           const currentQty = cart[cartKey]?.qty || 0;
           const atMax = vs !== null && currentQty >= vs;
