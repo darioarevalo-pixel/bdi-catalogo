@@ -202,7 +202,10 @@
   .lote-card .product-price small.cu { font-size: 12px; font-weight: 500; color: var(--text-muted); }
   .lote-card .modal-variant-row { min-height: 26px; }
   .lote-cant { font-size: 13px; font-weight: 600; color: var(--text-muted); padding-right: 6px; font-variant-numeric: tabular-nums; }
-  .lote-btn { font: inherit; font-size: 13px; font-weight: 600; background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 9px; cursor: pointer; margin: 6px 10px 10px; }
+  .lote-ahorro { font-size: 12px; font-weight: 700; color: var(--stock-ok); margin-top: 2px; }
+  .lista-foto .product-body .lote-ahorro { display: none; }
+  .lista-foto .lote-ahorro .pct { display: none; } /* en el celular no entra en una línea */
+  .lote-btn { font: inherit; font-size: 13px; font-weight: 600; background: var(--stock-ok); color: #fff; border: 0; border-radius: 8px; padding: 9px; cursor: pointer; margin: 6px 10px 10px; }
   .lote-btn.dentro { background: var(--stock-ok-bg); color: var(--stock-ok); border: 1px solid var(--stock-ok); }
   .lista-grid .lote-btn { grid-column: 1 / -1; margin: 8px 0 0; }
   .lote-expl { grid-column: 1 / -1; background: var(--accent-light); border-radius: var(--radius); padding: 10px 14px; font-size: 13px; color: #111827; }
@@ -2152,6 +2155,10 @@ function tarjetaLote(p) {
     '<div class="lote-cant">×' + x.q + '</div></div>').join('');
   const unitHTML = (getPrecio(p) > l.precio ? '<span class="product-price-old">' + formatPrecio(getPrecio(p)) + '</span>' : '') +
     '<span class="product-price">' + formatPrecio(l.precio) + '<small class="cu"> c/u</small></span>';
+  // El beneficio a la vista: cuánto se ahorra el cliente con el lote entero.
+  const ahorro = normal - total;
+  const pctAhorro = normal > 0 ? Math.round(ahorro / normal * 100) : 0;
+  const ahorroHTML = ahorro > 0 ? '<div class="lote-ahorro">Ahorrás ' + formatPrecio(ahorro) + '<span class="pct"> (' + pctAhorro + '%)</span></div>' : '';
   return '<div class="product-card lote-card">' +
     '<div class="product-img-wrap" style="cursor:zoom-in" onclick="abrirFotoModelo(' + id + ')">' +
       gridImgTag(img, nombre, 'card', 400) +
@@ -2159,9 +2166,9 @@ function tarjetaLote(p) {
     '<div class="product-body">' +
       '<span class="badge-lote-inline">LOTE</span>' +
       '<div class="product-name">' + nombre + '</div>' +
-      '<div class="product-price-wrap" style="margin-top:4px">' + unitHTML + '</div>' +
+      '<div class="product-price-wrap" style="margin-top:4px">' + unitHTML + '</div>' + ahorroHTML +
     '</div>' +
-    '<div class="precio-lista"><div class="product-price-wrap">' + unitHTML + '</div></div>' +
+    '<div class="precio-lista"><div class="product-price-wrap">' + unitHTML + '</div>' + ahorroHTML + '</div>' +
     '<div class="vcard-variants">' + rows + '</div>' +
     (dentro
       ? '<button class="lote-btn dentro" onclick="quitarLote(' + id + ');event.stopPropagation()">✓ Lote en tu pedido · Quitar</button>'
