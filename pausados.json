@@ -1,0 +1,9 @@
+{
+  "_nota": "Productos que NO se muestran en el catálogo hasta que Darío diga (10-nov-2026): los 7 lotes y las 21 sueltas que vienen del local. Para habilitarlos, sacar su id de la lista (o dejar la lista vacía).",
+  "productos": [
+    "937285", "831985", "1038198", "831986", "1038199", "937279", "831984",
+    "1001613", "1001616", "1006900", "1010588", "1040148", "337214", "348526",
+    "607147", "805285", "831732", "831734", "831735", "937280", "937281",
+    "937283", "937284", "937290", "937291", "937292", "937293", "937295"
+  ]
+}

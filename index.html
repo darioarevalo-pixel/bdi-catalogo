@@ -1184,6 +1184,8 @@ function cyberDe(id) {
 // del lote. Sirve para lo que queda con un poco de cada modelo y para lo que entra
 // desproporcionado. Tienen su categoría «Lotes» y también aparecen en Fundas.
 let lotesPrecios = {};
+// Pausados (pausados.json): no se muestran hasta que Darío los habilite.
+let pausados = [];
 function loteDe(id) {
   const l = lotesPrecios[String(id)];
   return l && l.precio > 0 ? l : null;
@@ -1784,6 +1786,10 @@ async function cargarConfig() {
     const r = await fetch('/lotes.json', { cache: 'no-store' });
     if (r.ok) lotesPrecios = (await r.json()).productos || {};
   } catch(e) {}
+  try {
+    const r = await fetch('/pausados.json', { cache: 'no-store' });
+    if (r.ok) pausados = ((await r.json()).productos || []).map(String);
+  } catch(e) {}
   aplicarMinimoFAQ();
 }
 
@@ -2309,6 +2315,8 @@ async function cargarProductos(paginas) {
     if (adminConfig.hideNoStock && getStockTotal(p) === 0) return false;
     // Apagado: producto de reventa / que nunca va por mayor → no se muestra nunca.
     if (apagados.some(a => a == pid)) return false;
+    // Pausado: espera que Darío lo habilite (pausados.json).
+    if (pausados.includes(String(pid))) return false;
     // Oculto manual + no publicar sin precio mayorista cargado
     // (evita que un producto nuevo se muestre con el precio minorista de respaldo).
     if (adminConfig.hiddenProducts.some(hid => hid == pid)) return false;
