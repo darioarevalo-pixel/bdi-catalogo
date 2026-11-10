@@ -2335,8 +2335,8 @@ function getTopeVariante(v) {
 // grilla, la ficha, "Ver por modelo", el filtro de con-stock y el máximo de los
 // +/−. Devuelve SIEMPRE el stock ya descontado el tope, así el cliente ve
 // "Sin stock" a secas y nunca se entera de que hay mercadería reservada.
-// «Última 1» / «Últimas 2»: con una sola, en singular (antes decía «Últimas 1»).
-function ultimasTxt(n) { return (n === 1 ? 'Última ' : 'Últimas ') + n; }
+// «Última» (sin número: es la única) / «Últimas 2». Antes decía «Últimas 1» (Darío 10-nov).
+function ultimasTxt(n) { return n === 1 ? 'Última' : 'Últimas ' + n; }
 function getStockVariante(v) {
   if (!v.stock_por_tienda || !v.stock_por_tienda.length) return null;
   // Un depósito puede venir REPETIDO (varios renglones de inventario del mismo
