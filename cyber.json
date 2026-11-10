@@ -1,5 +1,5 @@
 {
- "_nota": "Precios del Cyber BDI cargados por Darío el 1-nov-2026 (página «Precios para el Cyber BDI»). Cada producto entra COMPLETO con este precio; los modelos que ya tenían un precio especial más bajo lo mantienen, salvo «todos». Para apagar el Cyber: dejar productos vacío.",
+ "_nota": "Precios del Cyber BDI cargados por Darío el 1-nov-2026 (página «Precios para el Cyber BDI»). Cada producto entra COMPLETO con este precio; los modelos que ya tenían un precio especial más bajo lo mantienen, salvo «todos». Para apagar el Cyber: dejar productos vacío. 10-nov-2026: se sumaron 21 diseños que se venden sueltos (página «Precios para terminar diseños»).",
  "productos": {
   "237832": {
    "precio": 5990,
@@ -420,6 +420,90 @@
   "1044565": {
    "precio": 1990,
    "nombre": "Space Pink Case"
+  },
+  "1001613": {
+   "precio": 2490,
+   "nombre": "Bow Case"
+  },
+  "1001616": {
+   "precio": 2490,
+   "nombre": "Lace Case"
+  },
+  "1006900": {
+   "precio": 3490,
+   "nombre": "Ag Glass Case Orange"
+  },
+  "1010588": {
+   "precio": 2490,
+   "nombre": "Venom Case"
+  },
+  "1040148": {
+   "precio": 1990,
+   "nombre": "Distric Case Gray"
+  },
+  "337214": {
+   "precio": 1990,
+   "nombre": "Fire Case"
+  },
+  "348526": {
+   "precio": 1490,
+   "nombre": "Wrinkle Case"
+  },
+  "607147": {
+   "precio": 1490,
+   "nombre": "Amber Case"
+  },
+  "805285": {
+   "precio": 1490,
+   "nombre": "Lovely Case"
+  },
+  "831732": {
+   "precio": 1490,
+   "nombre": "Magsafe Case Bloom"
+  },
+  "831734": {
+   "precio": 1990,
+   "nombre": "Motion Case Pink"
+  },
+  "831735": {
+   "precio": 1990,
+   "nombre": "Motion Case Black"
+  },
+  "937280": {
+   "precio": 2490,
+   "nombre": "Reflex Case"
+  },
+  "937281": {
+   "precio": 1690,
+   "nombre": "Spot Case"
+  },
+  "937283": {
+   "precio": 1990,
+   "nombre": "Aura Case"
+  },
+  "937284": {
+   "precio": 1990,
+   "nombre": "Muse Case"
+  },
+  "937290": {
+   "precio": 2490,
+   "nombre": "Ticket Case"
+  },
+  "937291": {
+   "precio": 2490,
+   "nombre": "Sunflower Case"
+  },
+  "937292": {
+   "precio": 1990,
+   "nombre": "Street Case"
+  },
+  "937293": {
+   "precio": 1990,
+   "nombre": "Distric Case"
+  },
+  "937295": {
+   "precio": 1990,
+   "nombre": "Future Case"
   }
  }
 }
