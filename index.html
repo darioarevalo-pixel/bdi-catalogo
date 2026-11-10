@@ -1804,7 +1804,8 @@ function renderBanners() {
     .sort((a, b) => (a.orden || 0) - (b.orden || 0));
   // Mientras haya Cyber, su banner va primero y abre la sección acá mismo. Se
   // apaga solo cuando cyber.json queda sin productos (no hay que tocar el panel).
-  if (Object.keys(cyberPrecios).length) banners.unshift({ imagen: '/cyber-banner.jpg', titulo: LIQ_NOMBRE, cyber: true });
+  // El banner dice «CYBER BDI»: apagado hasta tener uno de «Ofertas» (10-nov).
+  if (false && Object.keys(cyberPrecios).length) banners.unshift({ imagen: '/cyber-banner.jpg', titulo: LIQ_NOMBRE, cyber: true });
   if (!banners.length) { section.style.display = 'none'; section.innerHTML = ''; return; }
   section.style.display = 'block';
   section.className = 'banners-section';
@@ -3169,7 +3170,7 @@ function renderPorModelo(indice, sel, elegir) {
   const filasCyber = filas.filter(esCyber);
   const filasHTML = '<div class="pm-tabla">' + filas.filter(f => !esCyber(f)).map(filaHTML).join('') + '</div>' +
     (filasCyber.length
-      ? '<div class="pm-grupo"><b>' + LIQ_NOMBRE + '</b><span>Precios especiales por tiempo limitado</span></div>' +
+      ? '<div class="pm-grupo"><b>' + LIQ_NOMBRE + '</b><span>Precios especiales</span></div>' +
         '<div class="pm-tabla">' + filasCyber.map(filaHTML).join('') + '</div>'
       : '');
 
@@ -3197,7 +3198,7 @@ function renderPorModelo(indice, sel, elegir) {
 // fundas como la Star de iPhone 11, que va más barata por ser modelo viejo y no
 // por estar en oferta (1-11-2026). Para apagarlo: dejar cyber.json sin productos.
 // Nombre del botón y de la sección. Pasado el Cyber se cambia acá y listo.
-const LIQ_NOMBRE = 'Cyber BDI';
+const LIQ_NOMBRE = 'Ofertas'; // antes «Cyber BDI» (hasta el 8-nov); Darío pidió «Ofertas» el 10-nov
 function varianteEnLiquidacion(p, v) {
   return !!cyberDe(p.id || p.product_id);
 }
@@ -3312,7 +3313,7 @@ function renderLiquidacion(q) {
     const n = cats.length;
     return '<div class="lq-wrap">' +
       '<div class="lq-top"><button class="pm-back" onclick="setCategoria(\'todas\')">←</button>' + titulo + '</div>' +
-      '<div class="pm-sub" style="margin-bottom:10px">' + (n === 1 ? 'Precios especiales por tiempo limitado' : 'Elegí qué estás buscando') + '</div>' +
+      '<div class="pm-sub" style="margin-bottom:10px">' + (n === 1 ? 'Precios especiales' : 'Elegí qué estás buscando') + '</div>' +
       '<div class="lq-cats ' + (n <= 4 ? 'n' + n : 'nm') + '">' + cats.map(c => {
         const cuantos = c.disenos + (c.nombre === 'Fundas' ? (c.disenos === 1 ? ' diseño' : ' diseños') : (c.disenos === 1 ? ' producto' : ' productos'));
         return '<button class="lq-cat" onclick="abrirLiquidacion(\'' + esc(c.nombre) + '\')">' +
@@ -3467,7 +3468,7 @@ function cartelOfertasFundas() {
   const n = indiceLiqDisenos().length;
   if (!n) return '';
   return '<button class="lq-cartel" onclick="abrirLiquidacion(\'Fundas\', null, \'diseno\')">' +
-    '<span><b>¿Querés ver más?</b>Hay ' + n + ' diseños de fundas en oferta en el ' + LIQ_NOMBRE + '.</span>' +
+    '<span><b>¿Querés ver más?</b>Hay ' + n + ' diseños de fundas en ' + LIQ_NOMBRE + '.</span>' +
     '<span class="lq-cartel-ir">Ver fundas en oferta →</span></button>';
 }
 
