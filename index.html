@@ -62,6 +62,15 @@
   /* Cuando la barra flotante está visible, reservar espacio abajo para que no tape la última fila de productos. */
   body.has-summary-bar .main { padding-bottom: 92px; }
   .summary-bar-left { display: flex; flex-direction: column; gap: 2px; }
+  .summary-bar-fila { display: flex; flex-direction: column; gap: 2px; }
+  /* Cuánto falta para la compra mínima (barra de abajo y carrito). */
+  .minimo-aviso { font-size: 12px; font-weight: 600; color: #FCD34D; }
+  .minimo-aviso.ok { color: #86EFAC; }
+  .minimo-progreso { position: absolute; left: 0; right: 0; top: 0; height: 3px; background: rgba(255,255,255,0.18); }
+  .minimo-progreso span { display: block; height: 100%; width: 0; background: #FCD34D; transition: width 0.3s ease; }
+  .drawer-action { flex-wrap: wrap; }
+  .minimo-aviso-carrito { flex-basis: 100%; padding: 8px 10px; border-radius: var(--radius-sm); background: #FEF3C7; color: #92400E; font-size: 13px; font-weight: 600; }
+  .minimo-aviso-carrito.ok { background: #DCFCE7; color: #166534; }
   .summary-bar-units { font-size: 12px; opacity: 0.75; }
   .summary-bar-total { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
   .summary-bar-btn { background: white; color: var(--accent); border: none; border-radius: var(--radius-sm); padding: 10px 20px; font-family: inherit; font-size: 14px; font-weight: 700; cursor: pointer; white-space: nowrap; transition: opacity 0.15s; }
@@ -77,7 +86,11 @@
   .wa-fab.wa-fab-hidden { transform: translateY(120px); opacity: 0; pointer-events: none; }
   body.has-summary-bar .wa-fab { bottom: 84px; }
   @media (max-width: 700px) {
-    .wa-fab { width: 52px; height: 52px; right: 16px; bottom: 16px; }
+    /* En el celular los botones − / + van todos sobre el borde derecho: el botón
+       de WhatsApp a la derecha tapaba el «+» (y se tocaba sin querer). A la
+       izquierda queda sobre la foto, que no se toca para comprar. */
+    .wa-fab { width: 46px; height: 46px; left: 14px; right: auto; bottom: 14px; }
+    .wa-fab svg { width: 27px; height: 27px; }
     body.has-summary-bar .wa-fab { bottom: 80px; }
   }
 
@@ -660,11 +673,11 @@
        catálogo, todo el tiempo. Las unidades pasan al lado del total en vez de
        arriba (una línea en vez de dos) y se recorta el relleno. De 78 a ~50. */
     .summary-bar { padding: 8px 14px; }
-    .summary-bar-left { flex-direction: row; align-items: baseline; gap: 7px; }
+    .summary-bar-fila { flex-direction: row; align-items: baseline; gap: 7px; }
     .summary-bar-total { font-size: 18px; }
     .summary-bar-units { font-size: 11px; order: 2; }
     .summary-bar-btn { padding: 9px 16px; font-size: 13px; }
-    body.has-summary-bar .wa-fab { bottom: 62px; }
+    body.has-summary-bar .wa-fab { bottom: 76px; }
     /* Fila de arriba: el buscador es lo que más se usa y era lo más chico (84px
        de 358). Ahora los dos botones se achican y el buscador se queda con lo
        que sobra. "Por modelo" SIGUE en la pantalla principal: es un filtro que
@@ -980,6 +993,7 @@
   <!-- Barra pegada abajo. En la hoja 1 (el pedido) muestra el total y lleva a
        cerrar la compra; en la hoja 2 (los datos) es el botón de confirmar. -->
   <div class="drawer-action" id="drawer-action" style="display:none">
+    <div class="minimo-aviso-carrito" id="cart-min" style="display:none"></div>
     <div class="drawer-action-tot">
       <span class="drawer-action-lbl">Total</span>
       <span class="drawer-action-amt" id="action-total">$0</span>
@@ -1028,9 +1042,13 @@
 <!-- Barra flotante de resumen -->
 <div class="summary-bar" id="summary-bar">
   <div class="summary-bar-left">
-    <div class="summary-bar-units" id="summary-units"></div>
-    <div class="summary-bar-total" id="summary-total"></div>
+    <div class="summary-bar-fila">
+      <div class="summary-bar-units" id="summary-units"></div>
+      <div class="summary-bar-total" id="summary-total"></div>
+    </div>
+    <div class="minimo-aviso" id="summary-min" style="display:none"></div>
   </div>
+  <div class="minimo-progreso" id="summary-min-barra" style="display:none"><span></span></div>
   <button class="summary-bar-btn" onclick="abrirCarrito()">Ver pedido →</button>
 </div>
 
@@ -4154,6 +4172,7 @@ function updateCartUI() {
 
   // Barra flotante — se actualiza SIEMPRE (no depende del bloque de arriba).
   const bar = $('summary-bar');
+  actualizarAvisoMinimo(subtotal);
   if (bar) {
     if (totalUnits > 0) {
       if ($('summary-units')) $('summary-units').textContent = totalUnits + (totalUnits === 1 ? ' producto' : ' productos');
@@ -4167,6 +4186,30 @@ function updateCartUI() {
   }
   // Solo reconstruir el drawer si está abierto
   if ($('cart-drawer')?.classList.contains('open')) renderCartItems();
+}
+
+// Cuánto falta para la compra mínima. Antes el cliente se enteraba recién al
+// confirmar (con un cartel de error); ahora lo ve mientras arma el pedido, en la
+// barra de abajo y en el carrito. Se mide con el mismo subtotal que se controla
+// al confirmar. Sin mínimo configurado, no se muestra nada.
+function actualizarAvisoMinimo(subtotal) {
+  const min = Number(adminConfig.minPurchase) || 0;
+  const barra = $('summary-min'), prog = $('summary-min-barra'), carrito = $('cart-min');
+  if (!min) { [barra, prog, carrito].forEach(el => el && (el.style.display = 'none')); return; }
+  const falta = min - subtotal;
+  const llego = falta <= 0;
+  const txt = llego ? '✓ Llegaste al mínimo' : 'Te faltan ' + formatPrecio(falta) + ' para el mínimo';
+  if (barra) { barra.style.display = ''; barra.textContent = txt; barra.classList.toggle('ok', llego); }
+  if (prog) {
+    prog.style.display = llego ? 'none' : '';
+    prog.firstElementChild.style.width = Math.min(100, Math.round(subtotal / min * 100)) + '%';
+  }
+  if (carrito) {
+    carrito.style.display = '';
+    carrito.textContent = llego ? '✓ Llegaste a la compra mínima de ' + formatPrecio(min)
+      : 'Te faltan ' + formatPrecio(falta) + ' para la compra mínima de ' + formatPrecio(min);
+    carrito.classList.toggle('ok', llego);
+  }
 }
 
 // Texto que ve el cliente cuando a un producto se le recortó el descuento de su
