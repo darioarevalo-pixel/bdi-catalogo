@@ -826,10 +826,10 @@
       </div>
       <div class="faq-item">
         <div class="faq-q">¿Hay descuento por cantidad?</div>
-        <div class="faq-a">Sí, para todos los clientes y sobre todo el pedido:<br>
+        <div class="faq-a">Sí, para todos los clientes:<br>
           · Desde <b>$1.000.000</b>: <b>5% OFF</b>.<br>
           · Desde <b>$2.000.000</b>: <b>10% OFF</b>.<br>
-          El descuento se aplica solo en tu pedido, y abajo vas a ver cuánto te falta para llegar.</div>
+          El descuento se aplica solo en tu pedido, y abajo vas a ver cuánto te falta para llegar. Los productos en oferta o liquidación suman para llegar al monto, pero no llevan descuento.</div>
       </div>
       <div class="faq-item">
         <div class="faq-q">¿A dónde y por dónde envían?</div>
@@ -1226,9 +1226,11 @@ const LOTES_NOMBRE = 'Lotes';
 let cuponAplicado = null; // cupón aplicado en el carrito (objeto) o null
 
 // DESCUENTO POR MONTO (escala), igual para todos los clientes (Darío, 11-nov-2026).
-// Se calcula sobre el subtotal de lista y se aplica a TODO el pedido, ofertas y
-// lotes incluidos (Darío lo quiso así a propósito). No se suma con un cupón: se
-// usa el que más descuenta. El servidor (api/proxy.js) tiene la misma tabla para
+// El escalón se alcanza con el subtotal de lista de TODO el pedido (las ofertas
+// suman para llegar), pero el descuento se aplica SOLO a los productos regulares:
+// ofertas, liquidación, Cyber y lotes quedan a su precio (Darío, 11-nov-2026;
+// cambia lo del 13-oct, cuando iba sobre todo). No se suma con un cupón: se usa
+// el que más descuenta. El servidor (api/proxy.js) tiene la misma tabla para
 // aceptar los precios rebajados: si se cambia acá, cambiarla también allá.
 const ESCALA_MONTO = [ { desde: 1000000, pct: 5 }, { desde: 2000000, pct: 10 } ];
 function escalaDe(subtotal) {
@@ -1239,9 +1241,9 @@ function escalaDe(subtotal) {
 function proximaEscala(subtotal) {
   return ESCALA_MONTO.find(t => subtotal < t.desde) || null;
 }
-function descuentoEscala(subtotal) {
+function descuentoEscala(subtotal, subtotalRegular) {
   const e = escalaDe(subtotal);
-  return e ? Math.round(subtotal * e.pct / 100) : 0;
+  return e ? Math.round(subtotalRegular * e.pct / 100) : 0;
 }
 
 // Lo que el stock le fue sacando del carrito mientras armaba ESTE pedido.
@@ -4194,7 +4196,7 @@ function updateCartUI() {
     }
     renderCuponUI(descuento, hayOferta);
     // Descuento por monto: si descuenta más que el cupón, manda él.
-    const esc = escalaDe(subtotal), descEsc = descuentoEscala(subtotal);
+    const esc = escalaDe(subtotal), descEsc = descuentoEscala(subtotal, subtotalDesc);
     const ganaEscala = descEsc > 0 && descEsc >= descuento;
     if (ganaEscala) { descuento = descEsc; total = Math.max(0, subtotal - descuento); }
     if ($('descuento-label')) $('descuento-label').textContent = ganaEscala ? 'Descuento ' + esc.pct + '% por monto' : 'Descuento';
@@ -4255,9 +4257,12 @@ function actualizarAvisoMinimo(subtotal) {
     relleno = subtotal / prox.desde;
   } else if (actual) {
     ok = true;
-    izq = '✓ Tenés ' + actual.pct + '% OFF en todo el pedido';
+    izq = '✓ Tenés ' + actual.pct + '% OFF';
     relleno = 1;
   }
+  // Con descuento ganado y ofertas en el pedido, se avisa que esas no lo llevan.
+  const hayOferta = Object.values(cart).some(cartItemOferta);
+  if (actual && hayOferta && !der) der = 'No aplica a ofertas';
   ['summary-min', 'cart-min'].forEach(id => {
     const el = $(id);
     if (!el) return;
@@ -4545,8 +4550,8 @@ async function confirmarPedido() {
       cupon = cuponAplicado; descuento = descuentoCupon(cupon, subtotalDesc);
     }
     // Descuento por monto: si descuenta más que el cupón, reemplaza al cupón y
-    // baja TODOS los renglones (ofertas incluidas) en el mismo porcentaje.
-    const escala = escalaDe(subtotal), descEscala = descuentoEscala(subtotal);
+    // baja los renglones regulares en ese porcentaje (las ofertas no se tocan).
+    const escala = escalaDe(subtotal), descEscala = descuentoEscala(subtotal, subtotalDesc);
     const usaEscala = descEscala > 0 && descEscala >= descuento;
     if (usaEscala) {
       descuento = descEscala;
@@ -4557,9 +4562,8 @@ async function confirmarPedido() {
     // quedan con su precio original (envío gratis no cambia precios).
     const factorCupon = (subtotalDesc > 0 && descuento > 0) ? (subtotalDesc - descuento) / subtotalDesc : 1;
     const factorEscala = usaEscala ? (1 - escala.pct / 100) : 1;
-    const precioRenglon = i => usaEscala
-      ? Math.round(i.precio * factorEscala * 100) / 100
-      : (cartItemOferta(i) ? i.precio : Math.round(i.precio * factorCupon * 100) / 100);
+    const precioRenglon = i => cartItemOferta(i) ? i.precio
+      : Math.round(i.precio * (usaEscala ? factorEscala : factorCupon) * 100) / 100;
     const cuponNota = usaEscala
       ? 'Descuento por monto ' + escala.pct + '%: -' + formatPrecio(descuento)
       : cupon
