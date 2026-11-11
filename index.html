@@ -64,8 +64,7 @@
   .summary-bar-left { display: flex; flex-direction: column; gap: 2px; }
   .summary-bar-fila { display: flex; flex-direction: column; gap: 2px; }
   /* Barra de progreso hacia la compra mínima (barra de abajo y carrito).
-     Dos formatos para comparar: A = texto arriba + barra fina (por defecto);
-     B = barra gruesa con el texto adentro (html.minimo-b). */
+     Primero empuja al mínimo y después al descuento por monto. */
   .summary-bar { flex-wrap: wrap; row-gap: 8px; }
   .minimo { flex-basis: 100%; order: -1; }
   .drawer-action { flex-wrap: wrap; row-gap: 10px; }
@@ -77,12 +76,8 @@
   .minimo-relleno { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 99px; background: var(--stock-ok); transition: width 0.35s ease; }
   .minimo.ok .minimo-falta { color: var(--stock-ok); }
   .minimo.oscuro.ok .minimo-falta { color: #4ADE80; }
-  .minimo-dentro { display: none; }
-  html.minimo-b .minimo-textos { display: none; }
-  html.minimo-b .minimo-pista { height: 24px; }
-  html.minimo-b .minimo-dentro { display: flex; position: absolute; inset: 0; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--text); z-index: 1; white-space: nowrap; }
-  html.minimo-b .minimo.oscuro .minimo-dentro { color: #fff; }
-  html.minimo-b .minimo.ok .minimo-dentro { color: #fff; }
+  .minimo.sin-barra .minimo-pista { display: none; }
+  .minimo.sin-barra .minimo-textos { margin-bottom: 0; }
   .summary-bar-units { font-size: 12px; opacity: 0.75; }
   .summary-bar-total { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
   .summary-bar-btn { background: white; color: var(--accent); border: none; border-radius: var(--radius-sm); padding: 10px 20px; font-family: inherit; font-size: 14px; font-weight: 700; cursor: pointer; white-space: nowrap; transition: opacity 0.15s; }
@@ -593,6 +588,7 @@
   .drawer-action-tot { display: flex; flex-direction: column; line-height: 1.2; }
   .drawer-action-lbl { font-size: 12px; color: var(--text-muted); }
   .drawer-action-amt { font-size: 20px; font-weight: 700; color: var(--text); }
+  #action-antes { margin-left: 4px; color: var(--text-hint); }
   .drawer-action-btn { width: auto !important; flex: 1; max-width: 55%; margin-left: auto; }
   .cart-vaciar { width: 100%; margin-top: 14px; background: none; border: none; color: var(--text-hint); font-family: inherit; font-size: 12px; text-decoration: underline; cursor: pointer; padding: 6px; }
   .total-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 1rem; }
@@ -829,6 +825,13 @@
         <div class="faq-a"><span class="faq-min-respuesta">La compra mínima es de <span class="faq-min-monto">$100.000</span>.</span></div>
       </div>
       <div class="faq-item">
+        <div class="faq-q">¿Hay descuento por cantidad?</div>
+        <div class="faq-a">Sí, para todos los clientes y sobre todo el pedido:<br>
+          · Desde <b>$1.000.000</b>: <b>5% OFF</b>.<br>
+          · Desde <b>$2.000.000</b>: <b>10% OFF</b>.<br>
+          El descuento se aplica solo en tu pedido, y abajo vas a ver cuánto te falta para llegar.</div>
+      </div>
+      <div class="faq-item">
         <div class="faq-q">¿A dónde y por dónde envían?</div>
         <div class="faq-a">Enviamos a todo el país por Correo Argentino, Andreani, Vía Cargo o Sendbox. También podemos despachar en tu transporte de confianza.</div>
       </div>
@@ -959,7 +962,7 @@
       <span class="total-sub-amount" id="subtotal-amount">$0</span>
     </div>
     <div class="total-row" id="descuento-row" style="display:none">
-      <span class="total-sub-label desc">Descuento</span>
+      <span class="total-sub-label desc" id="descuento-label">Descuento</span>
       <span class="total-sub-amount desc" id="descuento-amount">-$0</span>
     </div>
     <div class="total-row">
@@ -1005,9 +1008,9 @@
   <!-- Barra pegada abajo. En la hoja 1 (el pedido) muestra el total y lleva a
        cerrar la compra; en la hoja 2 (los datos) es el botón de confirmar. -->
   <div class="drawer-action" id="drawer-action" style="display:none">
-    <div class="minimo" id="cart-min" style="display:none"><div class="minimo-textos"><span class="minimo-falta"></span><span class="minimo-meta"></span></div><div class="minimo-pista"><span class="minimo-relleno"></span><span class="minimo-dentro"></span></div></div>
+    <div class="minimo" id="cart-min" style="display:none"><div class="minimo-textos"><span class="minimo-falta"></span><span class="minimo-meta"></span></div><div class="minimo-pista"><span class="minimo-relleno"></span></div></div>
     <div class="drawer-action-tot">
-      <span class="drawer-action-lbl">Total</span>
+      <span class="drawer-action-lbl">Total <s id="action-antes" style="display:none"></s></span>
       <span class="drawer-action-amt" id="action-total">$0</span>
     </div>
     <button class="btn btn-accent drawer-action-btn" onclick="irACerrar()">Continuar</button>
@@ -1059,7 +1062,7 @@
       <div class="summary-bar-total" id="summary-total"></div>
     </div>
   </div>
-  <div class="minimo oscuro" id="summary-min" style="display:none"><div class="minimo-textos"><span class="minimo-falta"></span><span class="minimo-meta"></span></div><div class="minimo-pista"><span class="minimo-relleno"></span><span class="minimo-dentro"></span></div></div>
+  <div class="minimo oscuro" id="summary-min" style="display:none"><div class="minimo-textos"><span class="minimo-falta"></span><span class="minimo-meta"></span></div><div class="minimo-pista"><span class="minimo-relleno"></span></div></div>
   <button class="summary-bar-btn" onclick="abrirCarrito()">Ver pedido →</button>
 </div>
 
@@ -1221,6 +1224,25 @@ function loteDe(id) {
 }
 const LOTES_NOMBRE = 'Lotes';
 let cuponAplicado = null; // cupón aplicado en el carrito (objeto) o null
+
+// DESCUENTO POR MONTO (escala), igual para todos los clientes (Darío, 11-nov-2026).
+// Se calcula sobre el subtotal de lista y se aplica a TODO el pedido, ofertas y
+// lotes incluidos (Darío lo quiso así a propósito). No se suma con un cupón: se
+// usa el que más descuenta. El servidor (api/proxy.js) tiene la misma tabla para
+// aceptar los precios rebajados: si se cambia acá, cambiarla también allá.
+const ESCALA_MONTO = [ { desde: 1000000, pct: 5 }, { desde: 2000000, pct: 10 } ];
+function escalaDe(subtotal) {
+  let e = null;
+  for (const t of ESCALA_MONTO) if (subtotal >= t.desde) e = t;
+  return e;
+}
+function proximaEscala(subtotal) {
+  return ESCALA_MONTO.find(t => subtotal < t.desde) || null;
+}
+function descuentoEscala(subtotal) {
+  const e = escalaDe(subtotal);
+  return e ? Math.round(subtotal * e.pct / 100) : 0;
+}
 
 // Lo que el stock le fue sacando del carrito mientras armaba ESTE pedido.
 //
@@ -4171,6 +4193,11 @@ function updateCartUI() {
       else { descuento = descuentoCupon(cuponAplicado, subtotalDesc); total = Math.max(0, subtotal - descuento); }
     }
     renderCuponUI(descuento, hayOferta);
+    // Descuento por monto: si descuenta más que el cupón, manda él.
+    const esc = escalaDe(subtotal), descEsc = descuentoEscala(subtotal);
+    const ganaEscala = descEsc > 0 && descEsc >= descuento;
+    if (ganaEscala) { descuento = descEsc; total = Math.max(0, subtotal - descuento); }
+    if ($('descuento-label')) $('descuento-label').textContent = ganaEscala ? 'Descuento ' + esc.pct + '% por monto' : 'Descuento';
     if ($('subtotal-row')) $('subtotal-row').style.display = descuento > 0 ? 'flex' : 'none';
     if ($('descuento-row')) $('descuento-row').style.display = descuento > 0 ? 'flex' : 'none';
     if ($('subtotal-amount')) $('subtotal-amount').textContent = formatPrecio(subtotal);
@@ -4179,6 +4206,7 @@ function updateCartUI() {
 
   if ($('total-amount')) $('total-amount').textContent = formatPrecio(total);
   if ($('action-total')) $('action-total').textContent = formatPrecio(total);
+  if ($('action-antes')) { $('action-antes').textContent = formatPrecio(subtotal); $('action-antes').style.display = total < subtotal ? '' : 'none'; }
   actualizarCabeceraPedido();
 
   // Barra flotante — se actualiza SIEMPRE (no depende del bloque de arriba).
@@ -4205,17 +4233,41 @@ function updateCartUI() {
 // al confirmar. Sin mínimo configurado, no se muestra nada.
 function actualizarAvisoMinimo(subtotal) {
   const min = Number(adminConfig.minPurchase) || 0;
+  // Qué se muestra según cuánto lleva el pedido:
+  //  · debajo del mínimo: cuánto falta para el mínimo;
+  //  · del mínimo hasta $500.000: «✓ Mínimo cumplido» y desde cuánto hay descuento (sin barra: queda lejos);
+  //  · desde $500.000: cuánto falta para el próximo descuento;
+  //  · arriba del último escalón: el descuento que ya tiene.
+  const VER_BARRA_DESDE = 500000;
+  let izq = '', der = '', relleno = 0, ok = false, barra = true;
+  const actual = escalaDe(subtotal), prox = proximaEscala(subtotal);
+  if (min && subtotal < min) {
+    izq = 'Te faltan ' + formatPrecio(min - subtotal) + ' para el mínimo';
+    der = 'Mínimo ' + formatPrecio(min);
+    relleno = subtotal / min;
+  } else if (prox && subtotal < VER_BARRA_DESDE && !actual) {
+    ok = true; barra = false;
+    izq = min ? '✓ Mínimo cumplido' : '';
+    der = prox.pct + '% OFF desde ' + formatPrecio(prox.desde);
+  } else if (prox) {
+    izq = 'Te faltan ' + formatPrecio(prox.desde - subtotal) + ' para ' + prox.pct + '% OFF';
+    der = actual ? '✓ Tenés ' + actual.pct + '% OFF' : 'Meta ' + formatPrecio(prox.desde);
+    relleno = subtotal / prox.desde;
+  } else if (actual) {
+    ok = true;
+    izq = '✓ Tenés ' + actual.pct + '% OFF en todo el pedido';
+    relleno = 1;
+  }
   ['summary-min', 'cart-min'].forEach(id => {
     const el = $(id);
     if (!el) return;
-    if (!min) { el.style.display = 'none'; return; }
-    const falta = min - subtotal, llego = falta <= 0;
+    if (!izq && !der) { el.style.display = 'none'; return; }
     el.style.display = '';
-    el.classList.toggle('ok', llego);
-    el.querySelector('.minimo-falta').textContent = llego ? '✓ Llegaste al mínimo' : 'Te faltan ' + formatPrecio(falta);
-    el.querySelector('.minimo-meta').textContent = 'Mínimo ' + formatPrecio(min);
-    el.querySelector('.minimo-dentro').textContent = llego ? '✓ Llegaste al mínimo' : 'Te faltan ' + formatPrecio(falta) + ' para el mínimo';
-    el.querySelector('.minimo-relleno').style.width = Math.max(4, Math.min(100, Math.round(subtotal / min * 100))) + '%';
+    el.classList.toggle('ok', ok);
+    el.classList.toggle('sin-barra', !barra);
+    el.querySelector('.minimo-falta').textContent = izq;
+    el.querySelector('.minimo-meta').textContent = der;
+    el.querySelector('.minimo-relleno').style.width = Math.max(4, Math.min(100, Math.round(relleno * 100))) + '%';
   });
 }
 
@@ -4492,11 +4544,25 @@ async function confirmarPedido() {
     if (cuponAplicado && cuponSigueValido(cuponAplicado, subtotal).ok) {
       cupon = cuponAplicado; descuento = descuentoCupon(cupon, subtotalDesc);
     }
+    // Descuento por monto: si descuenta más que el cupón, reemplaza al cupón y
+    // baja TODOS los renglones (ofertas incluidas) en el mismo porcentaje.
+    const escala = escalaDe(subtotal), descEscala = descuentoEscala(subtotal);
+    const usaEscala = descEscala > 0 && descEscala >= descuento;
+    if (usaEscala) {
+      descuento = descEscala;
+      cupon = { codigo: escala.pct + '% por compra desde ' + formatPrecio(escala.desde), tipo: 'porcentaje', valor: escala.pct, detalle: '' };
+    }
     const totalFinal = Math.max(0, subtotal - descuento);
     // Bajamos proporcionalmente el precio de cada ítem descontable; las ofertas
     // quedan con su precio original (envío gratis no cambia precios).
     const factorCupon = (subtotalDesc > 0 && descuento > 0) ? (subtotalDesc - descuento) / subtotalDesc : 1;
-    const cuponNota = cupon
+    const factorEscala = usaEscala ? (1 - escala.pct / 100) : 1;
+    const precioRenglon = i => usaEscala
+      ? Math.round(i.precio * factorEscala * 100) / 100
+      : (cartItemOferta(i) ? i.precio : Math.round(i.precio * factorCupon * 100) / 100);
+    const cuponNota = usaEscala
+      ? 'Descuento por monto ' + escala.pct + '%: -' + formatPrecio(descuento)
+      : cupon
       ? (cupon.tipo === 'envio'
           ? 'ENVÍO BONIFICADO (' + cupon.codigo + (cupon.detalle ? ' - ' + cupon.detalle : '') + ')'
           : 'Cupón ' + cupon.codigo + ': -' + formatPrecio(descuento))
@@ -4511,7 +4577,7 @@ async function confirmarPedido() {
       sale_state_id: 1,
       discount_inventory: true,
       comments: [clientName, contact, email, 'Pago: ' + payment, 'Entrega: ' + delivery, cuponNota, obs].filter(Boolean).join(' — '),
-      items: items.map(i => ({ product_id: i.id, ...(i.sizeId ? { size_id: i.sizeId } : {}), quantity: i.qty, unit_price: cartItemOferta(i) ? i.precio : Math.round(i.precio * factorCupon * 100) / 100 })),
+      items: items.map(i => ({ product_id: i.id, ...(i.sizeId ? { size_id: i.sizeId } : {}), quantity: i.qty, unit_price: precioRenglon(i) })),
       // Para el ERP (el proxy lo saca antes de mandarle el pedido a GN): una clave
       // nueva por confirmación y los datos del cliente, que a GN sólo le llegan
       // como texto en `comments`.
@@ -4587,7 +4653,8 @@ async function confirmarPedido() {
       '\nEmail: ' + email +
       '\nPago: ' + payment +
       '\nEntrega: ' + delivery +
-      (cupon ? '\nCupón: ' + cupon.codigo + (cupon.tipo === 'envio' ? ' (ENVÍO BONIFICADO' + (cupon.detalle ? ' - ' + cupon.detalle : '') + ')' : ' (-' + formatPrecio(descuento) + ')') : '') +
+      (usaEscala ? '\nDescuento ' + escala.pct + '% por monto: -' + formatPrecio(descuento) : '') +
+      (cupon && !usaEscala ? '\nCupón: ' + cupon.codigo + (cupon.tipo === 'envio' ? ' (ENVÍO BONIFICADO' + (cupon.detalle ? ' - ' + cupon.detalle : '') + ')' : ' (-' + formatPrecio(descuento) + ')') : '') +
       '\nTotal: ' + formatPrecio(totalPedido) +
       (obs ? '\nObservaciones: ' + obs : '') +
       (pedidoUrl ? '\n\nDetalle del pedido: ' + pedidoUrl : '') +

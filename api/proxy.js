@@ -887,8 +887,24 @@ function pisoDeRenglon(item, p, cfg, afloje) {
   return piso;
 }
 
+// DESCUENTO POR MONTO (escala, 11-nov-2026): misma tabla que index.html. El
+// catálogo baja TODOS los renglones en ese % cuando el subtotal de lista llega
+// al escalón, así que acá el piso se afloja en ese % solo si el pedido, tal como
+// llega (ya rebajado), alcanza el escalón: total ≥ desde × (1 − pct).
+const ESCALA_MONTO = [ { desde: 1000000, pct: 5 }, { desde: 2000000, pct: 10 } ];
+function aflojeDeEscala(items) {
+  const total = items.reduce((s, i) => s + (parseFloat(i.unit_price) || 0) * (parseFloat(i.quantity) || 0), 0);
+  let fraccion = 0;
+  for (const t of ESCALA_MONTO) {
+    if (total >= t.desde * (1 - t.pct / 100) * (1 - TOLERANCIA_PORCENTAJE)) fraccion = Math.max(fraccion, t.pct / 100);
+  }
+  return fraccion;
+}
+
 function revisarPrecios(items, productos, cfg) {
-  const { fraccion, incierto } = aflojeDeCupones(cfg);
+  const cupones = aflojeDeCupones(cfg);
+  const incierto = cupones.incierto;
+  const fraccion = Math.max(cupones.fraccion, aflojeDeEscala(items));
   if (incierto) {
     // Que se vea en el registro: mientras dure el cupón de monto, el control de
     // precios queda mirando sin trabar. Si esto aparece sin cupón de monto
