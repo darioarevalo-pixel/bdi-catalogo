@@ -1307,7 +1307,7 @@ function promoBadge(p) {
   const id = p.id || p.product_id;
   const pr = promoDe(id);
   if (!pr || esOferta(p)) return '';
-  return '<span class="badge-promo">' + pr.pct + '% OFF llevando +' + pr.desde + 'u</span>';
+  return '<span class="badge-promo">' + pr.pct + '% OFF llevando ' + pr.desde + ' o más</span>';
 }
 function cartelPromo(prods) {
   if (categoria === 'todas') return '';
