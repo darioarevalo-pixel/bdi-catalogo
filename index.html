@@ -357,10 +357,10 @@
   .product-card .product-img-wrap .product-img-badge:not(.oferta):not(.nuevo) { display: none; }
   .lista-foto .badge-nuevo-inline { order: 2; flex: 0 0 auto; align-self: center; }
   /* Promo por cantidad (Marketing › Descuentos): etiqueta negra al lado del nombre. */
-  .badge-promo { display: block; color: var(--stock-ok); font-size: 12px; font-weight: 700; margin: 2px 0 4px; white-space: nowrap; }
+  .badge-promo { display: block; color: var(--stock-ok); font-size: 12px; font-weight: 700; margin: 2px 0 4px; }
   /* En la vista del celular va debajo del precio (en el renglón del nombre no entra). */
   .lista-foto .product-body .badge-promo { display: none; }
-  .lista-foto .precio-lista .badge-promo { margin: 3px 0 0; }
+  .lista-foto .precio-lista .badge-promo { margin: 3px 0 0; white-space: nowrap; }
   .lista-foto .product-img-wrap .product-img-badge.nuevo { display: none; }
   /* El descuento se decía dos veces: el cartelito rojo sobre la foto y el -40%
      al lado del precio. Se queda el del precio, que va junto al precio viejo
@@ -1299,21 +1299,28 @@ function calcularDescuentos(items, subtotal) {
     pctDe.set(i, pct);
   });
   const partes = [];
-  promosActivas().forEach(pr => { const v = porFuente['promo:' + pr.id]; if (v) partes.push({ txt: pr.pct + '% ' + (pr.nombre || 'promo'), monto: Math.round(v) }); });
+  promosActivas().forEach(pr => { const v = porFuente['promo:' + pr.id]; if (v) partes.push({ txt: pr.pct + '% ' + nombrePromo(pr, 'promo'), monto: Math.round(v) }); });
   if (porFuente.escala) partes.push({ txt: esc.pct + '% por monto', monto: Math.round(porFuente.escala) });
   return { total: Math.round(total), pctDe, partes, unidades, escala: esc };
+}
+// Nombre de la promo como se muestra: cada palabra con mayúscula, salvo las
+// chicas («smartwatch y auriculares» → «Smartwatch y Auriculares»).
+function nombrePromo(pr, siVacio) {
+  const n = String((pr && pr.nombre) || '').trim();
+  if (!n) return siVacio || 'la promo';
+  return n.split(/\s+/).map(w => /^(y|e|o|u|de|del|la|las|el|los|con|para|en)$/i.test(w) ? w.toLowerCase() : w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 }
 function promoBadge(p) {
   const id = p.id || p.product_id;
   const pr = promoDe(id);
   if (!pr || esOferta(p)) return '';
-  return '<span class="badge-promo">' + pr.pct + '% OFF llevando ' + pr.desde + ' o más</span>';
+  return '<span class="badge-promo">' + pr.pct + '% OFF desde ' + pr.desde + ' unidades</span>';
 }
 function cartelPromo(prods) {
   if (categoria === 'todas') return '';
   const pr = prods.map(p => promoDe(p.id || p.product_id)).find(Boolean);
   if (!pr) return '';
-  return '<div class="lote-expl promo-expl"><b>' + pr.pct + '% OFF llevando ' + pr.desde + ' o más</b> de ' + (pr.nombre || 'estos productos') + '. Podés combinarlos.</div>';
+  return '<div class="lote-expl promo-expl"><b>' + pr.pct + '% OFF llevando ' + pr.desde + ' unidades o más</b> de ' + nombrePromo(pr, 'estos productos') + '. Podés combinarlos.</div>';
 }
 
 // Lo que el stock le fue sacando del carrito mientras armaba ESTE pedido.
@@ -1922,7 +1929,7 @@ function aplicarDescuentosFAQ() {
   const el = document.getElementById('faq-desc-lista');
   if (!el) return;
   const filas = escalaTabla().map(t => '· Desde <b>' + formatPrecio(t.desde) + '</b>: <b>' + t.pct + '% OFF</b>.')
-    .concat(promosActivas().map(pr => '· <b>' + pr.pct + '% OFF</b> llevando <b>' + pr.desde + ' o más</b> de ' + (pr.nombre || 'la promo') + ' (podés combinarlos).'));
+    .concat(promosActivas().map(pr => '· <b>' + pr.pct + '% OFF</b> llevando <b>' + pr.desde + ' unidades o más</b> de ' + nombrePromo(pr) + ' (podés combinarlos).'));
   el.innerHTML = filas.join('<br>') + '<br>';
   const item = document.getElementById('faq-descuentos');
   if (item) item.closest('.faq-item').style.display = filas.length ? '' : 'none';
@@ -4339,11 +4346,11 @@ function actualizarAvisoMinimo(subtotal) {
     relleno = subtotal / min;
   } else if (empezada) {
     const falta = +empezada.pr.desde - empezada.u;
-    izq = 'Sumá ' + falta + ' más de ' + (empezada.pr.nombre || 'la promo') + ' y tenés ' + empezada.pr.pct + '% OFF';
+    izq = 'Sumá ' + falta + (falta === 1 ? ' unidad' : ' unidades') + ' más de ' + nombrePromo(empezada.pr) + ' y tenés ' + empezada.pr.pct + '% OFF';
     relleno = empezada.u / +empezada.pr.desde;
   } else if (prox && subtotal < VER_BARRA_DESDE && !actual) {
     ok = true; barra = false;
-    izq = cumplida ? '✓ ' + cumplida.pct + '% OFF en ' + (cumplida.nombre || 'la promo') : (min ? '✓ Mínimo cumplido' : '');
+    izq = cumplida ? '✓ ' + cumplida.pct + '% OFF en ' + nombrePromo(cumplida) : (min ? '✓ Mínimo cumplido' : '');
     der = prox.pct + '% OFF desde ' + formatPrecio(prox.desde);
   } else if (prox) {
     izq = 'Te faltan ' + formatPrecio(prox.desde - subtotal) + ' para ' + prox.pct + '% OFF';
