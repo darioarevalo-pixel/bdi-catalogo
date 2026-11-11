@@ -357,8 +357,10 @@
   .product-card .product-img-wrap .product-img-badge:not(.oferta):not(.nuevo) { display: none; }
   .lista-foto .badge-nuevo-inline { order: 2; flex: 0 0 auto; align-self: center; }
   /* Promo por cantidad (Marketing › Descuentos): etiqueta negra al lado del nombre. */
-  .badge-promo { display: inline-block; background: var(--text); color: #fff; font-size: 9px; font-weight: 700; letter-spacing: 0.3px; padding: 2px 5px; border-radius: 4px; margin: 0 0 4px; white-space: nowrap; }
-  .lista-foto .badge-promo { order: 3; flex: 0 0 auto; align-self: center; margin: 0 0 0 4px; }
+  .badge-promo { display: block; color: var(--stock-ok); font-size: 12px; font-weight: 700; margin: 2px 0 4px; white-space: nowrap; }
+  /* En la vista del celular va debajo del precio (en el renglón del nombre no entra). */
+  .lista-foto .product-body .badge-promo { display: none; }
+  .lista-foto .precio-lista .badge-promo { margin: 3px 0 0; }
   .lista-foto .product-img-wrap .product-img-badge.nuevo { display: none; }
   /* El descuento se decía dos veces: el cartelito rojo sobre la foto y el -40%
      al lado del precio. Se queda el del precio, que va junto al precio viejo
@@ -1305,7 +1307,7 @@ function promoBadge(p) {
   const id = p.id || p.product_id;
   const pr = promoDe(id);
   if (!pr || esOferta(p)) return '';
-  return '<span class="badge-promo">' + pr.pct + '% OFF x' + pr.desde + '</span>';
+  return '<span class="badge-promo">' + pr.pct + '% OFF llevando +' + pr.desde + 'u</span>';
 }
 function cartelPromo(prods) {
   if (categoria === 'todas') return '';
@@ -3803,18 +3805,18 @@ function renderVariantesGrid(prods, ofertaTodas) {
         '</div>' +
         '<div class="product-body" style="cursor:pointer;flex:0 0 auto" onclick="abrirDesdeCard(' + id + ',this)">' +
           (nuevoBadge(id) ? '<span class="badge-nuevo-inline">NUEVO</span>' : '') +
-          promoBadge(p) +
           (cat ? '<div class="product-cat">' + cat + '</div>' : '') +
           '<div class="product-name">' + nombre + '</div>' +
           (cod ? '<div class="product-code">' + cod + '</div>' : '') +
           precioHTML +
+          promoBadge(p) +
           (conDesc ? '<div class="product-ver-mas">Ver características ›</div>' : '') +
         '</div>' +
         // El mismo precio, suelto: en la vista de lista va arriba a la derecha,
         // encabezando la columna de los modelos. En las otras vistas no se ve.
         // En la lista (la vista del celular) tocar la tarjeta abre la foto, no la ficha:
         // por eso «Ver características» va acá, debajo del precio, y abre la ficha.
-        '<div class="precio-lista">' + precioHTML +
+        '<div class="precio-lista">' + precioHTML + promoBadge(p) +
           (conDesc ? '<div class="product-ver-mas lista" onclick="abrirModalSoloGaleria(' + id + ');event.stopPropagation()">Ver características ›</div>' : '') +
         '</div>' +
         variantsHTML +
