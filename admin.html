@@ -554,12 +554,10 @@
   <div class="tabs">
     <div class="tab-subs active" data-group="catalogo">
       <button class="tab-btn active" onclick="setTab('products')">Productos</button>
-      <button class="tab-btn" onclick="setTab('categories')">Categorías</button>
       <button class="tab-btn" onclick="setTab('fotos')">Fotos</button>
       <button class="tab-btn" id="tab-btn-topes" onclick="setTab('topes')">🛡 Protección de stock</button>
     </div>
     <div class="tab-subs" data-group="precios">
-      <button class="tab-btn" id="tab-btn-recargos" onclick="setTab('recargos')">🎯 Lista mejor</button>
       <button class="tab-btn" id="tab-btn-prices" onclick="setTab('prices')">Precios</button>
       <button class="tab-btn" onclick="setTab('margenes')">Márgenes</button>
       <button class="tab-btn" id="tab-btn-pendientes" onclick="setTab('pendientes')">Pendientes</button>
@@ -575,7 +573,6 @@
       <button class="tab-btn" onclick="setTab('banners')">Banners</button>
       <button class="tab-btn" onclick="setTab('descuentos')">🏷 Descuentos</button>
       <button class="tab-btn" onclick="setTab('cupones')">Cupones</button>
-      <button class="tab-btn" onclick="setTab('codigos')">🔑 Códigos</button>
     </div>
     <div class="tab-subs" data-group="ajustes">
       <button class="tab-btn" onclick="setTab('settings')">Configuración</button>
@@ -959,16 +956,6 @@
         <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
           <span style="font-size:14px;color:var(--text-muted)">$</span>
           <input type="number" id="input-min-purchase" min="0" step="1000" style="width:130px;padding:8px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font-family:inherit;font-size:14px;outline:none" oninput="config.minPurchase=parseInt(this.value)||0" />
-        </div>
-      </div>
-      <div class="setting-row" style="flex-wrap:wrap;gap:8px">
-        <div class="setting-info">
-          <div class="setting-label">Descuento base de la "lista mejor" (%)</div>
-          <div class="setting-desc">Descuento general sobre el precio mayorista para clientes con código. Cada producto puede tener una excepción (pestaña "Lista mejor"). El precio nunca baja del costo, salvo excepción.</div>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
-          <input type="number" id="input-descuento-base" min="0" max="90" step="1" style="width:90px;padding:8px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font-family:inherit;font-size:14px;outline:none" oninput="config.descuentoBase=parseInt(this.value)||0" />
-          <span style="font-size:14px;color:var(--text-muted)">%</span>
         </div>
       </div>
       <div class="setting-row">
@@ -1838,10 +1825,10 @@ function prodDrop(e, cat, catIdx, toProdIdx) {
 
 // Agrupación de las pestañas en 5 grupos (navegación de 2 niveles).
 const TAB_GROUPS = {
-  catalogo: ['products', 'categories', 'fotos', 'topes'],
-  precios: ['recargos', 'prices', 'margenes', 'pendientes', 'generador'],
+  catalogo: ['products', 'fotos', 'topes'],
+  precios: ['prices', 'margenes', 'pendientes', 'generador'],
   pedidos: ['pedidos', 'carritos', 'pedido', 'nota'],
-  marketing: ['banners', 'descuentos', 'cupones', 'codigos'],
+  marketing: ['banners', 'descuentos', 'cupones'],
   ajustes: ['settings'],
 };
 function grupoDeTab(tab) {
