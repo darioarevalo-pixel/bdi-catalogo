@@ -63,14 +63,26 @@
   body.has-summary-bar .main { padding-bottom: 92px; }
   .summary-bar-left { display: flex; flex-direction: column; gap: 2px; }
   .summary-bar-fila { display: flex; flex-direction: column; gap: 2px; }
-  /* Cuánto falta para la compra mínima (barra de abajo y carrito). */
-  .minimo-aviso { font-size: 12px; font-weight: 600; color: #FCD34D; }
-  .minimo-aviso.ok { color: #86EFAC; }
-  .minimo-progreso { position: absolute; left: 0; right: 0; top: 0; height: 3px; background: rgba(255,255,255,0.18); }
-  .minimo-progreso span { display: block; height: 100%; width: 0; background: #FCD34D; transition: width 0.3s ease; }
-  .drawer-action { flex-wrap: wrap; }
-  .minimo-aviso-carrito { flex-basis: 100%; padding: 8px 10px; border-radius: var(--radius-sm); background: #FEF3C7; color: #92400E; font-size: 13px; font-weight: 600; }
-  .minimo-aviso-carrito.ok { background: #DCFCE7; color: #166534; }
+  /* Barra de progreso hacia la compra mínima (barra de abajo y carrito).
+     Dos formatos para comparar: A = texto arriba + barra fina (por defecto);
+     B = barra gruesa con el texto adentro (html.minimo-b). */
+  .summary-bar { flex-wrap: wrap; row-gap: 8px; }
+  .minimo { flex-basis: 100%; order: -1; }
+  .drawer-action { flex-wrap: wrap; row-gap: 10px; }
+  .drawer-action .minimo { margin-bottom: 2px; }
+  .minimo-textos { display: flex; justify-content: space-between; align-items: baseline; font-size: 12.5px; font-weight: 700; margin-bottom: 5px; }
+  .minimo-meta { font-weight: 500; opacity: 0.7; font-size: 11.5px; }
+  .minimo-pista { position: relative; height: 8px; border-radius: 99px; background: #E5E7EB; overflow: hidden; }
+  .minimo.oscuro .minimo-pista { background: rgba(255,255,255,0.18); }
+  .minimo-relleno { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 99px; background: var(--stock-ok); transition: width 0.35s ease; }
+  .minimo.ok .minimo-falta { color: var(--stock-ok); }
+  .minimo.oscuro.ok .minimo-falta { color: #4ADE80; }
+  .minimo-dentro { display: none; }
+  html.minimo-b .minimo-textos { display: none; }
+  html.minimo-b .minimo-pista { height: 24px; }
+  html.minimo-b .minimo-dentro { display: flex; position: absolute; inset: 0; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--text); z-index: 1; white-space: nowrap; }
+  html.minimo-b .minimo.oscuro .minimo-dentro { color: #fff; }
+  html.minimo-b .minimo.ok .minimo-dentro { color: #fff; }
   .summary-bar-units { font-size: 12px; opacity: 0.75; }
   .summary-bar-total { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
   .summary-bar-btn { background: white; color: var(--accent); border: none; border-radius: var(--radius-sm); padding: 10px 20px; font-family: inherit; font-size: 14px; font-weight: 700; cursor: pointer; white-space: nowrap; transition: opacity 0.15s; }
@@ -993,7 +1005,7 @@
   <!-- Barra pegada abajo. En la hoja 1 (el pedido) muestra el total y lleva a
        cerrar la compra; en la hoja 2 (los datos) es el botón de confirmar. -->
   <div class="drawer-action" id="drawer-action" style="display:none">
-    <div class="minimo-aviso-carrito" id="cart-min" style="display:none"></div>
+    <div class="minimo" id="cart-min" style="display:none"><div class="minimo-textos"><span class="minimo-falta"></span><span class="minimo-meta"></span></div><div class="minimo-pista"><span class="minimo-relleno"></span><span class="minimo-dentro"></span></div></div>
     <div class="drawer-action-tot">
       <span class="drawer-action-lbl">Total</span>
       <span class="drawer-action-amt" id="action-total">$0</span>
@@ -1046,9 +1058,8 @@
       <div class="summary-bar-units" id="summary-units"></div>
       <div class="summary-bar-total" id="summary-total"></div>
     </div>
-    <div class="minimo-aviso" id="summary-min" style="display:none"></div>
   </div>
-  <div class="minimo-progreso" id="summary-min-barra" style="display:none"><span></span></div>
+  <div class="minimo oscuro" id="summary-min" style="display:none"><div class="minimo-textos"><span class="minimo-falta"></span><span class="minimo-meta"></span></div><div class="minimo-pista"><span class="minimo-relleno"></span><span class="minimo-dentro"></span></div></div>
   <button class="summary-bar-btn" onclick="abrirCarrito()">Ver pedido →</button>
 </div>
 
@@ -4194,22 +4205,18 @@ function updateCartUI() {
 // al confirmar. Sin mínimo configurado, no se muestra nada.
 function actualizarAvisoMinimo(subtotal) {
   const min = Number(adminConfig.minPurchase) || 0;
-  const barra = $('summary-min'), prog = $('summary-min-barra'), carrito = $('cart-min');
-  if (!min) { [barra, prog, carrito].forEach(el => el && (el.style.display = 'none')); return; }
-  const falta = min - subtotal;
-  const llego = falta <= 0;
-  const txt = llego ? '✓ Llegaste al mínimo' : 'Te faltan ' + formatPrecio(falta) + ' para el mínimo';
-  if (barra) { barra.style.display = ''; barra.textContent = txt; barra.classList.toggle('ok', llego); }
-  if (prog) {
-    prog.style.display = llego ? 'none' : '';
-    prog.firstElementChild.style.width = Math.min(100, Math.round(subtotal / min * 100)) + '%';
-  }
-  if (carrito) {
-    carrito.style.display = '';
-    carrito.textContent = llego ? '✓ Llegaste a la compra mínima de ' + formatPrecio(min)
-      : 'Te faltan ' + formatPrecio(falta) + ' para la compra mínima de ' + formatPrecio(min);
-    carrito.classList.toggle('ok', llego);
-  }
+  ['summary-min', 'cart-min'].forEach(id => {
+    const el = $(id);
+    if (!el) return;
+    if (!min) { el.style.display = 'none'; return; }
+    const falta = min - subtotal, llego = falta <= 0;
+    el.style.display = '';
+    el.classList.toggle('ok', llego);
+    el.querySelector('.minimo-falta').textContent = llego ? '✓ Llegaste al mínimo' : 'Te faltan ' + formatPrecio(falta);
+    el.querySelector('.minimo-meta').textContent = 'Mínimo ' + formatPrecio(min);
+    el.querySelector('.minimo-dentro').textContent = llego ? '✓ Llegaste al mínimo' : 'Te faltan ' + formatPrecio(falta) + ' para el mínimo';
+    el.querySelector('.minimo-relleno').style.width = Math.max(4, Math.min(100, Math.round(subtotal / min * 100))) + '%';
+  });
 }
 
 // Texto que ve el cliente cuando a un producto se le recortó el descuento de su
