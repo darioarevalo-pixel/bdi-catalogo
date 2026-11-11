@@ -771,6 +771,11 @@
      más que fundas. En el celular la fila se desliza con el dedo. */
   .cat-chips { display: flex; gap: 8px; margin: -0.25rem 0 1.25rem; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
   .cat-chips::-webkit-scrollbar { display: none; }
+  /* Si hay más categorías a la derecha (o a la izquierda, después de deslizar),
+     el borde se desvanece: así se nota que la fila sigue. Lo marca marcarChipsScroll(). */
+  .cat-chips.hay-mas { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 56px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 56px), transparent); }
+  .cat-chips.hay-antes { -webkit-mask-image: linear-gradient(to right, transparent, #000 40px); mask-image: linear-gradient(to right, transparent, #000 40px); }
+  .cat-chips.hay-antes.hay-mas { -webkit-mask-image: linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 56px), transparent); mask-image: linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 56px), transparent); }
   .cat-chip { flex-shrink: 0; padding: 7px 14px; border-radius: 20px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; transition: background 0.15s, color 0.15s, border-color 0.15s; }
   .cat-chip:hover { border-color: var(--accent); }
   .cat-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
@@ -2215,7 +2220,20 @@ function coincideCategoria(p) {
   return cat === categoria;
 }
 
+function marcarChipsScroll() {
+  const c = $('cat-chips');
+  if (!c) return;
+  c.classList.toggle('hay-mas', c.scrollLeft + c.clientWidth < c.scrollWidth - 4);
+  c.classList.toggle('hay-antes', c.scrollLeft > 4);
+}
+window.addEventListener('DOMContentLoaded', () => {
+  const c = $('cat-chips');
+  if (c) c.addEventListener('scroll', marcarChipsScroll, { passive: true });
+});
+window.addEventListener('resize', marcarChipsScroll);
+
 function renderCatChips(orderedCats) {
+  setTimeout(marcarChipsScroll, 0); // después de dibujar los botones
   const cont = $('cat-chips');
   if (!cont) return;
   const botones = [];
