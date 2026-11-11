@@ -150,6 +150,7 @@
   .banner-nav.prev { left: 12px; }
   .banner-nav.next { right: 12px; }
   @media (max-width: 900px) { .banners-track { aspect-ratio: 16 / 9; max-height: 380px; } }
+  @media (max-width: 700px) { .banner-slide img.banner-img { width: 100%; height: 100%; max-width: none; max-height: none; object-fit: cover; object-position: center 70%; border-radius: 0; box-shadow: none; } .banner-dots { bottom: 7px; } .banner-dot { width: 6px; height: 6px; } .banner-dot.active { width: 14px; } }
   @media (max-width: 600px) { .banners-track { aspect-ratio: 4 / 3; max-height: 320px; } .banner-title { font-size: 16px; bottom: 28px; } .banner-nav { display: none; } }
   .search-wrap { flex: 1; position: relative; }
   .search-wrap input { width: 100%; padding: 9px 12px 9px 36px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 14px; background: var(--surface); color: var(--text); outline: none; transition: border-color 0.15s; }
@@ -2023,8 +2024,10 @@ function ajustarAltoBanner() {
   if (!track || !img) return;
   const aplicar = () => {
     if (!img.naturalWidth || !img.naturalHeight) return;
+    // En celular va más bajito (2,8 a 1): se recorta un poco arriba y abajo
+    // para que la primera funda se vea antes de bajar (pedido de Darío, 11-nov).
     track.style.aspectRatio = window.matchMedia('(max-width: 700px)').matches
-      ? img.naturalWidth + ' / ' + img.naturalHeight : '';
+      ? '2.8 / 1' : '';
   };
   if (img.complete) aplicar(); else img.addEventListener('load', aplicar, { once: true });
   if (!bannerResizeListo) {   // una sola vez: si no, se apila un oyente por dibujado
