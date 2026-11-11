@@ -60,7 +60,10 @@
   .summary-bar { position: fixed; bottom: 0; left: 232px; right: 0; background: var(--accent); color: white; display: none; align-items: center; justify-content: space-between; padding: 14px 20px; z-index: 90; box-shadow: 0 -2px 12px rgba(0,0,0,0.18); }
   .summary-bar.visible { display: flex; }
   /* Cuando la barra flotante está visible, reservar espacio abajo para que no tape la última fila de productos. */
-  body.has-summary-bar .main { padding-bottom: 92px; }
+  /* El espacio al final de la página = lo que mide la barra del pedido (se mide
+     en vivo: crece con la barra de progreso o si el texto pasa a 2 renglones) +
+     margen. Con un número fijo, en algunos celulares la barra tapaba el final. */
+  body.has-summary-bar .main { padding-bottom: calc(var(--alto-barra, 92px) + 24px); }
   .summary-bar-left { display: flex; flex-direction: column; gap: 2px; }
   .summary-bar-fila { display: flex; flex-direction: column; gap: 2px; }
   /* Barra de progreso hacia la compra mínima (barra de abajo y carrito).
@@ -690,7 +693,7 @@
     .summary-bar-total { font-size: 18px; }
     .summary-bar-units { font-size: 11px; order: 2; }
     .summary-bar-btn { padding: 9px 16px; font-size: 13px; }
-    body.has-summary-bar .wa-fab { bottom: 104px; }
+    body.has-summary-bar .wa-fab { bottom: calc(var(--alto-barra, 92px) + 12px); }
     /* Fila de arriba: el buscador es lo que más se usa y era lo más chico (84px
        de 358). Ahora los dos botones se achican y el buscador se queda con lo
        que sobra. "Por modelo" SIGUE en la pantalla principal: es un filtro que
@@ -4310,6 +4313,7 @@ function updateCartUI() {
       if ($('summary-total')) $('summary-total').textContent = formatPrecio(total);
       bar.classList.add('visible');
       document.body.classList.add('has-summary-bar');
+      medirBarraPedido();
     } else {
       bar.classList.remove('visible');
       document.body.classList.remove('has-summary-bar');
@@ -4318,6 +4322,19 @@ function updateCartUI() {
   // Solo reconstruir el drawer si está abierto
   if ($('cart-drawer')?.classList.contains('open')) renderCartItems();
 }
+
+// Mide la barra del pedido y deja ese espacio al final de la página (ver CSS
+// --alto-barra). Se vuelve a medir si la barra cambia de alto o se gira el celular.
+function medirBarraPedido() {
+  const bar = $('summary-bar');
+  if (!bar) return;
+  const h = bar.classList.contains('visible') ? bar.getBoundingClientRect().height : 0;
+  document.documentElement.style.setProperty('--alto-barra', Math.ceil(h) + 'px');
+}
+if (window.ResizeObserver) {
+  window.addEventListener('DOMContentLoaded', () => { const bar = $('summary-bar'); if (bar) new ResizeObserver(medirBarraPedido).observe(bar); });
+}
+window.addEventListener('resize', medirBarraPedido);
 
 // Cuánto falta para la compra mínima. Antes el cliente se enteraba recién al
 // confirmar (con un cartel de error); ahora lo ve mientras arma el pedido, en la
