@@ -891,12 +891,36 @@ function pisoDeRenglon(item, p, cfg, afloje) {
 // catálogo baja TODOS los renglones en ese % cuando el subtotal de lista llega
 // al escalón, así que acá el piso se afloja en ese % solo si el pedido, tal como
 // llega (ya rebajado), alcanza el escalón: total ≥ desde × (1 − pct).
+// Si en el panel (Marketing › Descuentos) se cargó otra escala, manda esa.
 const ESCALA_MONTO = [ { desde: 1000000, pct: 5 }, { desde: 2000000, pct: 10 } ];
-function aflojeDeEscala(items) {
+function escalaDeCfg(cfg) {
+  const d = cfg && cfg.descuentos;
+  if (!d || !Array.isArray(d.escala)) return ESCALA_MONTO;
+  if (d.escalaActiva === false) return [];
+  return d.escala.map(t => ({ desde: +t.desde, pct: +t.pct })).filter(t => t.desde > 0 && t.pct > 0);
+}
+function aflojeDeEscala(items, cfg) {
   const total = items.reduce((s, i) => s + (parseFloat(i.unit_price) || 0) * (parseFloat(i.quantity) || 0), 0);
   let fraccion = 0;
-  for (const t of ESCALA_MONTO) {
+  for (const t of escalaDeCfg(cfg)) {
     if (total >= t.desde * (1 - t.pct / 100) * (1 - TOLERANCIA_PORCENTAJE)) fraccion = Math.max(fraccion, t.pct / 100);
+  }
+  return fraccion;
+}
+// PROMOS POR CANTIDAD (ej. 10% llevando 10+ entre smartwatches y auriculares).
+// Acá no sabemos la categoría de cada renglón (la categoría buena es la de Tienda
+// Nube), así que el afloje es el % de la promo vigente más alta, siempre que el
+// pedido traiga al menos las unidades que esa promo pide. Es acotado (≤ el % que
+// Darío cargó) y en la práctica casi nunca hace falta: el piso es el COSTO, y un
+// producto regular con 10% menos sigue arriba del costo.
+function aflojeDePromos(items, cfg) {
+  const d = cfg && cfg.descuentos;
+  const ps = (d && Array.isArray(d.promos)) ? d.promos : [];
+  const unidades = items.reduce((s, i) => s + (parseFloat(i.quantity) || 0), 0);
+  let fraccion = 0;
+  for (const x of ps) {
+    if (!x || x.activo === false || !(+x.pct > 0) || !(+x.desde > 0)) continue;
+    if (unidades >= +x.desde) fraccion = Math.max(fraccion, Math.min(+x.pct, 100) / 100);
   }
   return fraccion;
 }
@@ -904,7 +928,7 @@ function aflojeDeEscala(items) {
 function revisarPrecios(items, productos, cfg) {
   const cupones = aflojeDeCupones(cfg);
   const incierto = cupones.incierto;
-  const fraccion = Math.max(cupones.fraccion, aflojeDeEscala(items));
+  const fraccion = Math.max(cupones.fraccion, aflojeDeEscala(items, cfg), aflojeDePromos(items, cfg));
   if (incierto) {
     // Que se vea en el registro: mientras dure el cupón de monto, el control de
     // precios queda mirando sin trabar. Si esto aparece sin cupón de monto

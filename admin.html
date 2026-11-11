@@ -163,6 +163,31 @@
   .move-btn:hover { background: var(--accent); color: white; border-color: var(--accent); }
 
   .section-note { font-size: 12px; color: var(--text-muted); margin-bottom: 1rem; line-height: 1.5; }
+  /* Marketing › Descuentos */
+  .desc-aviso { background: #FEF3C7; color: #92400E; font-size: 13px; padding: 10px 12px; border-radius: var(--radius-sm); margin-bottom: 12px; }
+  .desc-bloque { border: 1px solid var(--border); border-radius: var(--radius-sm); background: white; padding: 14px; margin-bottom: 14px; }
+  .desc-bloque-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 14px; }
+  .desc-hint { font-size: 12px; color: var(--text-muted); margin-bottom: 10px; }
+  .desc-fila { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 13px; flex-wrap: wrap; }
+  .desc-fila input { padding: 7px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; }
+  .desc-fila input[type=number] { width: 120px; }
+  .desc-btn-sec { background: var(--bg); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); padding: 6px 12px; font-family: inherit; font-size: 12px; cursor: pointer; }
+  .desc-quitar { background: transparent; border: none; color: var(--danger); font-size: 18px; cursor: pointer; line-height: 1; }
+  .promo-card { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 10px; }
+  .promo-card.inactive { opacity: 0.55; background: #fafafa; }
+  .promo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 10px; }
+  .promo-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--text-muted); }
+  .promo-grid input { padding: 7px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; }
+  .promo-sub { font-size: 11px; color: var(--text-muted); margin: 8px 0 4px; }
+  .promo-cats { display: flex; flex-wrap: wrap; gap: 6px; }
+  .promo-cats label { display: flex; align-items: center; gap: 5px; font-size: 12px; border: 1px solid var(--border-strong); border-radius: 99px; padding: 4px 10px; cursor: pointer; }
+  .promo-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; background: var(--bg); border: 1px solid var(--border-strong); border-radius: 99px; padding: 3px 4px 3px 10px; margin: 0 6px 6px 0; }
+  .promo-busca-res { max-height: 180px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-top: 6px; }
+  .promo-busca-res div { padding: 6px 10px; font-size: 12px; cursor: pointer; border-bottom: 1px solid var(--border); }
+  .promo-busca-res div:hover { background: var(--bg); }
+  .promo-preview { font-size: 12px; background: var(--bg); border-radius: var(--radius-sm); padding: 8px 10px; margin-top: 10px; }
+  .promo-actions { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+  .promo-actions .btn-del { margin-left: auto; background: transparent; color: var(--danger); border: 1px solid var(--danger); padding: 5px 10px; border-radius: var(--radius-sm); cursor: pointer; font-size: 12px; font-family: inherit; }
   .setting-row { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px 16px; display: flex; align-items: center; gap: 16px; margin-bottom: 8px; }
   .setting-info { flex: 1; }
   .setting-label { font-size: 14px; font-weight: 500; }
@@ -548,6 +573,7 @@
     </div>
     <div class="tab-subs" data-group="marketing">
       <button class="tab-btn" onclick="setTab('banners')">Banners</button>
+      <button class="tab-btn" onclick="setTab('descuentos')">🏷 Descuentos</button>
       <button class="tab-btn" onclick="setTab('cupones')">Cupones</button>
       <button class="tab-btn" onclick="setTab('codigos')">🔑 Códigos</button>
     </div>
@@ -599,6 +625,25 @@
       <p class="section-note">Cargá banners para mostrar en la parte superior del catálogo. Subí la imagen a TiendaNube (u otro hosting), copiá la URL y pegala acá. El catálogo los rota automáticamente cada 5 segundos.</p>
       <button class="btn-save" onclick="addBanner()" style="margin-bottom:14px">+ Agregar banner</button>
       <div id="banners-admin-list"><div class="loading-state">Sin banners cargados</div></div>
+    </div>
+
+    <div id="tab-descuentos" style="display:none">
+      <p class="section-note">Descuentos que la tienda aplica <strong>sola</strong>, para todos los clientes. <strong>No se suman entre sí</strong>: en cada producto se aplica el mayor. <strong>No aplican a productos en oferta o liquidación</strong> (suman para llegar, pero quedan a su precio). Acordate de tocar "Guardar cambios".</p>
+      <div id="desc-sin-guardar" class="desc-aviso" style="display:none">Esto todavía no está guardado: revisalo y tocá <strong>Guardar cambios</strong> para que lo vean los clientes.</div>
+      <div class="desc-bloque">
+        <div class="desc-bloque-head">
+          <strong>Descuento por monto del pedido</strong>
+          <label class="toggle-row" style="margin-left:auto"><button class="toggle" id="desc-escala-toggle" onclick="toggleEscala()"></button><span id="desc-escala-estado"></span></label>
+        </div>
+        <div id="desc-escala-lista"></div>
+        <button class="desc-btn-sec" onclick="addEscalon()">+ Agregar escalón</button>
+      </div>
+      <div class="desc-bloque">
+        <div class="desc-bloque-head"><strong>Promos por cantidad</strong></div>
+        <div class="desc-hint">Ej.: 10% llevando 10 o más. Las unidades se cuentan <strong>sumando todos los productos de la promo</strong> (se pueden combinar).</div>
+        <div id="desc-promos-lista"></div>
+        <button class="btn-save" onclick="addPromo()">+ Agregar promo</button>
+      </div>
     </div>
 
     <div id="tab-cupones" style="display:none">
@@ -1796,7 +1841,7 @@ const TAB_GROUPS = {
   catalogo: ['products', 'categories', 'fotos', 'topes'],
   precios: ['recargos', 'prices', 'margenes', 'pendientes', 'generador'],
   pedidos: ['pedidos', 'carritos', 'pedido', 'nota'],
-  marketing: ['banners', 'cupones', 'codigos'],
+  marketing: ['banners', 'descuentos', 'cupones', 'codigos'],
   ajustes: ['settings'],
 };
 function grupoDeTab(tab) {
@@ -1816,6 +1861,7 @@ function setTab(tab) {
   $('tab-recargos').style.display = tab === 'recargos' ? 'block' : 'none';
   $('tab-banners').style.display = tab === 'banners' ? 'block' : 'none';
   $('tab-cupones').style.display = tab === 'cupones' ? 'block' : 'none';
+  $('tab-descuentos').style.display = tab === 'descuentos' ? 'block' : 'none';
   $('tab-codigos').style.display = tab === 'codigos' ? 'block' : 'none';
   $('tab-margenes').style.display = tab === 'margenes' ? 'block' : 'none';
   $('tab-pendientes').style.display = tab === 'pendientes' ? 'block' : 'none';
@@ -1850,6 +1896,7 @@ function setTab(tab) {
   }
   if (tab === 'banners') renderBannersAdmin();
   if (tab === 'cupones') { renderCupones(); populateCuponCompartir(); }
+  if (tab === 'descuentos') renderDescuentos();
   if (tab === 'codigos') renderCodigos();
   if (tab === 'margenes') { populateMargenCatFilter(); renderMargenes(); }
   if (tab === 'pendientes') { populatePendientesCatFilter(); renderPendientes(); }
@@ -2073,6 +2120,116 @@ function updateCuponField(id, field, value) {
   if (field === 'tipo') renderCupones();
   // Refrescá el selector de compartir (etiquetas/estado) sin perder la selección.
   if (field === 'codigo' || field === 'minimo' || field === 'vence' || field === 'valor' || field === 'detalle') populateCuponCompartir();
+}
+
+// ===== Descuentos automáticos (Marketing › Descuentos) =====
+// config.descuentos = { escalaActiva, escala: [{desde, pct}], promos: [{id, nombre,
+// categorias, productos, desde, pct, inicio, fin, activo}] }. El catálogo
+// (index.html) y el control de precios (api/proxy.js) leen esto mismo. Si no hay
+// nada guardado, se precarga lo que ya rige (escala 5%/10%) + la promo de
+// smartwatch y auriculares, y se avisa que falta guardar.
+function descuentosIniciales() {
+  return {
+    escalaActiva: true,
+    escala: [{ desde: 1000000, pct: 5 }, { desde: 2000000, pct: 10 }],
+    promos: [{ id: 'p' + Date.now().toString(36), nombre: 'smartwatch y auriculares', categorias: ['SMARTWATCH', 'AURICULARES'], productos: [], desde: 10, pct: 10, inicio: '', fin: '', activo: true }],
+  };
+}
+let promoBusqueda = {}; // promo id → texto buscado
+function escH(t) { return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
+function renderDescuentos() {
+  if (!config.descuentos) { config.descuentos = descuentosIniciales(); $('desc-sin-guardar').style.display = ''; }
+  const d = config.descuentos;
+  if (!Array.isArray(d.escala)) d.escala = [];
+  if (!Array.isArray(d.promos)) d.promos = [];
+  const on = d.escalaActiva !== false;
+  $('desc-escala-toggle').classList.toggle('on', on);
+  $('desc-escala-estado').textContent = on ? 'Prendido' : 'Apagado';
+  $('desc-escala-lista').innerHTML = d.escala.length ? d.escala.map((t, i) =>
+    '<div class="desc-fila">Desde $ <input type="number" min="0" step="1000" value="' + escH(t.desde) + '" oninput="updEscalon(' + i + ',\'desde\',this.value)" />' +
+    ' → <input type="number" min="0" max="100" value="' + escH(t.pct) + '" oninput="updEscalon(' + i + ',\'pct\',this.value)" style="width:70px" /> % OFF' +
+    '<button class="desc-quitar" title="Quitar" onclick="quitarEscalon(' + i + ')">×</button></div>').join('')
+    : '<div class="desc-hint">Sin escalones.</div>';
+  renderPromos();
+}
+function renderPromos() {
+  const d = config.descuentos;
+  const cats = [...new Set(allAdminProducts.map(p => p.category || '').filter(Boolean))].sort();
+  const cont = $('desc-promos-lista');
+  if (!d.promos.length) { cont.innerHTML = '<div class="desc-hint">Sin promos cargadas.</div>'; return; }
+  cont.innerHTML = d.promos.map(pr => {
+    const id = pr.id;
+    const elegidos = (pr.productos || []).map(pid => allAdminProducts.find(p => (p.id || p.product_id) == pid)).filter(Boolean);
+    const q = (promoBusqueda[id] || '').trim().toLowerCase();
+    const res = q.length >= 2 ? allAdminProducts.filter(p => (p.name || '').toLowerCase().includes(q) && !(pr.productos || []).some(x => x == (p.id || p.product_id))).slice(0, 30) : [];
+    const cuantos = allAdminProducts.filter(p => (pr.categorias || []).includes(p.category || '') || (pr.productos || []).some(x => x == (p.id || p.product_id))).length;
+    return '<div class="promo-card' + (pr.activo === false ? ' inactive' : '') + '">' +
+      '<div class="promo-grid">' +
+        '<label>Nombre (lo ve el cliente: «Sumá 3 más de …»)<input type="text" value="' + escH(pr.nombre) + '" oninput="updPromo(\'' + id + '\',\'nombre\',this.value)" /></label>' +
+        '<label>Desde (unidades)<input type="number" min="1" value="' + escH(pr.desde) + '" oninput="updPromo(\'' + id + '\',\'desde\',this.value)" /></label>' +
+        '<label>Descuento (%)<input type="number" min="0" max="100" value="' + escH(pr.pct) + '" oninput="updPromo(\'' + id + '\',\'pct\',this.value)" /></label>' +
+        '<label>Empieza (opcional)<input type="date" value="' + escH(pr.inicio) + '" oninput="updPromo(\'' + id + '\',\'inicio\',this.value)" /></label>' +
+        '<label>Termina (opcional)<input type="date" value="' + escH(pr.fin) + '" oninput="updPromo(\'' + id + '\',\'fin\',this.value)" /></label>' +
+      '</div>' +
+      '<div class="promo-sub">Categorías enteras</div>' +
+      '<div class="promo-cats">' + cats.map(c => '<label><input type="checkbox"' + ((pr.categorias || []).includes(c) ? ' checked' : '') + ' onchange="togglePromoCat(\'' + id + '\',\'' + escH(c).replace(/'/g, "\\'") + '\',this.checked)" />' + escH(c) + '</label>').join('') + '</div>' +
+      '<div class="promo-sub">Productos sueltos</div>' +
+      '<div>' + elegidos.map(p => '<span class="promo-chip">' + escH(p.name) + '<button class="desc-quitar" onclick="quitarPromoProd(\'' + id + '\',' + (p.id || p.product_id) + ')">×</button></span>').join('') + '</div>' +
+      '<input type="text" placeholder="Buscar producto para sumar…" value="' + escH(promoBusqueda[id] || '') + '" oninput="buscarPromoProd(\'' + id + '\',this.value)" id="promo-busca-' + id + '" style="width:100%;padding:7px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font-family:inherit;font-size:13px" />' +
+      (res.length ? '<div class="promo-busca-res">' + res.map(p => '<div onclick="sumarPromoProd(\'' + id + '\',' + (p.id || p.product_id) + ')">+ ' + escH(p.name) + ' <span style="color:var(--text-muted)">· ' + escH(p.category || '') + '</span></div>').join('') + '</div>' : '') +
+      '<div class="promo-preview">Así lo ve el cliente: <strong>' + escH(pr.pct) + '% OFF llevando ' + escH(pr.desde) + ' o más</strong> de ' + escH(pr.nombre || '…') + ' · entran <strong>' + cuantos + '</strong> productos</div>' +
+      '<div class="promo-actions">' +
+        '<label class="toggle-row"><button class="toggle' + (pr.activo !== false ? ' on' : '') + '" onclick="togglePromo(\'' + id + '\')"></button>' + (pr.activo !== false ? 'Prendida' : 'Apagada') + '</label>' +
+        '<button class="btn-del" onclick="quitarPromo(\'' + id + '\')">Eliminar</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+function promoPorId(id) { return (config.descuentos.promos || []).find(x => x.id === id); }
+function toggleEscala() { config.descuentos.escalaActiva = config.descuentos.escalaActiva === false; renderDescuentos(); }
+function addEscalon() { config.descuentos.escala.push({ desde: '', pct: '' }); renderDescuentos(); }
+function quitarEscalon(i) { config.descuentos.escala.splice(i, 1); renderDescuentos(); }
+function updEscalon(i, campo, v) { const t = config.descuentos.escala[i]; if (t) t[campo] = v === '' ? '' : Number(v); }
+function addPromo() {
+  config.descuentos.promos.push({ id: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), nombre: '', categorias: [], productos: [], desde: 10, pct: 10, inicio: '', fin: '', activo: true });
+  renderPromos();
+}
+function quitarPromo(id) {
+  if (!confirm('¿Eliminar esta promo? (se aplica al tocar Guardar cambios)')) return;
+  config.descuentos.promos = config.descuentos.promos.filter(x => x.id !== id);
+  renderPromos();
+}
+function togglePromo(id) { const pr = promoPorId(id); if (pr) { pr.activo = pr.activo === false; renderPromos(); } }
+function updPromo(id, campo, v) {
+  const pr = promoPorId(id); if (!pr) return;
+  pr[campo] = (campo === 'desde' || campo === 'pct') ? (v === '' ? '' : Number(v)) : v;
+  // Actualiza solo la vista previa (re-dibujar todo haría perder el foco del campo).
+  const card = document.activeElement && document.activeElement.closest('.promo-card');
+  const prev = card && card.querySelector('.promo-preview strong');
+  if (prev) prev.textContent = pr.pct + '% OFF llevando ' + pr.desde + ' o más';
+}
+function togglePromoCat(id, cat, on) {
+  const pr = promoPorId(id); if (!pr) return;
+  pr.categorias = (pr.categorias || []).filter(c => c !== cat);
+  if (on) pr.categorias.push(cat);
+  renderPromos();
+}
+function buscarPromoProd(id, v) {
+  promoBusqueda[id] = v;
+  renderPromos();
+  const inp = $('promo-busca-' + id);
+  if (inp) { inp.focus(); inp.setSelectionRange(v.length, v.length); }
+}
+function sumarPromoProd(id, pid) {
+  const pr = promoPorId(id); if (!pr) return;
+  pr.productos = (pr.productos || []).concat([pid]);
+  promoBusqueda[id] = '';
+  renderPromos();
+}
+function quitarPromoProd(id, pid) {
+  const pr = promoPorId(id); if (!pr) return;
+  pr.productos = (pr.productos || []).filter(x => x != pid);
+  renderPromos();
 }
 
 // ===== Códigos de acceso a la lista mejor (un código por cliente) =====

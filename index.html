@@ -356,6 +356,9 @@
   .product-card .product-cat { display: none; }
   .product-card .product-img-wrap .product-img-badge:not(.oferta):not(.nuevo) { display: none; }
   .lista-foto .badge-nuevo-inline { order: 2; flex: 0 0 auto; align-self: center; }
+  /* Promo por cantidad (Marketing › Descuentos): etiqueta negra al lado del nombre. */
+  .badge-promo { display: inline-block; background: var(--text); color: #fff; font-size: 9px; font-weight: 700; letter-spacing: 0.3px; padding: 2px 5px; border-radius: 4px; margin: 0 0 4px; white-space: nowrap; }
+  .lista-foto .badge-promo { order: 3; flex: 0 0 auto; align-self: center; margin: 0 0 0 4px; }
   .lista-foto .product-img-wrap .product-img-badge.nuevo { display: none; }
   /* El descuento se decía dos veces: el cartelito rojo sobre la foto y el -40%
      al lado del precio. Se queda el del precio, que va junto al precio viejo
@@ -685,7 +688,7 @@
     .summary-bar-total { font-size: 18px; }
     .summary-bar-units { font-size: 11px; order: 2; }
     .summary-bar-btn { padding: 9px 16px; font-size: 13px; }
-    body.has-summary-bar .wa-fab { bottom: 76px; }
+    body.has-summary-bar .wa-fab { bottom: 104px; }
     /* Fila de arriba: el buscador es lo que más se usa y era lo más chico (84px
        de 358). Ahora los dos botones se achican y el buscador se queda con lo
        que sobra. "Por modelo" SIGUE en la pantalla principal: es un filtro que
@@ -826,10 +829,10 @@
       </div>
       <div class="faq-item">
         <div class="faq-q">¿Hay descuento por cantidad?</div>
-        <div class="faq-a">Sí, para todos los clientes:<br>
-          · Desde <b>$1.000.000</b>: <b>5% OFF</b>.<br>
-          · Desde <b>$2.000.000</b>: <b>10% OFF</b>.<br>
-          El descuento se aplica solo en tu pedido, y abajo vas a ver cuánto te falta para llegar. Los productos en oferta o liquidación suman para llegar al monto, pero no llevan descuento.</div>
+        <div class="faq-a" id="faq-descuentos">Sí, para todos los clientes:<br>
+          <span id="faq-desc-lista">· Desde <b>$1.000.000</b>: <b>5% OFF</b>.<br>
+          · Desde <b>$2.000.000</b>: <b>10% OFF</b>.<br></span>
+          El descuento se aplica solo en tu pedido, y abajo vas a ver cuánto te falta para llegar. Los descuentos no se suman entre sí: en cada producto se aplica el mayor. Los productos en oferta o liquidación suman para llegar, pero no llevan descuento.</div>
       </div>
       <div class="faq-item">
         <div class="faq-q">¿A dónde y por dónde envían?</div>
@@ -1233,17 +1236,82 @@ let cuponAplicado = null; // cupón aplicado en el carrito (objeto) o null
 // el que más descuenta. El servidor (api/proxy.js) tiene la misma tabla para
 // aceptar los precios rebajados: si se cambia acá, cambiarla también allá.
 const ESCALA_MONTO = [ { desde: 1000000, pct: 5 }, { desde: 2000000, pct: 10 } ];
+// Desde el panel (Marketing › Descuentos) se puede cambiar la escala y cargar
+// promos por cantidad. Sin nada guardado, rige la tabla de arriba.
+function escalaTabla() {
+  const d = adminConfig.descuentos;
+  if (!d || !Array.isArray(d.escala)) return ESCALA_MONTO;
+  if (d.escalaActiva === false) return [];
+  return d.escala.map(t => ({ desde: +t.desde, pct: +t.pct }))
+    .filter(t => t.desde > 0 && t.pct > 0).sort((a, b) => a.desde - b.desde);
+}
 function escalaDe(subtotal) {
   let e = null;
-  for (const t of ESCALA_MONTO) if (subtotal >= t.desde) e = t;
+  for (const t of escalaTabla()) if (subtotal >= t.desde) e = t;
   return e;
 }
 function proximaEscala(subtotal) {
-  return ESCALA_MONTO.find(t => subtotal < t.desde) || null;
+  return escalaTabla().find(t => subtotal < t.desde) || null;
 }
-function descuentoEscala(subtotal, subtotalRegular) {
-  const e = escalaDe(subtotal);
-  return e ? Math.round(subtotalRegular * e.pct / 100) : 0;
+
+// PROMOS POR CANTIDAD (ej.: 10% llevando 10 o más entre smartwatches y
+// auriculares). Las unidades se cuentan sumando TODOS los productos de la promo
+// (combinables). No se suman con el descuento por monto: en cada producto se
+// aplica el mayor de los dos. Igual que el de monto, solo a productos regulares
+// (las ofertas suman unidades pero quedan a su precio).
+function hoyLocal() {
+  const t = new Date(), d = n => String(n).padStart(2, '0');
+  return t.getFullYear() + '-' + d(t.getMonth() + 1) + '-' + d(t.getDate());
+}
+function promosActivas() {
+  const d = adminConfig.descuentos;
+  const ps = (d && Array.isArray(d.promos)) ? d.promos : [];
+  const hoy = hoyLocal();
+  return ps.filter(x => x && x.activo !== false && +x.pct > 0 && +x.desde > 0 &&
+    (!x.inicio || x.inicio <= hoy) && (!x.fin || x.fin >= hoy));
+}
+function promoDe(id) {
+  const ps = promosActivas();
+  if (!ps.length) return null;
+  const p = allProducts.find(x => (x.id || x.product_id) == id);
+  const cat = p ? (p.category || '') : '';
+  return ps.find(x => (x.categorias || []).includes(cat) || (x.productos || []).some(y => y == id)) || null;
+}
+// Cuánto descuenta el pedido y por qué. pctDe: renglón → % que lleva.
+function calcularDescuentos(items, subtotal) {
+  const esc = escalaDe(subtotal);
+  const unidades = {}, deItem = new Map();
+  items.forEach(i => { const pr = promoDe(i.id); deItem.set(i, pr); if (pr) unidades[pr.id] = (unidades[pr.id] || 0) + i.qty; });
+  let total = 0;
+  const porFuente = {}, pctDe = new Map();
+  items.forEach(i => {
+    if (cartItemOferta(i)) return;
+    let pct = 0, fuente = null;
+    const pr = deItem.get(i);
+    if (pr && unidades[pr.id] >= +pr.desde) { pct = +pr.pct; fuente = 'promo:' + pr.id; }
+    if (esc && esc.pct > pct) { pct = esc.pct; fuente = 'escala'; }
+    if (!pct) return;
+    const d = i.precio * i.qty * pct / 100;
+    total += d;
+    porFuente[fuente] = (porFuente[fuente] || 0) + d;
+    pctDe.set(i, pct);
+  });
+  const partes = [];
+  promosActivas().forEach(pr => { const v = porFuente['promo:' + pr.id]; if (v) partes.push({ txt: pr.pct + '% ' + (pr.nombre || 'promo'), monto: Math.round(v) }); });
+  if (porFuente.escala) partes.push({ txt: esc.pct + '% por monto', monto: Math.round(porFuente.escala) });
+  return { total: Math.round(total), pctDe, partes, unidades, escala: esc };
+}
+function promoBadge(p) {
+  const id = p.id || p.product_id;
+  const pr = promoDe(id);
+  if (!pr || esOferta(p)) return '';
+  return '<span class="badge-promo">' + pr.pct + '% OFF x' + pr.desde + '</span>';
+}
+function cartelPromo(prods) {
+  if (categoria === 'todas') return '';
+  const pr = prods.map(p => promoDe(p.id || p.product_id)).find(Boolean);
+  if (!pr) return '';
+  return '<div class="lote-expl promo-expl"><b>' + pr.pct + '% OFF llevando ' + pr.desde + ' o más</b> de ' + (pr.nombre || 'estos productos') + '. Podés combinarlos.</div>';
 }
 
 // Lo que el stock le fue sacando del carrito mientras armaba ESTE pedido.
@@ -1844,6 +1912,18 @@ async function cargarConfig() {
     if (r.ok) pausados = ((await r.json()).productos || []).map(String);
   } catch(e) {}
   aplicarMinimoFAQ();
+  aplicarDescuentosFAQ();
+}
+
+// La pregunta de descuentos se arma con lo cargado en el panel (escala + promos).
+function aplicarDescuentosFAQ() {
+  const el = document.getElementById('faq-desc-lista');
+  if (!el) return;
+  const filas = escalaTabla().map(t => '· Desde <b>' + formatPrecio(t.desde) + '</b>: <b>' + t.pct + '% OFF</b>.')
+    .concat(promosActivas().map(pr => '· <b>' + pr.pct + '% OFF</b> llevando <b>' + pr.desde + ' o más</b> de ' + (pr.nombre || 'la promo') + ' (podés combinarlos).'));
+  el.innerHTML = filas.join('<br>') + '<br>';
+  const item = document.getElementById('faq-descuentos');
+  if (item) item.closest('.faq-item').style.display = filas.length ? '' : 'none';
 }
 
 // La FAQ muestra el mínimo configurado (no un texto fijo). Si no hay mínimo
@@ -3034,7 +3114,7 @@ function dibujarProductos() {
     return;
   }
   if (viewMode === 'variants' || viewMode === 'lista' || viewMode === 'lista2') {
-    grid.innerHTML = renderVariantesGrid(prods) + cartel;
+    grid.innerHTML = (q ? '' : cartelPromo(prods)) + renderVariantesGrid(prods) + cartel;
     return;
   }
   grid.innerHTML = prods.map(p => {
@@ -3723,6 +3803,7 @@ function renderVariantesGrid(prods, ofertaTodas) {
         '</div>' +
         '<div class="product-body" style="cursor:pointer;flex:0 0 auto" onclick="abrirDesdeCard(' + id + ',this)">' +
           (nuevoBadge(id) ? '<span class="badge-nuevo-inline">NUEVO</span>' : '') +
+          promoBadge(p) +
           (cat ? '<div class="product-cat">' + cat + '</div>' : '') +
           '<div class="product-name">' + nombre + '</div>' +
           (cod ? '<div class="product-code">' + cod + '</div>' : '') +
@@ -4195,11 +4276,11 @@ function updateCartUI() {
       else { descuento = descuentoCupon(cuponAplicado, subtotalDesc); total = Math.max(0, subtotal - descuento); }
     }
     renderCuponUI(descuento, hayOferta);
-    // Descuento por monto: si descuenta más que el cupón, manda él.
-    const esc = escalaDe(subtotal), descEsc = descuentoEscala(subtotal, subtotalDesc);
-    const ganaEscala = descEsc > 0 && descEsc >= descuento;
-    if (ganaEscala) { descuento = descEsc; total = Math.max(0, subtotal - descuento); }
-    if ($('descuento-label')) $('descuento-label').textContent = ganaEscala ? 'Descuento ' + esc.pct + '% por monto' : 'Descuento';
+    // Descuentos automáticos (monto y promos): si descuentan más que el cupón, mandan ellos.
+    const auto = calcularDescuentos(items, subtotal);
+    const ganaAuto = auto.total > 0 && auto.total >= descuento;
+    if (ganaAuto) { descuento = auto.total; total = Math.max(0, subtotal - descuento); }
+    if ($('descuento-label')) $('descuento-label').textContent = ganaAuto ? 'Descuento ' + auto.partes.map(x => x.txt).join(' + ') : 'Descuento';
     if ($('subtotal-row')) $('subtotal-row').style.display = descuento > 0 ? 'flex' : 'none';
     if ($('descuento-row')) $('descuento-row').style.display = descuento > 0 ? 'flex' : 'none';
     if ($('subtotal-amount')) $('subtotal-amount').textContent = formatPrecio(subtotal);
@@ -4243,13 +4324,24 @@ function actualizarAvisoMinimo(subtotal) {
   const VER_BARRA_DESDE = 500000;
   let izq = '', der = '', relleno = 0, ok = false, barra = true;
   const actual = escalaDe(subtotal), prox = proximaEscala(subtotal);
+  // Promos por cantidad: la que esté empezada y más cerca de cumplirse.
+  const auto = calcularDescuentos(Object.values(cart), subtotal);
+  const ps = promosActivas();
+  const empezada = ps.map(pr => ({ pr, u: auto.unidades[pr.id] || 0 }))
+    .filter(x => x.u > 0 && x.u < +x.pr.desde && +x.pr.pct > (actual ? actual.pct : 0))
+    .sort((a, b) => (+a.pr.desde - a.u) - (+b.pr.desde - b.u))[0];
+  const cumplida = ps.find(pr => (auto.unidades[pr.id] || 0) >= +pr.desde && +pr.pct > (actual ? actual.pct : 0));
   if (min && subtotal < min) {
     izq = 'Te faltan ' + formatPrecio(min - subtotal) + ' para el mínimo';
     der = 'Mínimo ' + formatPrecio(min);
     relleno = subtotal / min;
+  } else if (empezada) {
+    const falta = +empezada.pr.desde - empezada.u;
+    izq = 'Sumá ' + falta + ' más de ' + (empezada.pr.nombre || 'la promo') + ' y tenés ' + empezada.pr.pct + '% OFF';
+    relleno = empezada.u / +empezada.pr.desde;
   } else if (prox && subtotal < VER_BARRA_DESDE && !actual) {
     ok = true; barra = false;
-    izq = min ? '✓ Mínimo cumplido' : '';
+    izq = cumplida ? '✓ ' + cumplida.pct + '% OFF en ' + (cumplida.nombre || 'la promo') : (min ? '✓ Mínimo cumplido' : '');
     der = prox.pct + '% OFF desde ' + formatPrecio(prox.desde);
   } else if (prox) {
     izq = 'Te faltan ' + formatPrecio(prox.desde - subtotal) + ' para ' + prox.pct + '% OFF';
@@ -4549,23 +4641,23 @@ async function confirmarPedido() {
     if (cuponAplicado && cuponSigueValido(cuponAplicado, subtotal).ok) {
       cupon = cuponAplicado; descuento = descuentoCupon(cupon, subtotalDesc);
     }
-    // Descuento por monto: si descuenta más que el cupón, reemplaza al cupón y
-    // baja los renglones regulares en ese porcentaje (las ofertas no se tocan).
-    const escala = escalaDe(subtotal), descEscala = descuentoEscala(subtotal, subtotalDesc);
-    const usaEscala = descEscala > 0 && descEscala >= descuento;
-    if (usaEscala) {
-      descuento = descEscala;
-      cupon = { codigo: escala.pct + '% por compra desde ' + formatPrecio(escala.desde), tipo: 'porcentaje', valor: escala.pct, detalle: '' };
+    // Descuentos automáticos (monto y promos): si descuentan más que el cupón, lo
+    // reemplazan; cada renglón regular baja en SU porcentaje (las ofertas no se tocan).
+    const auto = calcularDescuentos(items, subtotal);
+    const usaAuto = auto.total > 0 && auto.total >= descuento;
+    const textoAuto = auto.partes.map(x => x.txt + ': -' + formatPrecio(x.monto)).join(', ');
+    if (usaAuto) {
+      descuento = auto.total;
+      cupon = { codigo: auto.partes.map(x => x.txt).join(' + '), tipo: 'porcentaje', valor: 0, detalle: '' };
     }
     const totalFinal = Math.max(0, subtotal - descuento);
     // Bajamos proporcionalmente el precio de cada ítem descontable; las ofertas
     // quedan con su precio original (envío gratis no cambia precios).
     const factorCupon = (subtotalDesc > 0 && descuento > 0) ? (subtotalDesc - descuento) / subtotalDesc : 1;
-    const factorEscala = usaEscala ? (1 - escala.pct / 100) : 1;
     const precioRenglon = i => cartItemOferta(i) ? i.precio
-      : Math.round(i.precio * (usaEscala ? factorEscala : factorCupon) * 100) / 100;
-    const cuponNota = usaEscala
-      ? 'Descuento por monto ' + escala.pct + '%: -' + formatPrecio(descuento)
+      : Math.round(i.precio * (usaAuto ? (1 - (auto.pctDe.get(i) || 0) / 100) : factorCupon) * 100) / 100;
+    const cuponNota = usaAuto
+      ? 'Descuentos: ' + textoAuto
       : cupon
       ? (cupon.tipo === 'envio'
           ? 'ENVÍO BONIFICADO (' + cupon.codigo + (cupon.detalle ? ' - ' + cupon.detalle : '') + ')'
@@ -4657,8 +4749,8 @@ async function confirmarPedido() {
       '\nEmail: ' + email +
       '\nPago: ' + payment +
       '\nEntrega: ' + delivery +
-      (usaEscala ? '\nDescuento ' + escala.pct + '% por monto: -' + formatPrecio(descuento) : '') +
-      (cupon && !usaEscala ? '\nCupón: ' + cupon.codigo + (cupon.tipo === 'envio' ? ' (ENVÍO BONIFICADO' + (cupon.detalle ? ' - ' + cupon.detalle : '') + ')' : ' (-' + formatPrecio(descuento) + ')') : '') +
+      (usaAuto ? '\nDescuentos: ' + textoAuto : '') +
+      (cupon && !usaAuto ? '\nCupón: ' + cupon.codigo + (cupon.tipo === 'envio' ? ' (ENVÍO BONIFICADO' + (cupon.detalle ? ' - ' + cupon.detalle : '') + ')' : ' (-' + formatPrecio(descuento) + ')') : '') +
       '\nTotal: ' + formatPrecio(totalPedido) +
       (obs ? '\nObservaciones: ' + obs : '') +
       (pedidoUrl ? '\n\nDetalle del pedido: ' + pedidoUrl : '') +
