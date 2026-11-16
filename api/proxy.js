@@ -678,9 +678,18 @@ async function verificarStockServer(items, token, topes = {}, costos = null) {
 // que no hay forma de que uno cuente el stock distinto que el otro.
 function evaluar(items, productos, topes) {
   const problemas = [];
+  // La misma funda puede venir en DOS renglones (lote parcial, 16-nov-2026: una
+  // parte en lote y otra suelta, a precios distintos). El stock se controla con la
+  // SUMA, y el faltante se informa una sola vez por funda.
+  const totalDe = {};
+  const claveDe = it => it.product_id + '|' + (it.size_id || '');
+  for (const it of items) totalDe[claveDe(it)] = (totalDe[claveDe(it)] || 0) + (it.quantity || 1);
+  const vistos = new Set();
   for (const item of items) {
+    if (vistos.has(claveDe(item))) continue;
+    vistos.add(claveDe(item));
     const p = productos[item.product_id];
-    const qty = item.quantity || 1;
+    const qty = totalDe[claveDe(item)];
 
     // Producto ya no existe en GN (borrado o inactivo)
     if (!p) {

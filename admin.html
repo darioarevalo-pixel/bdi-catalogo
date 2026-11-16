@@ -2254,15 +2254,21 @@ function tarjetaLoteAdmin(id) {
     });
     const tam = filas.reduce((s, f) => s + f.q, 0);
     const conQ = filas.filter(f => f.q > 0);
-    const lotes = conQ.length ? Math.min(...conQ.map(f => f.alcanza)) : 0;
+    const alcanzan = conQ.length ? Math.min(...conQ.map(f => f.alcanza)) : 0;
+    // Lote PARCIAL: con «Lotes a la venta» se separan esos lotes y el resto se vende suelto.
+    const nVenta = Math.floor(Number(l.lotes) || 0);
+    const lotes = nVenta > 0 ? Math.min(nVenta, alcanzan) : alcanzan;
     tabla = '<table class="lote-modelos"><tr><th>Modelo</th><th class="num">En el depósito</th><th class="num">Por lote</th><th class="num">Alcanza para</th></tr>' +
       filas.map(f => '<tr' + (f.q > 0 && f.alcanza === lotes && lotes < 1 ? ' class="falta"' : '') + '><td>' + escH(f.v.size) + '</td><td class="num">' + f.st + '</td>' +
         '<td class="num"><input type="number" min="0" step="1" value="' + (f.q || '') + '" placeholder="0" onchange="updLoteModelo(\'' + id + '\',\'' + escH(f.v.size).replace(/'/g, "\\'") + '\',this.value)" /></td>' +
         '<td class="num">' + (f.q > 0 ? f.alcanza + ' lotes' : '—') + '</td></tr>').join('') + '</table>';
     resumen = 'Cada lote: <strong>' + tam + ' fundas</strong> a ' + fmtAR(precio) + ' = <strong>' + fmtAR(tam * precio) + '</strong>' +
       (may > precio && tam ? ' · ahorra ' + fmtAR((may - precio) * tam) + ' por lote (' + Math.round((may - precio) / may * 100) + '%)' : '') +
-      ' · con el stock de hoy se arman <strong>' + lotes + ' lotes</strong>' +
-      ((s => s > 0 ? ' (sobran ' + s + ' fundas, que no se venden sueltas)' : '')(filas.reduce((s, f) => s + (f.st - f.q * lotes), 0)));
+      (nVenta > 0
+        ? (s => '<br>A la venta: <strong>' + lotes + (lotes === 1 ? ' lote' : ' lotes') + ' = ' + (lotes * tam) + ' fundas en lote</strong> · <strong>' + s + ' sueltas</strong> a ' + fmtAR(may) +
+            (nVenta > alcanzan ? ' · <span style="color:var(--danger)">pediste ' + nVenta + ' lotes y el stock de hoy alcanza para ' + alcanzan + '</span>' : ''))(filas.reduce((s, f) => s + (f.st - f.q * lotes), 0))
+        : ' · con el stock de hoy se arman <strong>' + lotes + ' lotes</strong>' +
+          ((s => s > 0 ? ' (sobran ' + s + ' fundas, que no se venden sueltas)' : '')(filas.reduce((s, f) => s + (f.st - f.q * lotes), 0))));
   } else {
     const n = vars.reduce((s, v) => s + stockLoteAdmin(v), 0);
     // Diseño entero: no hay nada que cargar por modelo, alcanza con ver qué hay (una línea).
@@ -2284,7 +2290,9 @@ function tarjetaLoteAdmin(id) {
       '<button class="' + (armado ? '' : 'on') + '" onclick="tipoLote(\'' + id + '\',false)">Diseño entero</button>' +
       '<button class="' + (armado ? 'on' : '') + '" onclick="tipoLote(\'' + id + '\',true)">Armado (cantidad por modelo)</button>' +
     '</div>' +
-    '<div class="promo-grid"><label>Precio por funda en el lote ($)<input type="number" min="0" step="10" value="' + escH(l.precio) + '" onchange="updLotePrecio(\'' + id + '\',this.value)" /></label></div>' +
+    '<div class="promo-grid"><label>Precio por funda en el lote ($)<input type="number" min="0" step="10" value="' + escH(l.precio) + '" onchange="updLotePrecio(\'' + id + '\',this.value)" /></label>' +
+      (armado ? '<label>Lotes a la venta<input type="number" min="0" step="1" value="' + (Math.floor(Number(l.lotes) || 0) || '') + '" placeholder="Todos" onchange="updLoteCantidad(\'' + id + '\',this.value)" /><span class="desc-hint" style="margin:2px 0 0">Vacío = todo en lote. Con un número, el resto se vende suelto.</span></label>' : '') +
+    '</div>' +
     tabla +
     '<div class="promo-preview">' + resumen + '</div>' +
     '<div class="promo-actions">' +
@@ -2305,7 +2313,7 @@ function sumarLote(pid) {
 }
 function tipoLote(id, armado) {
   const l = config.lotes.productos[id]; if (!l) return;
-  if (!armado) delete l.porLote;
+  if (!armado) { delete l.porLote; delete l.lotes; }
   else if (!l.porLote) {
     const p = prodLoteAdmin(id);
     l.porLote = {};
@@ -2317,6 +2325,12 @@ function updLoteModelo(id, modelo, v) {
   const l = config.lotes.productos[id]; if (!l || !l.porLote) return;
   const n = Math.max(0, Math.floor(Number(v) || 0));
   if (n > 0) l.porLote[modelo] = n; else delete l.porLote[modelo];
+  renderLotesLista();
+}
+function updLoteCantidad(id, v) {
+  const l = config.lotes.productos[id]; if (!l) return;
+  const n = Math.max(0, Math.floor(Number(v) || 0));
+  if (n > 0) l.lotes = n; else delete l.lotes;
   renderLotesLista();
 }
 function updLotePrecio(id, v) { const l = config.lotes.productos[id]; if (l) { l.precio = v === '' ? 0 : Number(v); renderLotesLista(); } }

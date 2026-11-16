@@ -1246,6 +1246,34 @@ function loteDe(id) {
 // a lotes iguales, cada uno con la proporción por modelo con que vino la compra
 // (ej. Twinkle: 20 fundas, 2 del 13, 3 del 15…). El cliente elige cuántos lotes;
 // no se vende suelto. Sin `porLote`, el lote es el diseño entero (10-nov).
+// Lote PARCIAL (Darío 16-nov-2026): con `lotes` (N) en un lote armado, se separan N
+// lotes y el resto del stock de esa funda se vende SUELTO, a su precio de siempre.
+// Sin `lotes`, todo va en lote (como el 16-nov). La cuenta es del catálogo: no
+// mueve stock en el sistema.
+function loteParcial(id) {
+  const l = loteDe(id);
+  return l && l.porLote && Math.floor(+l.lotes) > 0 ? l : null;
+}
+// La funda se vende SOLO en lote (diseño entero, o armado sin cantidad de lotes).
+function soloLote(id) { return !!loteDe(id) && !loteParcial(id); }
+// Cuántas fundas de cada variante quedan separadas para los lotes parciales:
+// { size_id: fundas }. Se recalcula cuando cambian los productos o la configuración.
+let reservaLoteMemo = null;
+function reservaLotePorSize() {
+  const firma = [allProducts, lotesPrecios, adminConfig];
+  if (reservaLoteMemo && reservaLoteMemo.firma.every((x, i) => x === firma[i])) return reservaLoteMemo.mapa;
+  const mapa = {};
+  for (const id of Object.keys(lotesPrecios)) {
+    if (!loteParcial(id)) continue;
+    const p = allProducts.find(x => (x.id || x.product_id) == id);
+    const c = p && composicionLote(p);
+    if (!c || !c.length) continue;
+    const n = lotesDisponibles(p);
+    for (const x of c) if (x.v) mapa[x.v.size_id] = (mapa[x.v.size_id] || 0) + n * x.q;
+  }
+  reservaLoteMemo = { firma, mapa };
+  return mapa;
+}
 const normModeloLote = s => String(s || '').trim().toUpperCase();
 function composicionLote(p) {
   const l = loteDe(p.id || p.product_id);
@@ -1259,17 +1287,25 @@ function fundasPorLote(p) {
   const c = composicionLote(p);
   return c ? c.reduce((s, x) => s + x.q, 0) : 0;
 }
-// Cuántos lotes enteros se pueden armar con el stock del depósito.
+// Cuántos lotes enteros se pueden armar con el stock del depósito (en un lote
+// parcial, como mucho los N separados).
 function lotesDisponibles(p) {
   const c = composicionLote(p);
   if (!c || !c.length) return 0;
-  return Math.min(...c.map(x => x.v ? Math.floor(getStockVariante(x.v) / x.q) : 0));
+  const alcanza = Math.min(...c.map(x => x.v ? Math.floor(getStockVarianteBase(x.v) / x.q) : 0));
+  const l = loteParcial(p.id || p.product_id);
+  return l ? Math.min(alcanza, Math.floor(+l.lotes)) : alcanza;
+}
+// Los renglones del lote se reconocen por `lote: true` (no por la clave): en un
+// lote parcial la misma funda puede estar también suelta, con su propio renglón.
+function renglonLote(id, sizeId) {
+  return Object.values(cart).find(i => i.id == id && i.lote && i.sizeId == sizeId) || null;
 }
 function lotesEnCarrito(p) {
   const id = p.id || p.product_id;
   const c = composicionLote(p);
   const x = c && c.find(y => y.v);
-  return x ? Math.floor((cart[id + '-' + x.v.size_id]?.qty || 0) / x.q) : 0;
+  return x ? Math.floor((renglonLote(id, x.v.size_id)?.qty || 0) / x.q) : 0;
 }
 // Deja en el carrito exactamente `n` lotes armados (0 = ninguno).
 function ponerLotes(id, n) {
@@ -1278,11 +1314,11 @@ function ponerLotes(id, n) {
   const c = p && composicionLote(p);
   if (!p || !l || !c) return;
   n = Math.max(0, Math.min(n, lotesDisponibles(p)));
-  Object.keys(cart).forEach(k => { if (cart[k].id == id) delete cart[k]; });
+  Object.keys(cart).forEach(k => { if (cart[k].id == id && cart[k].lote) delete cart[k]; });
   const nombre = p.name || p.nombre || p.product_name || 'Sin nombre';
   const img = getImagenes(p)[0] || '';
   if (n > 0) for (const x of c) {
-    cart[id + '-' + x.v.size_id] = { id: parseInt(id), nombre, varNombre: nombreCompat(x.v.size, id), precio: l.precio, qty: x.q * n, sizeId: x.v.size_id, img, lote: true };
+    cart[id + '-' + x.v.size_id + '-L'] = { id: parseInt(id), nombre, varNombre: nombreCompat(x.v.size, id), precio: l.precio, qty: x.q * n, sizeId: x.v.size_id, img, lote: true };
   }
   updateCartUI();
   renderProductos();
@@ -1830,7 +1866,7 @@ function construirIndiceModelos() {
 
   for (const p of fundas) {
     const id = p.id || p.product_id;
-    if (loteDe(id)) continue; // los lotes no se venden por modelo
+    if (soloLote(id)) continue; // los lotes no se venden por modelo (el parcial sí: su parte suelta)
     const hiddenVars = (adminConfig.hiddenVariants || {})[String(id)] || [];
     // Mismo filtro por-variante que renderVariantesGrid: sin ocultas y con stock.
     // Lo del Cyber BDI también va acá: renderPorModelo lo pone abajo de todo.
@@ -2335,7 +2371,7 @@ function variantesDeLote(p) {
   const ocultas = (adminConfig.hiddenVariants || {})[String(id)] || [];
   return sortVariantsByModel((p.variantes || []).filter(v => {
     if (ocultas.some(h => h == v.size_id)) return false;
-    const vs = getStockVariante(v);
+    const vs = getStockVarianteBase(v);
     return vs !== null && vs > 0;
   }));
 }
@@ -2359,7 +2395,7 @@ function agregarLote(id) {
   renderProductos();
 }
 function quitarLote(id) {
-  Object.keys(cart).forEach(k => { if (cart[k].id == id) delete cart[k]; });
+  Object.keys(cart).forEach(k => { if (cart[k].id == id && cart[k].lote) delete cart[k]; });
   updateCartUI();
   renderProductos();
 }
@@ -2585,7 +2621,7 @@ async function cargarProductos(paginas) {
   all = all.filter(p => {
     const pid = p.id || p.product_id;
     if (hiddenCats.includes(p.category || '')) return false;
-    if (adminConfig.hideNoStock && getStockTotal(p) === 0) return false;
+    if (adminConfig.hideNoStock && getStockTotal(p) === 0 && !(loteParcial(p.id || p.product_id) && lotesDisponibles(p) > 0)) return false;
     // Apagado: producto de reventa / que nunca va por mayor → no se muestra nunca.
     if (apagados.some(a => a == pid)) return false;
     // Pausado: espera que Darío lo habilite (pausados.json).
@@ -2627,7 +2663,14 @@ function getTopeVariante(v) {
 // "Sin stock" a secas y nunca se entera de que hay mercadería reservada.
 // «Última» (sin número: es la única) / «Últimas 2». Antes decía «Últimas 1» (Darío 10-nov).
 function ultimasTxt(n) { return n === 1 ? 'Última' : 'Últimas ' + n; }
+// Lo que se vende SUELTO: el stock del depósito menos lo separado para lotes parciales.
 function getStockVariante(v) {
+  const base = getStockVarianteBase(v);
+  if (base === null) return null;
+  const r = reservaLotePorSize()[v.size_id] || 0;
+  return r ? Math.max(0, base - r) : base;
+}
+function getStockVarianteBase(v) {
   if (!v.stock_por_tienda || !v.stock_por_tienda.length) return null;
   // Un depósito puede venir REPETIDO (varios renglones de inventario del mismo
   // depósito para la misma variante). GN no los devuelve en orden estable, así
@@ -2738,8 +2781,10 @@ function precioVarianteOverride(id, sizeId) {
   const n = parseFloat(vp);
   const propio = (vp !== undefined && vp !== null && vp !== '' && !isNaN(n) && n > 0) ? n : null;
   // Lote: todas las fundas al precio del lote, sin excepciones por modelo.
+  // En el lote parcial, la parte suelta va a su precio (el renglón del lote lo
+  // pone recomputarPreciosCarrito).
   const lote = loteDe(id);
-  if (lote) return lote.precio;
+  if (lote && !loteParcial(id)) return lote.precio;
   // En el Cyber manda su precio; el modelo que ya estaba más barato (11 / 12 /
   // 12 Pro) se queda con el suyo, salvo que el diseño diga «todos».
   const c = cyberDe(id);
@@ -2749,7 +2794,7 @@ function precioVarianteOverride(id, sizeId) {
 function getPrecioVariante(id, sizeId, base, ignorarTecho) {
   const o = precioVarianteOverride(id, sizeId);
   if (o === null) return base; // sin precio especial: usa el del producto (ya con lista mejor)
-  if (cyberDe(id) || loteDe(id)) return o; // el precio del Cyber (y el del lote) es final: no suma el descuento del código
+  if (cyberDe(id) || soloLote(id)) return o; // el precio del Cyber (y el del lote) es final: no suma el descuento del código
   // Con precio especial de variante: si hay código, también recibe el descuento,
   // con piso en el costo del producto. Sin código, queda a su precio.
   const p = (allProducts || []).find(x => (x.id || x.product_id) == id);
@@ -3049,7 +3094,7 @@ function getPrecioAnterior(p) {
 // cuenta hecha como sí/no en `_oferta` (y `_ofertaVar` por variante con precio
 // especial). Con código sí llega el costo, y el cálculo es el de siempre.
 function esOferta(p) {
-  if (cyberDe(p.id || p.product_id) || loteDe(p.id || p.product_id)) return true;
+  if (cyberDe(p.id || p.product_id) || soloLote(p.id || p.product_id)) return true;
   const umbral = parseFloat(adminConfig.ofertaMargen) || 0;
   if (umbral <= 0) return false;
   if (p.unit_cost === undefined) return !!p._oferta;
@@ -3063,7 +3108,7 @@ function esOferta(p) {
 // el costo del producto. Así se protege una variante al costo aunque el producto
 // en general tenga buen margen.
 function cartItemOferta(i) {
-  if (cyberDe(i.id) || loteDe(i.id)) return true;
+  if (cyberDe(i.id) || (i.lote && loteDe(i.id)) || soloLote(i.id)) return true;
   const umbral = parseFloat(adminConfig.ofertaMargen) || 0;
   if (umbral <= 0) return false;
   const p = allProducts.find(x => (x.id || x.product_id) == i.id);
@@ -3834,7 +3879,11 @@ function renderVariantesGrid(prods, ofertaTodas) {
   for (const p of prods) {
     const id = p.id || p.product_id;
     // Un lote se ve como lote en todos lados (Fundas, Todo, buscando): no se vende suelto.
-    if (loteDe(id)) { const c = tarjetaLote(p); if (c) cards.push(c); continue; }
+    // El lote parcial muestra las DOS tarjetas: la del lote y la suelta con el resto.
+    if (loteDe(id)) {
+      const c = tarjetaLote(p); if (c) cards.push(c);
+      if (soloLote(id) || categoria === 'lotes' || getStockTotal(p) === 0) continue;
+    }
     // Lo del Cyber se ve igual fuera de su sección (por ejemplo, buscando).
     const oferta = ofertaTodas || !!cyberDe(id);
     const nombre = p.name || p.nombre || p.product_name || 'Sin nombre';
@@ -4392,6 +4441,7 @@ function recomputarPreciosCarrito() {
     const p = (allProducts || []).find(x => (x.id || x.product_id) == it.id);
     if (!p) return;
     const base = getPrecio(p);
+    if (it.lote && loteDe(it.id)) { it.precio = loteDe(it.id).precio; return; }
     it.precio = it.sizeId ? getPrecioVariante(it.id, it.sizeId, base) : base;
   });
 }
@@ -4579,15 +4629,17 @@ function renderCartItems() {
   // Agrupar por producto (id numérico)
   const groups = {};
   for (const i of items) {
-    if (!groups[i.id]) groups[i.id] = { id: i.id, nombre: i.nombre, img: i.img, precio: i.precio, variantes: [] };
-    groups[i.id].variantes.push(i);
+    // En un lote parcial la misma funda puede ir en lote Y suelta: dos grupos.
+    const g = i.id + (i.lote ? '-L' : '');
+    if (!groups[g]) groups[g] = { id: i.id, nombre: i.nombre, img: i.img, precio: i.precio, lote: !!i.lote, variantes: [] };
+    groups[g].variantes.push(i);
   }
 
   body.innerHTML = Object.values(groups).map(g => {
     const subtotal = g.variantes.reduce((s, v) => s + v.precio * v.qty, 0);
     // Un lote va en UN renglón: se compra entero, así que no se cambian cantidades
     // modelo por modelo; solo se quita completo. Al pedido llegan funda por funda.
-    const esLote = !!loteDe(g.id);
+    const esLote = g.lote && !!loteDe(g.id);
     const fundasLote = g.variantes.reduce((s, v) => s + v.qty, 0);
     const pLote = esLote && loteDe(g.id).porLote ? allProducts.find(x => (x.id || x.product_id) == g.id) : null;
     const kLote = pLote ? lotesEnCarrito(pLote) : 0;
@@ -4599,7 +4651,7 @@ function renderCartItems() {
           '<button class="cart-item-del" title="Quitar el lote" onclick="quitarLote(' + g.id + ')">×</button>' +
         '</div>'
       : g.variantes.map(v => {
-      const cartKey = v.sizeId ? v.id + '-' + v.sizeId : String(v.id);
+      const cartKey = Object.keys(cart).find(k => cart[k] === v) || (v.sizeId ? v.id + '-' + v.sizeId : String(v.id));
       const label = v.varNombre || 'Sin variante';
       return '<div class="cart-variant-row">' +
         '<span class="cart-variant-name">' + label + '</span>' +
@@ -4974,16 +5026,32 @@ function mostrarAlertaStock(problemas) {
     if (yaEsta >= 0) faltantesSesion[yaEsta] = reg; else faltantesSesion.push(reg);
   }
 
-  // Ajustar carrito según lo que reportó el servidor
+  // Ajustar carrito según lo que reportó el servidor. En un lote parcial la misma
+  // funda puede venir en dos renglones (lote y suelta) y el servidor cuenta la
+  // suma: se recorta primero lo suelto y, si no alcanza, los lotes enteros.
   for (const prob of problemas) {
-    const key = Object.keys(cart).find(k => {
+    const keys = Object.keys(cart).filter(k => {
       const i = cart[k];
       return String(i.id) === String(prob.product_id) &&
              String(i.sizeId || '') === String(prob.size_id || '');
     });
-    if (!key) continue;
-    if (prob.disponible === 0) delete cart[key];
-    else cart[key].qty = prob.disponible;
+    if (!keys.length) continue;
+    const kLote = keys.find(k => cart[k].lote && cart[k].sizeId);
+    const kSuelto = keys.find(k => !cart[k].lote);
+    if (!kLote || !kSuelto) {
+      for (const key of keys) { if (prob.disponible === 0) delete cart[key]; else cart[key].qty = prob.disponible; }
+      continue;
+    }
+    const enLote = cart[kLote].qty;
+    if (prob.disponible >= enLote) {
+      const resto = prob.disponible - enLote;
+      if (resto === 0) delete cart[kSuelto]; else cart[kSuelto].qty = resto;
+    } else {
+      delete cart[kSuelto];
+      const p = allProducts.find(x => (x.id || x.product_id) == prob.product_id);
+      const x = p && (composicionLote(p) || []).find(y => y.v && y.v.size_id == prob.size_id);
+      ponerLotes(prob.product_id, x ? Math.floor(prob.disponible / x.q) : 0);
+    }
   }
   updateCartUI();
 
