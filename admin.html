@@ -211,6 +211,8 @@
   .ll-estado.on { color: var(--success); font-weight: 600; }
   .ll-flecha { color: var(--text-muted); font-size: 16px; width: 12px; text-align: center; }
   @media (max-width: 640px) { .lote-linea { flex-wrap: wrap; gap: 4px 10px; } .ll-nombre { flex: 1 1 60%; } .ll-datos { flex: 1 1 100%; order: 3; } }
+  .lote-costo { font-size: 13px; color: var(--text-muted); margin: 2px 0 10px; }
+  .lote-costo strong { color: var(--text); font-weight: 600; }
   .btn-mini { background: #fff; color: var(--text); border: 1px solid var(--border); padding: 3px 8px; border-radius: var(--radius-sm); cursor: pointer; font-size: 12px; font-family: inherit; margin-left: 4px; }
   .btn-mini:disabled { opacity: .45; cursor: default; }
   .setting-row { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px 16px; display: flex; align-items: center; gap: 16px; margin-bottom: 8px; }
@@ -2317,6 +2319,16 @@ function tarjetaLoteAdmin(id) {
   const pausado = (lotesPausados || []).includes(String(id));
   const aviso = (oculto || pausado) ? '<div class="desc-aviso" style="margin:0 0 8px">No se ve en el catálogo: está ' + (pausado ? 'pausado' : 'oculto') + '. El lote rige cuando lo vuelvas a mostrar.</div>' : '';
   if (pausado || oculto) alerta = alerta ? alerta + ' · ' + (pausado ? 'pausado' : 'oculto') : (pausado ? 'pausado' : 'oculto');
+  // Costo y lo que se gana por funda, en el lote y suelta (Darío 16-nov). Debajo del
+  // costo puede ser a propósito (liquidación): se dice, sin alarma.
+  const costo = p ? parseFloat(p.unit_cost || 0) : 0;
+  const ganaTxt = (pr) => {
+    const g = pr - costo;
+    return g >= 0 ? 'ganás ' + fmtAR(g) + ' por funda (' + Math.round(g / pr * 100) + '%)' : 'queda ' + fmtAR(-g) + ' por funda debajo del costo';
+  };
+  const costoHTML = costo > 0 && precio > 0
+    ? '<div class="lote-costo">Costo ' + fmtAR(costo) + ' · <strong>en el lote ' + ganaTxt(precio) + '</strong>' + (may > 0 ? ' · suelta ' + ganaTxt(may) : '') + '</div>'
+    : (p && !(costo > 0) ? '<div class="lote-costo">Sin costo cargado.</div>' : '');
   const abierto = loteAbierto === String(id);
   const nombre = escH(p ? p.name : (l.nombre || 'Producto ' + id));
   const cabeza = '<div class="lote-linea" onclick="abrirLoteAdmin(\'' + id + '\')">' +
@@ -2336,6 +2348,7 @@ function tarjetaLoteAdmin(id) {
     '<div class="promo-grid"><label>Precio por funda en el lote ($)<input type="number" min="0" step="10" value="' + escH(l.precio) + '" onchange="updLotePrecio(\'' + id + '\',this.value)" /></label>' +
       (armado ? '<label>Lotes a la venta<input type="number" min="0" step="1" value="' + (Math.floor(Number(l.lotes) || 0) || '') + '" placeholder="Todos" onchange="updLoteCantidad(\'' + id + '\',this.value)" /><span class="desc-hint" style="margin:2px 0 0">Vacío = todo en lote. Con un número, el resto se vende suelto.</span></label>' : '') +
     '</div>' +
+    costoHTML +
     tabla +
     '<div class="promo-preview">' + resumen + '</div>' +
     '<div class="promo-actions">' +
