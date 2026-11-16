@@ -198,6 +198,8 @@
   .promo-preview { font-size: 12px; background: var(--bg); border-radius: var(--radius-sm); padding: 8px 10px; margin-top: 10px; }
   .promo-actions { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
   .promo-actions .btn-del { margin-left: auto; background: transparent; color: var(--danger); border: 1px solid var(--danger); padding: 5px 10px; border-radius: var(--radius-sm); cursor: pointer; font-size: 12px; font-family: inherit; }
+  .btn-mini { background: #fff; color: var(--text); border: 1px solid var(--border); padding: 3px 8px; border-radius: var(--radius-sm); cursor: pointer; font-size: 12px; font-family: inherit; margin-left: 4px; }
+  .btn-mini:disabled { opacity: .45; cursor: default; }
   .setting-row { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px 16px; display: flex; align-items: center; gap: 16px; margin-bottom: 8px; }
   .setting-info { flex: 1; }
   .setting-label { font-size: 14px; font-weight: 500; }
@@ -2257,7 +2259,9 @@ function tarjetaLoteAdmin(id) {
     const alcanzan = conQ.length ? Math.min(...conQ.map(f => f.alcanza)) : 0;
     // Lote PARCIAL: con «Lotes a la venta» se separan esos lotes y el resto se vende suelto.
     const nVenta = Math.floor(Number(l.lotes) || 0);
-    const lotes = nVenta > 0 ? Math.min(nVenta, alcanzan) : alcanzan;
+    const vendidos = (config.lotesVendidos || {})[String(id)] || 0;
+    const quedan = Math.max(0, nVenta - vendidos);
+    const lotes = nVenta > 0 ? Math.min(quedan, alcanzan) : alcanzan;
     tabla = '<table class="lote-modelos"><tr><th>Modelo</th><th class="num">En el depósito</th><th class="num">Por lote</th><th class="num">Alcanza para</th></tr>' +
       filas.map(f => '<tr' + (f.q > 0 && f.alcanza === lotes && lotes < 1 ? ' class="falta"' : '') + '><td>' + escH(f.v.size) + '</td><td class="num">' + f.st + '</td>' +
         '<td class="num"><input type="number" min="0" step="1" value="' + (f.q || '') + '" placeholder="0" onchange="updLoteModelo(\'' + id + '\',\'' + escH(f.v.size).replace(/'/g, "\\'") + '\',this.value)" /></td>' +
@@ -2265,8 +2269,12 @@ function tarjetaLoteAdmin(id) {
     resumen = 'Cada lote: <strong>' + tam + ' fundas</strong> a ' + fmtAR(precio) + ' = <strong>' + fmtAR(tam * precio) + '</strong>' +
       (may > precio && tam ? ' · ahorra ' + fmtAR((may - precio) * tam) + ' por lote (' + Math.round((may - precio) / may * 100) + '%)' : '') +
       (nVenta > 0
-        ? (s => '<br>A la venta: <strong>' + lotes + (lotes === 1 ? ' lote' : ' lotes') + ' = ' + (lotes * tam) + ' fundas en lote</strong> · <strong>' + s + ' sueltas</strong> a ' + fmtAR(may) +
-            (nVenta > alcanzan ? ' · <span style="color:var(--danger)">pediste ' + nVenta + ' lotes y el stock de hoy alcanza para ' + alcanzan + '</span>' : ''))(filas.reduce((s, f) => s + (f.st - f.q * lotes), 0))
+        ? (s => '<br><strong>' + nVenta + (nVenta === 1 ? ' lote' : ' lotes') + ' a la venta · ' + vendidos + (vendidos === 1 ? ' vendido' : ' vendidos') + ' · quedan ' + quedan + '</strong>' +
+            ' <button class="btn-mini" onclick="corregirVendidos(\'' + id + '\',' + (vendidos - 1) + ')"' + (vendidos > 0 ? '' : ' disabled') + ' title="Si se canceló un pedido con lote">− 1 vendido</button>' +
+            (vendidos > 0 ? ' <button class="btn-mini" onclick="corregirVendidos(\'' + id + '\',0)">Volver a 0</button>' : '') +
+            '<br>Hoy en el catálogo: <strong>' + lotes + (lotes === 1 ? ' lote' : ' lotes') + ' = ' + (lotes * tam) + ' fundas en lote</strong> · <strong>' + s + ' sueltas</strong> a ' + fmtAR(may) +
+            (quedan > alcanzan ? ' · <span style="color:var(--danger)">quedan ' + quedan + ' lotes por vender y el stock de hoy alcanza para ' + alcanzan + '</span>' : '') +
+            (nVenta > 0 && quedan === 0 ? ' · ya se vendieron todos: la funda se vende toda suelta' : ''))(filas.reduce((s, f) => s + (f.st - f.q * lotes), 0))
         : ' · con el stock de hoy se arman <strong>' + lotes + ' lotes</strong>' +
           ((s => s > 0 ? ' (sobran ' + s + ' fundas, que no se venden sueltas)' : '')(filas.reduce((s, f) => s + (f.st - f.q * lotes), 0))));
   } else {
@@ -2326,6 +2334,18 @@ function updLoteModelo(id, modelo, v) {
   const n = Math.max(0, Math.floor(Number(v) || 0));
   if (n > 0) l.porLote[modelo] = n; else delete l.porLote[modelo];
   renderLotesLista();
+}
+// Corrige los lotes vendidos (pedido cancelado o empezar de nuevo). Se guarda en el
+// momento, aparte de «Guardar cambios»: lo cuenta el servidor con cada pedido.
+async function corregirVendidos(id, valor) {
+  valor = Math.max(0, valor);
+  if (valor === 0 && !confirm('¿Volver a 0 los lotes vendidos? Se vuelven a ofrecer todos los lotes a la venta.')) return;
+  try {
+    const r = await fetch('/api/config?accion=lotes-vendidos', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword }, body: JSON.stringify({ id, valor }) });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'HTTP ' + r.status);
+    config.lotesVendidos = { ...(config.lotesVendidos || {}), [String(id)]: valor };
+    renderLotesLista();
+  } catch (e) { alert('No se pudo corregir: ' + e.message); }
 }
 function updLoteCantidad(id, v) {
   const l = config.lotes.productos[id]; if (!l) return;

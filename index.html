@@ -1254,6 +1254,14 @@ function loteParcial(id) {
   const l = loteDe(id);
   return l && l.porLote && Math.floor(+l.lotes) > 0 ? l : null;
 }
+// De los N lotes a la venta, los que todavía no se vendieron (los vendidos los
+// anota el servidor en cada pedido: adminConfig.lotesVendidos). En 0, todo suelto.
+function lotesQueQuedan(id) {
+  const l = loteParcial(id);
+  if (!l) return 0;
+  const vendidos = +((adminConfig.lotesVendidos || {})[String(id)]) || 0;
+  return Math.max(0, Math.floor(+l.lotes) - vendidos);
+}
 // La funda se vende SOLO en lote (diseño entero, o armado sin cantidad de lotes).
 function soloLote(id) { return !!loteDe(id) && !loteParcial(id); }
 // Cuántas fundas de cada variante quedan separadas para los lotes parciales:
@@ -1293,8 +1301,9 @@ function lotesDisponibles(p) {
   const c = composicionLote(p);
   if (!c || !c.length) return 0;
   const alcanza = Math.min(...c.map(x => x.v ? Math.floor(getStockVarianteBase(x.v) / x.q) : 0));
-  const l = loteParcial(p.id || p.product_id);
-  return l ? Math.min(alcanza, Math.floor(+l.lotes)) : alcanza;
+  const id = p.id || p.product_id;
+  const l = loteParcial(id);
+  return l ? Math.max(0, Math.min(alcanza, lotesQueQuedan(id))) : alcanza;
 }
 // Los renglones del lote se reconocen por `lote: true` (no por la clave): en un
 // lote parcial la misma funda puede estar también suelta, con su propio renglón.

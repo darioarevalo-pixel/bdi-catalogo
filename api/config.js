@@ -146,6 +146,14 @@ module.exports = async (req, res) => {
     try {
       const guardada = await kvGet();
       const config = { ...DEFAULT, ...(guardada || {}) };
+      // Lotes vendidos de los lotes parciales (los anota api/proxy.js en cada pedido).
+      try {
+        const r = await kvCmd(['HGETALL', 'lotes:vendidos']);
+        const a = (r && r.result) || [];
+        const v = {};
+        for (let i = 0; i + 1 < a.length; i += 2) v[a[i]] = parseInt(a[i + 1], 10) || 0;
+        config.lotesVendidos = v;
+      } catch (e) { config.lotesVendidos = {}; }
       // Datos sensibles que NO se exponen al público (solo el admin con verify, o
       // se validan on-demand): cupones (?accion=cupon) y las reglas de la "lista
       // mejor" + códigos de acceso (?accion=codigo). 'apagados' sí es público
@@ -175,6 +183,17 @@ module.exports = async (req, res) => {
       return res.status(401).json({ error: 'Contraseña incorrecta' });
     try {
       const incoming = req.body || {};
+      // Lotes vendidos: Darío los corrige a mano desde Marketing › Lotes (pedido
+      // cancelado, o empezar de nuevo). No toca el resto de la config.
+      if (req.query.accion === 'lotes-vendidos') {
+        const id = String(incoming.id || '');
+        const valor = Math.max(0, Math.floor(Number(incoming.valor) || 0));
+        if (!/^\d+$/.test(id)) return res.status(400).json({ error: 'Falta el producto' });
+        await kvCmd(['HSET', 'lotes:vendidos', id, String(valor)]);
+        return res.json({ ok: true, id, valor });
+      }
+      // Viene de la lectura (es de otro lugar): no se guarda dentro de la config.
+      delete incoming.lotesVendidos;
       // Control de concurrencia optimista (repo/admin compartido): el cliente
       // manda en el header el updatedAt que vio al cargar. Si la config guardada
       // cambió desde entonces, otra sesión guardó en el medio → NO pisamos.

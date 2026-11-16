@@ -18,6 +18,40 @@ function precioDeLote(id, cfg) {
   return positivo(l.precio);
 }
 
+// LOTES VENDIDOS (lote parcial, Darío 16-nov-2026). En un lote parcial Darío pone
+// cuántos lotes se venden («Lotes a la venta»); cada pedido confirmado suma acá los
+// que se llevó, y el catálogo muestra solo los que quedan (N − vendidos). Cuando
+// llegan a N, la funda queda toda suelta. Se guarda aparte de la config (hash
+// `lotes:vendidos`, id → lotes) para que un guardado del panel no lo pise; el panel
+// lo corrige a mano si se cancela un pedido (api/config.js, accion=lotes-vendidos).
+// Los renglones del lote se reconocen por el precio: van al precio del lote, y la
+// parte suelta va a su precio normal, que es más alto.
+const LOTES_VENDIDOS_KEY = 'lotes:vendidos';
+async function anotarLotesVendidos(items) {
+  try {
+    if (!Array.isArray(items) || !items.length) return;
+    const cfg = await leerConfigKV();
+    const panel = cfg && cfg.lotes && cfg.lotes.productos;
+    const todos = panel || LOTES;
+    for (const [id, l] of Object.entries(todos || {})) {
+      if (!l || (panel && l.activo === false) || !l.porLote || !(Math.floor(+l.lotes) > 0)) continue;
+      const precio = positivo(l.precio);
+      const tam = Object.values(l.porLote).reduce((s, q) => s + (+q || 0), 0);
+      if (!precio || !tam) continue;
+      const fundas = items
+        .filter(it => String(it.product_id) === String(id) && Number(it.unit_price) <= precio + 0.5)
+        .reduce((s, it) => s + (Number(it.quantity) || 0), 0);
+      const n = Math.floor(fundas / tam);
+      if (n > 0) {
+        await kvCmd(['HINCRBY', LOTES_VENDIDOS_KEY, String(id), String(n)]);
+        console.log(`[lotes] producto ${id}: +${n} lote(s) vendido(s)`);
+      }
+    }
+  } catch (e) {
+    console.error('[lotes] no se pudieron anotar los vendidos:', (e && e.message) || e);
+  }
+}
+
 const API_BASE = 'https://www.gestionnube.com/api/v1';
 // Sin respaldo: ver la nota larga en api/config.js. Si ADMIN_PASSWORD no está
 // cargada, `esAdmin` da false siempre (nadie saltea los topes): lo resuelve
@@ -1391,6 +1425,7 @@ module.exports = async (req, res) => {
     if (esConfirmarPedido && erpManda) {
       const creado = await ERP_CORTE.crearPedido({ pedido: paraGN, datosErp: paraElERP(paraERP), esAdmin });
       marcar('crearVenta');
+      if (creado.status >= 200 && creado.status < 300) await anotarLotesVendidos(paraGN.items);
       return res.status(creado.status).json(creado.cuerpo);
     }
 
@@ -1450,7 +1485,7 @@ module.exports = async (req, res) => {
     // La venta ya está en GN: se le avisa también al ERP (ver `avisarAlERP`). No
     // cambia en nada la respuesta al cliente; `erp` mide cuánto se esperó (0 si
     // Vercel deja terminarlo después de responder).
-    if (esConfirmarPedido && r.ok) { await avisarAlERP(paraGN, data, esAdmin, paraERP); marcar('erp'); }
+    if (esConfirmarPedido && r.ok) { await avisarAlERP(paraGN, data, esAdmin, paraERP); marcar('erp'); await anotarLotesVendidos(paraGN.items); }
     // Cacheo en el CDN de Vercel SOLO para la lista de productos (lectura pura,
     // se usa para mostrar el catálogo). El navegador igual revalida (max-age=0),
     // pero el CDN sirve una copia compartida hasta 60s → abrir el catálogo es
