@@ -185,6 +185,16 @@
   .promo-busca-res { max-height: 180px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-top: 6px; }
   .promo-busca-res div { padding: 6px 10px; font-size: 12px; cursor: pointer; border-bottom: 1px solid var(--border); }
   .promo-busca-res div:hover { background: var(--bg); }
+  /* Marketing › Lotes */
+  .lote-tipo { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 10px; }
+  .lote-tipo button { font-family: inherit; font-size: 12px; border: 1px solid var(--border-strong); background: white; border-radius: 99px; padding: 5px 12px; cursor: pointer; }
+  .lote-tipo button.on { background: var(--accent); border-color: var(--accent); color: white; }
+  .lote-modelos { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .lote-modelos th { text-align: left; font-size: 11px; font-weight: 500; color: var(--text-muted); padding: 4px 6px; border-bottom: 1px solid var(--border); }
+  .lote-modelos td { padding: 4px 6px; border-bottom: 1px solid var(--border); }
+  .lote-modelos td.num, .lote-modelos th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .lote-modelos input { width: 64px; padding: 5px 8px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; text-align: right; }
+  .lote-modelos tr.falta td { color: var(--danger); }
   .promo-preview { font-size: 12px; background: var(--bg); border-radius: var(--radius-sm); padding: 8px 10px; margin-top: 10px; }
   .promo-actions { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
   .promo-actions .btn-del { margin-left: auto; background: transparent; color: var(--danger); border: 1px solid var(--danger); padding: 5px 10px; border-radius: var(--radius-sm); cursor: pointer; font-size: 12px; font-family: inherit; }
@@ -572,6 +582,7 @@
     <div class="tab-subs" data-group="marketing">
       <button class="tab-btn" onclick="setTab('banners')">Banners</button>
       <button class="tab-btn" onclick="setTab('descuentos')">🏷 Descuentos</button>
+      <button class="tab-btn" onclick="setTab('lotes')">📦 Lotes</button>
       <button class="tab-btn" onclick="setTab('cupones')">Cupones</button>
     </div>
     <div class="tab-subs" data-group="ajustes">
@@ -641,6 +652,17 @@
         <div id="desc-promos-lista"></div>
         <button class="btn-save" onclick="addPromo()">+ Agregar promo</button>
       </div>
+    </div>
+
+    <div id="tab-lotes" style="display:none">
+      <p class="section-note">Fundas que se venden en <strong>lote</strong>, a un precio por funda más bajo que sueltas. Un diseño en lote <strong>no se vende suelto</strong> en el catálogo. Acordate de tocar "Guardar cambios".</p>
+      <div id="lotes-sin-guardar" class="desc-aviso" style="display:none">Estos son los lotes que había hasta hoy. Revisalos y tocá <strong>Guardar cambios</strong>: desde ahí el catálogo toma los lotes de acá.</div>
+      <div class="desc-bloque">
+        <div class="desc-bloque-head"><strong>Agregar un lote</strong></div>
+        <input type="text" id="lotes-busca" placeholder="Buscar la funda…" oninput="buscarLote(this.value)" style="width:100%;padding:7px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);font-family:inherit;font-size:13px" />
+        <div id="lotes-busca-res"></div>
+      </div>
+      <div id="lotes-lista"></div>
     </div>
 
     <div id="tab-cupones" style="display:none">
@@ -1828,7 +1850,7 @@ const TAB_GROUPS = {
   catalogo: ['products', 'fotos', 'topes'],
   precios: ['prices', 'margenes', 'pendientes', 'generador'],
   pedidos: ['pedidos', 'carritos', 'pedido', 'nota'],
-  marketing: ['banners', 'descuentos', 'cupones'],
+  marketing: ['banners', 'descuentos', 'lotes', 'cupones'],
   ajustes: ['settings'],
 };
 function grupoDeTab(tab) {
@@ -1849,6 +1871,7 @@ function setTab(tab) {
   $('tab-banners').style.display = tab === 'banners' ? 'block' : 'none';
   $('tab-cupones').style.display = tab === 'cupones' ? 'block' : 'none';
   $('tab-descuentos').style.display = tab === 'descuentos' ? 'block' : 'none';
+  $('tab-lotes').style.display = tab === 'lotes' ? 'block' : 'none';
   $('tab-codigos').style.display = tab === 'codigos' ? 'block' : 'none';
   $('tab-margenes').style.display = tab === 'margenes' ? 'block' : 'none';
   $('tab-pendientes').style.display = tab === 'pendientes' ? 'block' : 'none';
@@ -1884,6 +1907,7 @@ function setTab(tab) {
   if (tab === 'banners') renderBannersAdmin();
   if (tab === 'cupones') { renderCupones(); populateCuponCompartir(); }
   if (tab === 'descuentos') renderDescuentos();
+  if (tab === 'lotes') renderLotes();
   if (tab === 'codigos') renderCodigos();
   if (tab === 'margenes') { populateMargenCatFilter(); renderMargenes(); }
   if (tab === 'pendientes') { populatePendientesCatFilter(); renderPendientes(); }
@@ -2171,6 +2195,136 @@ function renderPromos() {
       '</div>' +
     '</div>';
   }).join('');
+}
+// ===== Lotes (Marketing › Lotes, Darío 16-nov-2026) =====
+// config.lotes = { productos: { [id]: { precio, nombre, porLote?: { 'iPhone 13': 2, … }, activo } } }.
+// Sin `porLote` = DISEÑO ENTERO (el cliente se lleva todas las fundas del depósito).
+// Con `porLote` = ARMADO (lotes iguales con esa cantidad por modelo; el cliente elige
+// cuántos). Lo leen el catálogo (index.html, loteDe) y el control de precios
+// (api/proxy.js). Si el panel nunca guardó lotes, se precargan los de lotes.json y se
+// avisa que falta guardar: hasta ese guardado, el catálogo sigue con lotes.json.
+let lotesBusqueda = '';
+let lotesPausados = null; // ids de pausados.json (no se muestran en el catálogo)
+async function renderLotes() {
+  if (!lotesPausados) {
+    try { const r = await fetch('/pausados.json', { cache: 'no-store' }); const d = r.ok ? await r.json() : {}; lotesPausados = (Array.isArray(d) ? d : (d.productos || d.ids || [])).map(x => String(typeof x === 'object' ? x.id : x)); } catch (e) { lotesPausados = []; }
+  }
+  if (!config.lotes || !config.lotes.productos) {
+    let base = {};
+    try { const r = await fetch('/lotes.json', { cache: 'no-store' }); if (r.ok) base = (await r.json()).productos || {}; } catch (e) {}
+    const productos = {};
+    for (const k in base) productos[k] = { ...base[k], activo: true };
+    config.lotes = { productos };
+    $('lotes-sin-guardar').style.display = '';
+  }
+  renderLotesLista();
+}
+const prodLoteAdmin = (id) => allAdminProducts.find(p => (p.id || p.product_id) == id) || null;
+const stockLoteAdmin = (v) => Math.max(0, getStockVarianteAdmin(v) || 0);
+function renderLotesLista() {
+  const L = config.lotes.productos;
+  const q = lotesBusqueda.trim().toLowerCase();
+  const res = q.length >= 2
+    ? allAdminProducts.filter(p => /funda/i.test(p.category || '') && (p.name || '').toLowerCase().includes(q) && !L[String(p.id || p.product_id)]).slice(0, 30)
+    : [];
+  $('lotes-busca-res').innerHTML = res.length
+    ? '<div class="promo-busca-res">' + res.map(p => {
+        const n = (p.variantes || []).reduce((s, v) => s + stockLoteAdmin(v), 0);
+        return '<div onclick="sumarLote(' + (p.id || p.product_id) + ')">+ ' + escH(p.name) + ' <span style="color:var(--text-muted)">· ' + n + ' fundas en el depósito</span></div>';
+      }).join('') + '</div>'
+    : (q.length >= 2 ? '<div class="desc-hint" style="margin-top:6px">No hay fundas con ese nombre (o ya están en lote).</div>' : '');
+  const ids = Object.keys(L);
+  $('lotes-lista').innerHTML = ids.length ? ids.map(tarjetaLoteAdmin).join('') : '<div class="desc-hint">Sin lotes cargados.</div>';
+}
+function tarjetaLoteAdmin(id) {
+  const l = config.lotes.productos[id];
+  const p = prodLoteAdmin(id);
+  const armado = !!l.porLote;
+  const may = p ? parseFloat(p.wholesaler_price || 0) : 0;
+  const precio = Number(l.precio) || 0;
+  const vars = p ? (p.variantes || []) : [];
+  let tabla = '', resumen = '';
+  if (!p) {
+    tabla = '<div class="desc-hint">No aparece en el catálogo ahora (sin stock, oculto o sin precio mayorista). Queda guardado igual.</div>';
+  } else if (armado) {
+    const filas = vars.map(v => {
+      const q = Number(l.porLote[v.size]) || 0;
+      const st = stockLoteAdmin(v);
+      return { v, q, st, alcanza: q > 0 ? Math.floor(st / q) : null };
+    });
+    const tam = filas.reduce((s, f) => s + f.q, 0);
+    const conQ = filas.filter(f => f.q > 0);
+    const lotes = conQ.length ? Math.min(...conQ.map(f => f.alcanza)) : 0;
+    tabla = '<table class="lote-modelos"><tr><th>Modelo</th><th class="num">En el depósito</th><th class="num">Por lote</th><th class="num">Alcanza para</th></tr>' +
+      filas.map(f => '<tr' + (f.q > 0 && f.alcanza === lotes && lotes < 1 ? ' class="falta"' : '') + '><td>' + escH(f.v.size) + '</td><td class="num">' + f.st + '</td>' +
+        '<td class="num"><input type="number" min="0" step="1" value="' + (f.q || '') + '" placeholder="0" onchange="updLoteModelo(\'' + id + '\',\'' + escH(f.v.size).replace(/'/g, "\\'") + '\',this.value)" /></td>' +
+        '<td class="num">' + (f.q > 0 ? f.alcanza + ' lotes' : '—') + '</td></tr>').join('') + '</table>';
+    resumen = 'Cada lote: <strong>' + tam + ' fundas</strong> a ' + fmtAR(precio) + ' = <strong>' + fmtAR(tam * precio) + '</strong>' +
+      (may > precio && tam ? ' · ahorra ' + fmtAR((may - precio) * tam) + ' por lote (' + Math.round((may - precio) / may * 100) + '%)' : '') +
+      ' · con el stock de hoy se arman <strong>' + lotes + ' lotes</strong>' +
+      ((s => s > 0 ? ' (sobran ' + s + ' fundas, que no se venden sueltas)' : '')(filas.reduce((s, f) => s + (f.st - f.q * lotes), 0)));
+  } else {
+    const n = vars.reduce((s, v) => s + stockLoteAdmin(v), 0);
+    // Diseño entero: no hay nada que cargar por modelo, alcanza con ver qué hay (una línea).
+    const hay = vars.filter(v => stockLoteAdmin(v) > 0);
+    tabla = '<div class="desc-hint" style="margin:0">En el depósito: ' + (hay.length
+      ? hay.map(v => escH(String(v.size).replace(/^iPhone\s*/i, '')) + ' ×' + stockLoteAdmin(v)).join(' · ')
+      : 'nada') + '</div>';
+    resumen = 'El cliente se lleva las <strong>' + n + ' fundas</strong> a ' + fmtAR(precio) + ' = <strong>' + fmtAR(n * precio) + '</strong>' +
+      (may > precio && n ? ' · ahorra ' + fmtAR((may - precio) * n) + ' (' + Math.round((may - precio) / may * 100) + '%)' : '');
+  }
+  const activo = l.activo !== false;
+  const oculto = (config.hiddenProducts || []).map(String).includes(String(id));
+  const pausado = (lotesPausados || []).includes(String(id));
+  const aviso = (oculto || pausado) ? '<div class="desc-aviso" style="margin:0 0 8px">No se ve en el catálogo: está ' + (pausado ? 'pausado' : 'oculto') + '. El lote rige cuando lo vuelvas a mostrar.</div>' : '';
+  return '<div class="promo-card' + (activo ? '' : ' inactive') + '">' +
+    '<div class="desc-bloque-head" style="margin-bottom:6px"><strong>' + escH(p ? p.name : (l.nombre || 'Producto ' + id)) + '</strong>' +
+      (may ? '<span style="color:var(--text-muted);font-size:12px">suelta ' + fmtAR(may) + '</span>' : '') + '</div>' + aviso +
+    '<div class="lote-tipo">' +
+      '<button class="' + (armado ? '' : 'on') + '" onclick="tipoLote(\'' + id + '\',false)">Diseño entero</button>' +
+      '<button class="' + (armado ? 'on' : '') + '" onclick="tipoLote(\'' + id + '\',true)">Armado (cantidad por modelo)</button>' +
+    '</div>' +
+    '<div class="promo-grid"><label>Precio por funda en el lote ($)<input type="number" min="0" step="10" value="' + escH(l.precio) + '" onchange="updLotePrecio(\'' + id + '\',this.value)" /></label></div>' +
+    tabla +
+    '<div class="promo-preview">' + resumen + '</div>' +
+    '<div class="promo-actions">' +
+      '<label class="toggle-row"><button class="toggle' + (activo ? ' on' : '') + '" onclick="toggleLote(\'' + id + '\')"></button>' + (activo ? 'Prendido' : 'Apagado: se vende suelto') + '</label>' +
+      '<button class="btn-del" onclick="quitarLoteAdmin(\'' + id + '\')">Eliminar</button>' +
+    '</div>' +
+  '</div>';
+}
+function buscarLote(v) { lotesBusqueda = v; renderLotesLista(); }
+function sumarLote(pid) {
+  const p = prodLoteAdmin(pid); if (!p) return;
+  const may = parseFloat(p.wholesaler_price || 0);
+  // Arranca como ARMADO con la proporción del stock de hoy dividida en 10 lotes (se
+  // corrige a mano) y 20% menos que suelta: lo que se usó con Twinkle (16-nov).
+  config.lotes.productos[String(pid)] = { precio: may ? Math.round(may * 0.8 / 10) * 10 : 0, nombre: p.name, activo: true };
+  lotesBusqueda = ''; $('lotes-busca').value = '';
+  tipoLote(String(pid), true);
+}
+function tipoLote(id, armado) {
+  const l = config.lotes.productos[id]; if (!l) return;
+  if (!armado) delete l.porLote;
+  else if (!l.porLote) {
+    const p = prodLoteAdmin(id);
+    l.porLote = {};
+    for (const v of (p ? p.variantes || [] : [])) { const st = stockLoteAdmin(v); if (st > 0) l.porLote[v.size] = Math.max(1, Math.floor(st / 10)); }
+  }
+  renderLotesLista();
+}
+function updLoteModelo(id, modelo, v) {
+  const l = config.lotes.productos[id]; if (!l || !l.porLote) return;
+  const n = Math.max(0, Math.floor(Number(v) || 0));
+  if (n > 0) l.porLote[modelo] = n; else delete l.porLote[modelo];
+  renderLotesLista();
+}
+function updLotePrecio(id, v) { const l = config.lotes.productos[id]; if (l) { l.precio = v === '' ? 0 : Number(v); renderLotesLista(); } }
+function toggleLote(id) { const l = config.lotes.productos[id]; if (l) { l.activo = l.activo === false; renderLotesLista(); } }
+function quitarLoteAdmin(id) {
+  if (!confirm('¿Sacar este lote? La funda vuelve a venderse suelta (se aplica al tocar Guardar cambios).')) return;
+  delete config.lotes.productos[id];
+  renderLotesLista();
 }
 function promoPorId(id) { return (config.descuentos.promos || []).find(x => x.id === id); }
 function toggleEscala() { config.descuentos.escalaActiva = config.descuentos.escalaActiva === false; renderDescuentos(); }

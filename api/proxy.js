@@ -8,6 +8,15 @@ try { CYBER = require('../cyber.json').productos || {}; } catch (e) { CYBER = {}
 // Lotes de fundas (lotes.json): mismo criterio, precio puesto a mano por Darío.
 let LOTES = {};
 try { LOTES = require('../lotes.json').productos || {}; } catch (e) { LOTES = {}; }
+// Desde el 16-nov los lotes se manejan en el panel (Marketing › Lotes → cfg.lotes).
+// Si el panel ya guardó lotes, mandan ésos (uno apagado se vende suelto: sin precio
+// de lote); si nunca guardó, sigue lotes.json. Mismo criterio que index.html.
+function precioDeLote(id, cfg) {
+  const panel = cfg && cfg.lotes && cfg.lotes.productos;
+  const l = panel ? panel[String(id)] : LOTES[String(id)];
+  if (!l || (panel && l.activo === false)) return 0;
+  return positivo(l.precio);
+}
 
 const API_BASE = 'https://www.gestionnube.com/api/v1';
 // Sin respaldo: ver la nota larga en api/config.js. Si ADMIN_PASSWORD no está
@@ -871,7 +880,7 @@ function pisoDeRenglon(item, p, cfg, afloje) {
   // Es final (el catálogo no le suma el descuento del código).
   const cy = positivo((CYBER[String(id)] || {}).precio);
   if (cy > 0) piso = (piso > 0) ? Math.min(piso, cy) : cy;
-  const lote = positivo((LOTES[String(id)] || {}).precio);
+  const lote = precioDeLote(id, cfg);
   if (lote > 0) piso = (piso > 0) ? Math.min(piso, lote) : lote;
 
   if (item.size_id !== undefined && item.size_id !== null) {

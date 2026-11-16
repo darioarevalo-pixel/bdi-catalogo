@@ -1976,6 +1976,12 @@ async function cargarConfig() {
     const r = await fetch('/lotes.json', { cache: 'no-store' });
     if (r.ok) lotesPrecios = (await r.json()).productos || {};
   } catch(e) {}
+  // Desde el 16-nov los lotes se manejan en el panel (Marketing › Lotes, config.lotes).
+  // Si el panel ya guardó lotes, mandan ésos (los apagados se venden sueltos); si
+  // nunca guardó, sigue lotes.json. api/proxy.js decide igual.
+  if (adminConfig.lotes && adminConfig.lotes.productos) {
+    lotesPrecios = Object.fromEntries(Object.entries(adminConfig.lotes.productos).filter(([, l]) => l && l.activo !== false));
+  }
   try {
     const r = await fetch('/pausados.json', { cache: 'no-store' });
     if (r.ok) pausados = ((await r.json()).productos || []).map(String);
