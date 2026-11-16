@@ -200,6 +200,9 @@
   .promo-actions .btn-del { margin-left: auto; background: transparent; color: var(--danger); border: 1px solid var(--danger); padding: 5px 10px; border-radius: var(--radius-sm); cursor: pointer; font-size: 12px; font-family: inherit; }
   .lote-fila { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 6px; }
   .lote-fila.inactive .lote-linea { opacity: .6; }
+  .lote-linea, .ll-estado { transition: opacity .2s, background .15s; }
+  .lote-fila.abierto > :not(.lote-linea) { animation: loteAbre .18s ease-out; }
+  @keyframes loteAbre { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
   .lote-fila.abierto { padding: 0 14px 12px; }
   .lote-fila.abierto .lote-linea { margin: 0 -14px 4px; border-bottom: 1px solid var(--border); }
   .lote-linea { display: flex; align-items: center; gap: 12px; padding: 10px 14px; cursor: pointer; font-size: 13px; }
@@ -2237,6 +2240,7 @@ async function renderLotes() {
     config.lotes = { productos };
     $('lotes-sin-guardar').style.display = '';
   }
+  lotesOrden = null;
   renderLotesLista();
 }
 // Orden de modelos: del más viejo al más nuevo (13, 13 Pro, 13 Pro Max, 14…).
@@ -2262,15 +2266,27 @@ function renderLotesLista() {
         return '<div onclick="sumarLote(' + (p.id || p.product_id) + ')">+ ' + escH(p.name) + ' <span style="color:var(--text-muted)">· ' + n + ' fundas</span></div>';
       }).join('') + '</div>'
     : (q.length >= 2 ? '<div class="desc-hint" style="margin-top:6px">Sin resultados.</div>' : '');
-  // Prendidos arriba, apagados abajo; dentro de cada grupo, por nombre.
+  // Prendidos arriba, apagados abajo; dentro de cada grupo, por nombre. El orden se
+  // arma al entrar y queda FIJO mientras se trabaja: apagar uno no lo manda al fondo
+  // (saltaba, Darío 16-nov). Los nuevos se suman arriba.
   const nombreDe = id => String((prodLoteAdmin(id) || {}).name || L[id].nombre || '');
-  const ids = Object.keys(L).sort((a, b) =>
+  if (!lotesOrden) lotesOrden = Object.keys(L).sort((a, b) =>
     ((L[a].activo === false) - (L[b].activo === false)) || nombreDe(a).localeCompare(nombreDe(b), 'es'));
-  $('lotes-lista').innerHTML = ids.length ? ids.map(tarjetaLoteAdmin).join('') : '<div class="desc-hint">Sin lotes cargados.</div>';
+  lotesOrden = [...Object.keys(L).filter(id => !lotesOrden.includes(id)), ...lotesOrden.filter(id => L[id])];
+  // La línea que se tocó queda en el mismo lugar de la pantalla aunque se cierre otra arriba.
+  anclaLote = anclaLote || loteAbierto; // al editar un lote abierto, tampoco se mueve
+  const ancla = anclaLote && document.querySelector('.lote-fila[data-id="' + anclaLote + '"]');
+  const antes = ancla ? ancla.getBoundingClientRect().top : null;
+  $('lotes-lista').innerHTML = lotesOrden.length ? lotesOrden.map(tarjetaLoteAdmin).join('') : '<div class="desc-hint">Sin lotes cargados.</div>';
+  const despues = anclaLote && document.querySelector('.lote-fila[data-id="' + anclaLote + '"]');
+  if (antes !== null && despues) window.scrollBy(0, despues.getBoundingClientRect().top - antes);
+  anclaLote = null;
 }
+let lotesOrden = null;
+let anclaLote = null;
 // Una línea por lote; se abre de a uno (Darío 16-nov: con 20 lotes se hacía eterno).
 let loteAbierto = null;
-function abrirLoteAdmin(id) { loteAbierto = loteAbierto === id ? null : id; renderLotesLista(); }
+function abrirLoteAdmin(id) { loteAbierto = loteAbierto === id ? null : id; anclaLote = id; renderLotesLista(); }
 function tarjetaLoteAdmin(id) {
   const l = config.lotes.productos[id];
   const p = prodLoteAdmin(id);
@@ -2350,8 +2366,8 @@ function tarjetaLoteAdmin(id) {
       '<button class="toggle' + (activo ? ' on' : '') + '"></button>' + (activo ? 'Prendido' : 'Apagado') + '</span>' +
     '<span class="ll-flecha">' + (abierto ? '⌄' : '›') + '</span>' +
   '</div>';
-  if (!abierto) return '<div class="lote-fila' + (activo ? '' : ' inactive') + '">' + cabeza + '</div>';
-  return '<div class="promo-card lote-fila abierto' + (activo ? '' : ' inactive') + '">' + cabeza +
+  if (!abierto) return '<div class="lote-fila' + (activo ? '' : ' inactive') + '" data-id="' + id + '">' + cabeza + '</div>';
+  return '<div class="promo-card lote-fila abierto' + (activo ? '' : ' inactive') + '" data-id="' + id + '">' + cabeza +
     (may ? '<div style="color:var(--text-muted);font-size:12px;margin:6px 0">Suelta ' + fmtAR(may) + '</div>' : '') + aviso +
     '<div class="lote-tipo">' +
       '<button class="' + (armado ? '' : 'on') + '" onclick="tipoLote(\'' + id + '\',false)">Diseño entero</button>' +
@@ -2414,7 +2430,19 @@ function updLoteCantidad(id, v) {
   renderLotesLista();
 }
 function updLotePrecio(id, v) { const l = config.lotes.productos[id]; if (l) { l.precio = v === '' ? 0 : Number(v); renderLotesLista(); } }
-function toggleLote(id) { const l = config.lotes.productos[id]; if (l) { l.activo = l.activo === false; renderLotesLista(); } }
+function toggleLote(id) {
+  const l = config.lotes.productos[id]; if (!l) return;
+  l.activo = l.activo === false;
+  const fila = document.querySelector('.lote-fila[data-id="' + id + '"]');
+  const est = fila && fila.querySelector('.ll-estado');
+  if (!est) return renderLotesLista();
+  const on = l.activo !== false;
+  fila.classList.toggle('inactive', !on);
+  est.classList.toggle('on', on);
+  est.querySelector('.toggle').classList.toggle('on', on);
+  est.lastChild.textContent = on ? 'Prendido' : 'Apagado';
+  est.title = on ? 'Apagar: se vende suelta' : 'Prender';
+}
 function quitarLoteAdmin(id) {
   if (!confirm('¿Eliminar este lote?')) return;
   delete config.lotes.productos[id];
