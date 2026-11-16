@@ -228,7 +228,7 @@
   .lote-card .product-price small.cu { font-size: 12px; font-weight: 500; color: var(--text-muted); }
   .lote-card .modal-variant-row { min-height: 26px; }
   .lote-cant { font-size: 13px; font-weight: 600; color: var(--text-muted); padding-right: 6px; font-variant-numeric: tabular-nums; }
-  .lote-ahorro { font-size: 12px; font-weight: 700; color: var(--danger); margin-top: 2px; }
+  .lote-ahorro { margin-top: 4px; }
   .lista-foto .product-body .lote-ahorro { display: none; }
   .lista-foto .lote-ahorro .pct { display: none; } /* en el celular no entra en una línea */
   .lote-btn { font: inherit; font-size: 13px; font-weight: 600; background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 9px; cursor: pointer; margin: 6px 10px 10px; }
@@ -2440,11 +2440,13 @@ function tarjetaLoteArmado(p) {
   const rows = c.map(x =>
     '<div class="modal-variant-row"><div class="modal-variant-info"><div class="modal-variant-name" style="font-size:12px">' + modeloCorto(x.modelo, id) + '</div></div>' +
     '<div class="lote-cant">×' + x.q + '</div></div>').join('');
+  // El descuento como en Ofertas: «-20%» en rojo al lado del precio (Darío 16-nov,
+  // antes «Ahorrás $X por lote»).
+  const pctAhorro = getPrecio(p) > l.precio ? Math.round((getPrecio(p) - l.precio) / getPrecio(p) * 100) : 0;
   const unitHTML = (getPrecio(p) > l.precio ? '<span class="product-price-old">' + formatPrecio(getPrecio(p)) + '</span>' : '') +
-    '<span class="product-price">' + formatPrecio(l.precio) + '<small class="cu"> c/u</small></span>';
-  const ahorroLote = (getPrecio(p) - l.precio) * tam;
-  const pctAhorro = getPrecio(p) > 0 ? Math.round((getPrecio(p) - l.precio) / getPrecio(p) * 100) : 0;
-  const ahorroHTML = ahorroLote > 0 ? '<div class="lote-ahorro">Ahorrás ' + formatPrecio(ahorroLote) + ' por lote<span class="pct"> (' + pctAhorro + '%)</span></div>' : '';
+    '<span class="product-price">' + formatPrecio(l.precio) + '<small class="cu"> c/u</small></span>' +
+    (pctAhorro > 0 ? '<span class="product-discount-badge">-' + pctAhorro + '%</span>' : '');
+  const ahorroHTML = '';
   const infoHTML = '<div class="lote-info">Lote de ' + tam + ' fundas · quedan ' + hay + (hay === 1 ? ' lote' : ' lotes') + '</div>';
   const pedir = k > 0
     ? '<div class="lote-pedir" onclick="event.stopPropagation()"><span>Lotes</span><div class="modal-vqty-wrap">' +
@@ -2493,12 +2495,13 @@ function tarjetaLote(p) {
   const rows = porModelo.map(x =>
     '<div class="modal-variant-row"><div class="modal-variant-info"><div class="modal-variant-name" style="font-size:12px">' + x.m + '</div></div>' +
     '<div class="lote-cant">×' + x.q + '</div></div>').join('');
-  const unitHTML = (getPrecio(p) > l.precio ? '<span class="product-price-old">' + formatPrecio(getPrecio(p)) + '</span>' : '') +
+  let unitHTML = (getPrecio(p) > l.precio ? '<span class="product-price-old">' + formatPrecio(getPrecio(p)) + '</span>' : '') +
     '<span class="product-price">' + formatPrecio(l.precio) + '<small class="cu"> c/u</small></span>';
   // El beneficio a la vista: cuánto se ahorra el cliente con el lote entero.
   const ahorro = normal - total;
   const pctAhorro = normal > 0 ? Math.round(ahorro / normal * 100) : 0;
-  const ahorroHTML = ahorro > 0 ? '<div class="lote-ahorro">Ahorrás ' + formatPrecio(ahorro) + '<span class="pct"> (' + pctAhorro + '%)</span></div>' : '';
+  if (ahorro > 0 && pctAhorro > 0) unitHTML += '<span class="product-discount-badge">-' + pctAhorro + '%</span>';
+  const ahorroHTML = '';
   return '<div class="product-card lote-card">' +
     '<div class="product-img-wrap" style="cursor:zoom-in" onclick="abrirFotoModelo(' + id + ')">' +
       gridImgTag(img, nombre, 'card', 400) +
