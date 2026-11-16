@@ -198,6 +198,19 @@
   .promo-preview { font-size: 12px; background: var(--bg); border-radius: var(--radius-sm); padding: 8px 10px; margin-top: 10px; }
   .promo-actions { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
   .promo-actions .btn-del { margin-left: auto; background: transparent; color: var(--danger); border: 1px solid var(--danger); padding: 5px 10px; border-radius: var(--radius-sm); cursor: pointer; font-size: 12px; font-family: inherit; }
+  .lote-fila { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 6px; }
+  .lote-fila.inactive .lote-linea { opacity: .6; }
+  .lote-fila.abierto { padding: 0 14px 12px; }
+  .lote-fila.abierto .lote-linea { margin: 0 -14px 4px; border-bottom: 1px solid var(--border); }
+  .lote-linea { display: flex; align-items: center; gap: 12px; padding: 10px 14px; cursor: pointer; font-size: 13px; }
+  .lote-linea:hover { background: var(--bg); }
+  .ll-nombre { flex: 0 0 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ll-datos { flex: 1; color: var(--text-muted); min-width: 0; }
+  .ll-alerta { color: var(--danger); font-weight: 600; }
+  .ll-estado { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+  .ll-estado.on { color: var(--success); font-weight: 600; }
+  .ll-flecha { color: var(--text-muted); font-size: 16px; width: 12px; text-align: center; }
+  @media (max-width: 640px) { .lote-linea { flex-wrap: wrap; gap: 4px 10px; } .ll-nombre { flex: 1 1 60%; } .ll-datos { flex: 1 1 100%; order: 3; } }
   .btn-mini { background: #fff; color: var(--text); border: 1px solid var(--border); padding: 3px 8px; border-radius: var(--radius-sm); cursor: pointer; font-size: 12px; font-family: inherit; margin-left: 4px; }
   .btn-mini:disabled { opacity: .45; cursor: default; }
   .setting-row { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px 16px; display: flex; align-items: center; gap: 16px; margin-bottom: 8px; }
@@ -657,7 +670,7 @@
     </div>
 
     <div id="tab-lotes" style="display:none">
-      <p class="section-note">Fundas que se venden en <strong>lote</strong>, a un precio por funda más bajo que sueltas. Un diseño en lote <strong>no se vende suelto</strong> en el catálogo. Acordate de tocar "Guardar cambios".</p>
+      <p class="section-note">Fundas que se venden en <strong>lote</strong>, a un precio por funda más bajo que sueltas. Tocá un lote para abrirlo. Si no ponés «Lotes a la venta», el diseño <strong>no se vende suelto</strong>. Acordate de tocar "Guardar cambios".</p>
       <div id="lotes-sin-guardar" class="desc-aviso" style="display:none">Estos son los lotes que había hasta hoy. Revisalos y tocá <strong>Guardar cambios</strong>: desde ahí el catálogo toma los lotes de acá.</div>
       <div class="desc-bloque">
         <div class="desc-bloque-head"><strong>Agregar un lote</strong></div>
@@ -2235,9 +2248,15 @@ function renderLotesLista() {
         return '<div onclick="sumarLote(' + (p.id || p.product_id) + ')">+ ' + escH(p.name) + ' <span style="color:var(--text-muted)">· ' + n + ' fundas en el depósito</span></div>';
       }).join('') + '</div>'
     : (q.length >= 2 ? '<div class="desc-hint" style="margin-top:6px">No hay fundas con ese nombre (o ya están en lote).</div>' : '');
-  const ids = Object.keys(L);
+  // Prendidos arriba, apagados abajo; dentro de cada grupo, por nombre.
+  const nombreDe = id => String((prodLoteAdmin(id) || {}).name || L[id].nombre || '');
+  const ids = Object.keys(L).sort((a, b) =>
+    ((L[a].activo === false) - (L[b].activo === false)) || nombreDe(a).localeCompare(nombreDe(b), 'es'));
   $('lotes-lista').innerHTML = ids.length ? ids.map(tarjetaLoteAdmin).join('') : '<div class="desc-hint">Sin lotes cargados.</div>';
 }
+// Una línea por lote; se abre de a uno (Darío 16-nov: con 20 lotes se hacía eterno).
+let loteAbierto = null;
+function abrirLoteAdmin(id) { loteAbierto = loteAbierto === id ? null : id; renderLotesLista(); }
 function tarjetaLoteAdmin(id) {
   const l = config.lotes.productos[id];
   const p = prodLoteAdmin(id);
@@ -2245,8 +2264,9 @@ function tarjetaLoteAdmin(id) {
   const may = p ? parseFloat(p.wholesaler_price || 0) : 0;
   const precio = Number(l.precio) || 0;
   const vars = p ? (p.variantes || []) : [];
-  let tabla = '', resumen = '';
+  let tabla = '', resumen = '', linea = '', alerta = '';
   if (!p) {
+    alerta = 'no aparece en el catálogo';
     tabla = '<div class="desc-hint">No aparece en el catálogo ahora (sin stock, oculto o sin precio mayorista). Queda guardado igual.</div>';
   } else if (armado) {
     const filas = vars.map(v => {
@@ -2262,6 +2282,9 @@ function tarjetaLoteAdmin(id) {
     const vendidos = (config.lotesVendidos || {})[String(id)] || 0;
     const quedan = Math.max(0, nVenta - vendidos);
     const lotes = nVenta > 0 ? Math.min(quedan, alcanzan) : alcanzan;
+    linea = nVenta > 0 ? 'quedan ' + quedan + ' de ' + nVenta + (nVenta === 1 ? ' lote' : ' lotes') : lotes + (lotes === 1 ? ' lote' : ' lotes');
+    if (!tam) alerta = 'falta la cantidad por modelo';
+    else if (nVenta > 0 ? quedan > alcanzan : lotes < 1) alerta = 'no alcanza el stock';
     tabla = '<table class="lote-modelos"><tr><th>Modelo</th><th class="num">En el depósito</th><th class="num">Por lote</th><th class="num">Alcanza para</th></tr>' +
       filas.map(f => '<tr' + (f.q > 0 && f.alcanza === lotes && lotes < 1 ? ' class="falta"' : '') + '><td>' + escH(f.v.size) + '</td><td class="num">' + f.st + '</td>' +
         '<td class="num"><input type="number" min="0" step="1" value="' + (f.q || '') + '" placeholder="0" onchange="updLoteModelo(\'' + id + '\',\'' + escH(f.v.size).replace(/'/g, "\\'") + '\',this.value)" /></td>' +
@@ -2279,6 +2302,8 @@ function tarjetaLoteAdmin(id) {
           ((s => s > 0 ? ' (sobran ' + s + ' fundas, que no se venden sueltas)' : '')(filas.reduce((s, f) => s + (f.st - f.q * lotes), 0))));
   } else {
     const n = vars.reduce((s, v) => s + stockLoteAdmin(v), 0);
+    linea = n + (n === 1 ? ' funda' : ' fundas');
+    if (!n) alerta = 'sin stock';
     // Diseño entero: no hay nada que cargar por modelo, alcanza con ver qué hay (una línea).
     const hay = vars.filter(v => stockLoteAdmin(v) > 0);
     tabla = '<div class="desc-hint" style="margin:0">En el depósito: ' + (hay.length
@@ -2291,9 +2316,19 @@ function tarjetaLoteAdmin(id) {
   const oculto = (config.hiddenProducts || []).map(String).includes(String(id));
   const pausado = (lotesPausados || []).includes(String(id));
   const aviso = (oculto || pausado) ? '<div class="desc-aviso" style="margin:0 0 8px">No se ve en el catálogo: está ' + (pausado ? 'pausado' : 'oculto') + '. El lote rige cuando lo vuelvas a mostrar.</div>' : '';
-  return '<div class="promo-card' + (activo ? '' : ' inactive') + '">' +
-    '<div class="desc-bloque-head" style="margin-bottom:6px"><strong>' + escH(p ? p.name : (l.nombre || 'Producto ' + id)) + '</strong>' +
-      (may ? '<span style="color:var(--text-muted);font-size:12px">suelta ' + fmtAR(may) + '</span>' : '') + '</div>' + aviso +
+  if (pausado || oculto) alerta = alerta ? alerta + ' · ' + (pausado ? 'pausado' : 'oculto') : (pausado ? 'pausado' : 'oculto');
+  const abierto = loteAbierto === String(id);
+  const nombre = escH(p ? p.name : (l.nombre || 'Producto ' + id));
+  const cabeza = '<div class="lote-linea" onclick="abrirLoteAdmin(\'' + id + '\')">' +
+    '<strong class="ll-nombre">' + nombre + '</strong>' +
+    '<span class="ll-datos">' + (armado ? 'Armado' : 'Diseño entero') + ' · ' + fmtAR(precio) + ' c/u · ' + linea +
+      (alerta ? ' <span class="ll-alerta">· ' + alerta + '</span>' : '') + '</span>' +
+    '<span class="ll-estado' + (activo ? ' on' : '') + '">' + (activo ? '● Prendido' : '○ Apagado') + '</span>' +
+    '<span class="ll-flecha">' + (abierto ? '⌄' : '›') + '</span>' +
+  '</div>';
+  if (!abierto) return '<div class="lote-fila' + (activo ? '' : ' inactive') + '">' + cabeza + '</div>';
+  return '<div class="promo-card lote-fila abierto' + (activo ? '' : ' inactive') + '">' + cabeza +
+    (may ? '<div style="color:var(--text-muted);font-size:12px;margin:6px 0">Suelta: ' + fmtAR(may) + '</div>' : '') + aviso +
     '<div class="lote-tipo">' +
       '<button class="' + (armado ? '' : 'on') + '" onclick="tipoLote(\'' + id + '\',false)">Diseño entero</button>' +
       '<button class="' + (armado ? 'on' : '') + '" onclick="tipoLote(\'' + id + '\',true)">Armado (cantidad por modelo)</button>' +
@@ -2316,6 +2351,7 @@ function sumarLote(pid) {
   // Arranca como ARMADO con la proporción del stock de hoy dividida en 10 lotes (se
   // corrige a mano) y 20% menos que suelta: lo que se usó con Twinkle (16-nov).
   config.lotes.productos[String(pid)] = { precio: may ? Math.round(may * 0.8 / 10) * 10 : 0, nombre: p.name, activo: true };
+  loteAbierto = String(pid); // el recién sumado queda abierto para cargarlo
   lotesBusqueda = ''; $('lotes-busca').value = '';
   tipoLote(String(pid), true);
 }
