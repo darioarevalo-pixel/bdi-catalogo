@@ -238,6 +238,20 @@
   .lista-foto .product-body .lote-info { display: none; }
   .lote-pedir { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 6px 10px 0; font-size: 13px; font-weight: 600; }
   .lista-grid .lote-pedir { grid-column: 1 / -1; margin: 8px 0 0; }
+  .lote-oferta { margin: 6px 10px 10px; background: var(--accent-light); border-radius: 10px; }
+  .lista-grid .lote-oferta { grid-column: 1 / -1; margin: 8px 0 0; }
+  .lote-oferta-btn { font: inherit; width: 100%; display: flex; align-items: center; gap: 8px; background: none; border: 0; padding: 10px 12px; cursor: pointer; color: var(--text); text-align: left; }
+  .lote-oferta-btn .badge-lote-inline, .lista-grid .lote-oferta-btn .badge-lote-inline { order: 0; margin: 0; align-self: center; }
+  .lote-oferta-btn .txt { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lote-oferta-btn .product-discount-badge { flex: 0 0 auto; }
+  .lote-oferta-btn .flecha { color: var(--text-muted); font-size: 12px; }
+  .lote-oferta-det { padding: 0 12px 12px; }
+  .lote-oferta-precio { font-size: 13px; font-weight: 700; }
+  .lote-oferta-modelos { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+  .lote-oferta-modelos span { font-size: 12px; background: #fff; border-radius: 6px; padding: 2px 7px; color: var(--text-muted); }
+  .lote-oferta-modelos b { color: var(--text); font-weight: 600; }
+  .lote-oferta-agregar { font: inherit; font-size: 13px; font-weight: 600; width: 100%; margin-top: 10px; background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 10px; cursor: pointer; }
+  .lote-oferta-quitar { font: inherit; font-size: 12px; background: none; border: 0; color: var(--text-muted); text-decoration: underline; cursor: pointer; padding: 6px 0 0; }
   .lote-expl { grid-column: 1 / -1; background: var(--accent-light); border-radius: var(--radius); padding: 10px 14px; font-size: 13px; color: #111827; }
   .lq-ey { font-size: 11px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: #FCA5A5; }
   .lq-wrap { grid-column: 1 / -1; width: 100%; }
@@ -3895,7 +3909,10 @@ function renderVariantesGrid(prods, ofertaTodas) {
     const id = p.id || p.product_id;
     // Un lote se ve como lote en todos lados (Fundas, Todo, buscando): no se vende suelto.
     // El lote parcial muestra las DOS tarjetas: la del lote y la suelta con el resto.
-    if (loteDe(id)) {
+    // Lote parcial con sueltas (Darío 16-nov): fuera de «Lotes», UNA sola tarjeta
+    // (la suelta) con el lote ofrecido abajo («Llevá el lote… ahorrás X%»).
+    const loteAbajo = !!loteParcial(id) && categoria !== 'lotes' && getStockTotal(p) > 0 && lotesDisponibles(p) > 0;
+    if (loteDe(id) && !loteAbajo) {
       const c = tarjetaLote(p); if (c) cards.push(c);
       if (soloLote(id) || categoria === 'lotes' || getStockTotal(p) === 0) continue;
     }
@@ -4023,10 +4040,54 @@ function renderVariantesGrid(prods, ofertaTodas) {
         '</div>' +
         variantsHTML +
         (variantes.length > 0 ? '<button class="vcard-mobile-btn" onclick="toggleCard(this);event.stopPropagation()">Ver modelos ▾</button>' : '') +
+        (loteAbajo ? ofertaLoteEnSuelta(p) : '') +
       '</div>'
     );
   }
   return cards.join('');
+}
+
+// El lote ofrecido dentro de la tarjeta suelta (lote parcial con sueltas). Cerrado:
+// un botón «Llevá el lote de N · ahorrás X%». Abierto (o con lotes en el pedido):
+// qué trae el lote y el − / + para elegir cuántos.
+const lotesAbiertos = new Set();
+function abrirLoteEnSuelta(id) {
+  if (lotesAbiertos.has(String(id))) lotesAbiertos.delete(String(id)); else lotesAbiertos.add(String(id));
+  renderProductos();
+}
+function ofertaLoteEnSuelta(p) {
+  const id = p.id || p.product_id;
+  const l = loteDe(id);
+  const c = composicionLote(p);
+  const hay = lotesDisponibles(p);
+  if (!l || !c || hay <= 0) return '';
+  const tam = fundasPorLote(p);
+  const k = lotesEnCarrito(p);
+  // Contra el precio que el cliente VE suelto (si está en Ofertas, el de oferta).
+  const cy = cyberDe(id);
+  const suelta = cy ? Math.min(cy.precio, getPrecio(p)) : getPrecio(p);
+  if (!(suelta > l.precio)) return ''; // el lote no conviene: no se ofrece
+  const pct = Math.round((suelta - l.precio) / suelta * 100);
+  const abierto = k > 0 || lotesAbiertos.has(String(id));
+  const cab = '<button class="lote-oferta-btn" onclick="abrirLoteEnSuelta(' + id + ');event.stopPropagation()">' +
+    '<span class="badge-lote-inline">LOTE</span><span class="txt">' + tam + ' × ' + formatPrecio(l.precio) + '</span>' +
+    '<span class="product-discount-badge">-' + pct + '%</span><span class="flecha">' + (abierto ? '▴' : '▾') + '</span></button>';
+  if (!abierto) return '<div class="lote-oferta">' + cab + '</div>';
+  const modelos = c.map(x => '<span><b>' + modeloCorto(x.modelo, id) + '</b> ×' + x.q + '</span>').join('');
+  const pedir = k > 0
+    ? '<div class="lote-pedir" style="margin:10px 0 0"><span>' + k + (k === 1 ? ' lote' : ' lotes') + ' · ' + formatPrecio(l.precio * tam * k) + '</span><div class="modal-vqty-wrap">' +
+        '<button class="modal-vqty-btn minus" onclick="ponerLotes(' + id + ',' + (k - 1) + ');event.stopPropagation()">−</button>' +
+        '<input class="modal-vqty-num" type="number" readonly value="' + k + '" />' +
+        '<button class="modal-vqty-btn plus"' + (k >= hay ? ' disabled' : '') + ' onclick="ponerLotes(' + id + ',' + (k + 1) + ');event.stopPropagation()">+</button>' +
+      '</div></div>' +
+      '<button class="lote-oferta-quitar" onclick="ponerLotes(' + id + ',0);event.stopPropagation()">Quitar</button>'
+    : '<button class="lote-oferta-agregar" onclick="ponerLotes(' + id + ',1);event.stopPropagation()">Agregar 1 lote · ' + formatPrecio(l.precio * tam) + '</button>';
+  return '<div class="lote-oferta" onclick="event.stopPropagation()">' + cab +
+    '<div class="lote-oferta-det">' +
+      '<div class="lote-oferta-precio">' + formatPrecio(l.precio) + ' c/u · quedan ' + hay + (hay === 1 ? ' lote' : ' lotes') + '</div>' +
+      '<div class="lote-oferta-modelos">' + modelos + '</div>' +
+      pedir +
+    '</div></div>';
 }
 
 // Despliega los modelos de un diseño DENTRO de la grilla: la tarjeta pasa a
