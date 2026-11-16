@@ -1287,9 +1287,10 @@ function composicionLote(p) {
   const l = loteDe(p.id || p.product_id);
   if (!l || !l.porLote) return null;
   const vars = variantesDeLote(p);
+  // Del modelo más viejo al más nuevo, igual que en el panel.
   return Object.entries(l.porLote).map(([modelo, q]) => ({
     modelo, q: +q, v: vars.find(v => normModeloLote(v.size) === normModeloLote(modelo)) || null,
-  }));
+  })).sort((a, b) => variantSortKey(a.modelo) - variantSortKey(b.modelo));
 }
 function fundasPorLote(p) {
   const c = composicionLote(p);

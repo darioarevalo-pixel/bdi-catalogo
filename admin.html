@@ -207,10 +207,10 @@
   .ll-nombre { flex: 0 0 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ll-datos { flex: 1; color: var(--text-muted); min-width: 0; }
   .ll-alerta { color: var(--danger); font-weight: 600; }
-  .ll-estado { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+  .ll-estado { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); white-space: nowrap; cursor: pointer; }
   .ll-estado.on { color: var(--success); font-weight: 600; }
   .ll-flecha { color: var(--text-muted); font-size: 16px; width: 12px; text-align: center; }
-  @media (max-width: 640px) { .lote-linea { flex-wrap: wrap; gap: 4px 10px; } .ll-nombre { flex: 1 1 60%; } .ll-datos { flex: 1 1 100%; order: 3; } }
+  @media (max-width: 640px) { .ll-flecha { display: none; } .lote-linea { flex-wrap: wrap; gap: 4px 10px; } .ll-nombre { flex: 1 1 60%; } .ll-datos { flex: 1 1 100%; order: 3; } }
   .lote-costo { font-size: 13px; color: var(--text-muted); margin: 2px 0 10px; }
   .lote-costo strong { color: var(--text); font-weight: 600; }
   .lote-stock { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
@@ -2239,6 +2239,15 @@ async function renderLotes() {
   }
   renderLotesLista();
 }
+// Orden de modelos: del más viejo al más nuevo (13, 13 Pro, 13 Pro Max, 14…).
+function claveModeloLote(size) {
+  const t = String(size || '').replace(/^iPhone\s*/i, '').toUpperCase();
+  const m = t.match(/^(\d+)/);
+  const n = m ? +m[1] : (/AIR/.test(t) ? 17.5 : 99);
+  const r = /PRO\s*MAX/.test(t) ? 3 : /PRO/.test(t) ? 2 : /PLUS/.test(t) ? 1 : /^\d+E\b/.test(t) ? -1 : 0;
+  return n * 10 + r;
+}
+const ordenarModelosLote = (vars) => [...vars].sort((a, b) => claveModeloLote(a.size) - claveModeloLote(b.size));
 const prodLoteAdmin = (id) => allAdminProducts.find(p => (p.id || p.product_id) == id) || null;
 const stockLoteAdmin = (v) => Math.max(0, getStockVarianteAdmin(v) || 0);
 function renderLotesLista() {
@@ -2268,7 +2277,7 @@ function tarjetaLoteAdmin(id) {
   const armado = !!l.porLote;
   const may = p ? parseFloat(p.wholesaler_price || 0) : 0;
   const precio = Number(l.precio) || 0;
-  const vars = p ? (p.variantes || []) : [];
+  const vars = p ? ordenarModelosLote(p.variantes || []) : [];
   let tabla = '', resumen = '', linea = '', alerta = '';
   if (!p) {
     alerta = 'no aparece en el catálogo';
@@ -2337,7 +2346,8 @@ function tarjetaLoteAdmin(id) {
     '<strong class="ll-nombre">' + nombre + '</strong>' +
     '<span class="ll-datos">' + (armado ? 'Armado' : 'Diseño entero') + ' · ' + fmtAR(precio) + ' c/u · ' + linea +
       (alerta ? ' <span class="ll-alerta">· ' + alerta + '</span>' : '') + '</span>' +
-    '<span class="ll-estado' + (activo ? ' on' : '') + '">' + (activo ? '● Prendido' : '○ Apagado') + '</span>' +
+    '<span class="ll-estado' + (activo ? ' on' : '') + '" onclick="event.stopPropagation();toggleLote(\'' + id + '\')" title="' + (activo ? 'Apagar: se vende suelta' : 'Prender') + '">' +
+      '<button class="toggle' + (activo ? ' on' : '') + '"></button>' + (activo ? 'Prendido' : 'Apagado') + '</span>' +
     '<span class="ll-flecha">' + (abierto ? '⌄' : '›') + '</span>' +
   '</div>';
   if (!abierto) return '<div class="lote-fila' + (activo ? '' : ' inactive') + '">' + cabeza + '</div>';
@@ -2354,7 +2364,6 @@ function tarjetaLoteAdmin(id) {
     tabla +
     '<div class="promo-preview">' + resumen + '</div>' +
     '<div class="promo-actions">' +
-      '<label class="toggle-row"><button class="toggle' + (activo ? ' on' : '') + '" onclick="toggleLote(\'' + id + '\')"></button>' + (activo ? 'Prendido' : 'Apagado (se vende suelta)') + '</label>' +
       '<button class="btn-del" onclick="quitarLoteAdmin(\'' + id + '\')">Eliminar</button>' +
     '</div>' +
   '</div>';
@@ -2376,7 +2385,7 @@ function tipoLote(id, armado) {
   else if (!l.porLote) {
     const p = prodLoteAdmin(id);
     l.porLote = {};
-    for (const v of (p ? p.variantes || [] : [])) { const st = stockLoteAdmin(v); if (st > 0) l.porLote[v.size] = Math.max(1, Math.floor(st / 10)); }
+    for (const v of (p ? ordenarModelosLote(p.variantes || []) : [])) { const st = stockLoteAdmin(v); if (st > 0) l.porLote[v.size] = Math.max(1, Math.floor(st / 10)); }
   }
   renderLotesLista();
 }
