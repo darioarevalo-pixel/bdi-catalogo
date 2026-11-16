@@ -1,5 +1,5 @@
 {
- "_nota": "Lotes de fundas (Darío, 10-nov-2026). Cada diseño se vende ENTERO: el cliente se lleva todas las fundas que hay en el depósito, cada una a este precio. Precios cargados en la página «Precios para terminar diseños». Para sacar un lote: borrarlo de acá.",
+ "_nota": "Lotes de fundas (Darío, 10-nov-2026). Cada diseño se vende ENTERO: el cliente se lleva todas las fundas que hay en el depósito, cada una a este precio. Precios cargados en la página «Precios para terminar diseños». Para sacar un lote: borrarlo de acá. Con «porLote» (16-nov) el lote es ARMADO: se vende de a lotes iguales con esa cantidad por modelo (el modelo tal cual en Areben Gestión) y el cliente elige cuántos.",
  "productos": {
   "937285": { "precio": 1990, "nombre": "Apex Case" },
   "831985": { "precio": 1990, "nombre": "Dot Case Black" },
@@ -7,6 +7,7 @@
   "831986": { "precio": 1990, "nombre": "Dot Case Silver" },
   "1038199": { "precio": 1990, "nombre": "Ocean Case" },
   "937279": { "precio": 1990, "nombre": "Sweet Case" },
-  "831984": { "precio": 1990, "nombre": "Dot Case Pink" }
+  "831984": { "precio": 1990, "nombre": "Dot Case Pink" },
+  "1000000056": { "precio": 3990, "nombre": "Twinkle Case", "porLote": {"iPhone 13": 2, "iPhone 15": 3, "iPhone 16": 3, "iPhone 16 Pro": 3, "iPhone 16 Pro Max": 3, "iPhone 17": 2, "iPhone 17 Pro": 2, "iPhone 17 Pro Max": 2} }
  }
 }

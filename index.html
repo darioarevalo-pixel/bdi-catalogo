@@ -234,6 +234,10 @@
   .lote-btn { font: inherit; font-size: 13px; font-weight: 600; background: var(--stock-ok); color: #fff; border: 0; border-radius: 8px; padding: 9px; cursor: pointer; margin: 6px 10px 10px; }
   .lote-btn.dentro { background: var(--stock-ok-bg); color: var(--stock-ok); border: 1px solid var(--stock-ok); }
   .lista-grid .lote-btn { grid-column: 1 / -1; margin: 8px 0 0; }
+  .lote-info { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .lista-foto .product-body .lote-info { display: none; }
+  .lote-pedir { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 6px 10px 0; font-size: 13px; font-weight: 600; }
+  .lista-grid .lote-pedir { grid-column: 1 / -1; margin: 8px 0 0; }
   .lote-expl { grid-column: 1 / -1; background: var(--accent-light); border-radius: var(--radius); padding: 10px 14px; font-size: 13px; color: #111827; }
   .lq-ey { font-size: 11px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: #FCA5A5; }
   .lq-wrap { grid-column: 1 / -1; width: 100%; }
@@ -1237,6 +1241,51 @@ let pausados = [];
 function loteDe(id) {
   const l = lotesPrecios[String(id)];
   return l && l.precio > 0 ? l : null;
+}
+// Lote ARMADO (`porLote` en lotes.json, Darío 16-nov-2026): el diseño se vende de
+// a lotes iguales, cada uno con la proporción por modelo con que vino la compra
+// (ej. Twinkle: 20 fundas, 2 del 13, 3 del 15…). El cliente elige cuántos lotes;
+// no se vende suelto. Sin `porLote`, el lote es el diseño entero (10-nov).
+const normModeloLote = s => String(s || '').trim().toUpperCase();
+function composicionLote(p) {
+  const l = loteDe(p.id || p.product_id);
+  if (!l || !l.porLote) return null;
+  const vars = variantesDeLote(p);
+  return Object.entries(l.porLote).map(([modelo, q]) => ({
+    modelo, q: +q, v: vars.find(v => normModeloLote(v.size) === normModeloLote(modelo)) || null,
+  }));
+}
+function fundasPorLote(p) {
+  const c = composicionLote(p);
+  return c ? c.reduce((s, x) => s + x.q, 0) : 0;
+}
+// Cuántos lotes enteros se pueden armar con el stock del depósito.
+function lotesDisponibles(p) {
+  const c = composicionLote(p);
+  if (!c || !c.length) return 0;
+  return Math.min(...c.map(x => x.v ? Math.floor(getStockVariante(x.v) / x.q) : 0));
+}
+function lotesEnCarrito(p) {
+  const id = p.id || p.product_id;
+  const c = composicionLote(p);
+  const x = c && c.find(y => y.v);
+  return x ? Math.floor((cart[id + '-' + x.v.size_id]?.qty || 0) / x.q) : 0;
+}
+// Deja en el carrito exactamente `n` lotes armados (0 = ninguno).
+function ponerLotes(id, n) {
+  const p = allProducts.find(x => (x.id || x.product_id) == id);
+  const l = loteDe(id);
+  const c = p && composicionLote(p);
+  if (!p || !l || !c) return;
+  n = Math.max(0, Math.min(n, lotesDisponibles(p)));
+  Object.keys(cart).forEach(k => { if (cart[k].id == id) delete cart[k]; });
+  const nombre = p.name || p.nombre || p.product_name || 'Sin nombre';
+  const img = getImagenes(p)[0] || '';
+  if (n > 0) for (const x of c) {
+    cart[id + '-' + x.v.size_id] = { id: parseInt(id), nombre, varNombre: nombreCompat(x.v.size, id), precio: l.precio, qty: x.q * n, sizeId: x.v.size_id, img, lote: true };
+  }
+  updateCartUI();
+  renderProductos();
 }
 const LOTES_NOMBRE = 'Lotes';
 let cuponAplicado = null; // cupón aplicado en el carrito (objeto) o null
@@ -2268,7 +2317,11 @@ function chipsConLotes(chips, botones) {
   return chips.join('');
 }
 function hayLotes() {
-  return allProducts.some(p => loteDe(p.id || p.product_id) && variantesDeLote(p).length);
+  return allProducts.some(p => {
+    const l = loteDe(p.id || p.product_id);
+    if (!l) return false;
+    return l.porLote ? lotesDisponibles(p) > 0 : variantesDeLote(p).length > 0;
+  });
 }
 // Las fundas que forman el lote: las visibles con stock en el depósito.
 function variantesDeLote(p) {
@@ -2290,6 +2343,7 @@ function agregarLote(id) {
   const p = allProducts.find(x => (x.id || x.product_id) == id);
   const l = loteDe(id);
   if (!p || !l) return;
+  if (l.porLote) return ponerLotes(id, 1);
   const nombre = p.name || p.nombre || p.product_name || 'Sin nombre';
   const img = getImagenes(p)[0] || '';
   for (const v of variantesDeLote(p)) {
@@ -2303,9 +2357,54 @@ function quitarLote(id) {
   updateCartUI();
   renderProductos();
 }
+// La tarjeta del lote ARMADO: la misma forma que la del diseño entero, pero los
+// renglones dicen cuántas fundas de cada modelo trae UN lote, y abajo se eligen
+// cuántos lotes (− / +), con el total.
+function tarjetaLoteArmado(p) {
+  const id = p.id || p.product_id;
+  const l = loteDe(id);
+  const c = composicionLote(p);
+  const hay = lotesDisponibles(p);
+  if (!l || !c || hay <= 0) return '';
+  const nombre = p.name || p.nombre || p.product_name || 'Sin nombre';
+  const img = getImagenes(p)[0] || null;
+  const tam = fundasPorLote(p);
+  const k = lotesEnCarrito(p);
+  const rows = c.map(x =>
+    '<div class="modal-variant-row"><div class="modal-variant-info"><div class="modal-variant-name" style="font-size:12px">' + modeloCorto(x.modelo, id) + '</div></div>' +
+    '<div class="lote-cant">×' + x.q + '</div></div>').join('');
+  const unitHTML = (getPrecio(p) > l.precio ? '<span class="product-price-old">' + formatPrecio(getPrecio(p)) + '</span>' : '') +
+    '<span class="product-price">' + formatPrecio(l.precio) + '<small class="cu"> c/u</small></span>';
+  const ahorroLote = (getPrecio(p) - l.precio) * tam;
+  const pctAhorro = getPrecio(p) > 0 ? Math.round((getPrecio(p) - l.precio) / getPrecio(p) * 100) : 0;
+  const ahorroHTML = ahorroLote > 0 ? '<div class="lote-ahorro">Ahorrás ' + formatPrecio(ahorroLote) + ' por lote<span class="pct"> (' + pctAhorro + '%)</span></div>' : '';
+  const infoHTML = '<div class="lote-info">Lote de ' + tam + ' fundas · quedan ' + hay + (hay === 1 ? ' lote' : ' lotes') + '</div>';
+  const pedir = k > 0
+    ? '<div class="lote-pedir" onclick="event.stopPropagation()"><span>Lotes</span><div class="modal-vqty-wrap">' +
+        '<button class="modal-vqty-btn minus" onclick="ponerLotes(' + id + ',' + (k - 1) + ');event.stopPropagation()">−</button>' +
+        '<input class="modal-vqty-num" type="number" readonly value="' + k + '" />' +
+        '<button class="modal-vqty-btn plus"' + (k >= hay ? ' disabled' : '') + ' onclick="ponerLotes(' + id + ',' + (k + 1) + ');event.stopPropagation()">+</button>' +
+      '</div></div>' +
+      '<button class="lote-btn dentro" onclick="ponerLotes(' + id + ',0);event.stopPropagation()">✓ ' + k + (k === 1 ? ' lote' : ' lotes') + ' · ' + (k * tam) + ' fundas · ' + formatPrecio(l.precio * tam * k) + ' · Quitar</button>'
+    : '<button class="lote-btn" onclick="ponerLotes(' + id + ',1);event.stopPropagation()">Agregar 1 lote · ' + tam + ' fundas · ' + formatPrecio(l.precio * tam) + '</button>';
+  return '<div class="product-card lote-card">' +
+    '<div class="product-img-wrap" style="cursor:zoom-in" onclick="abrirFotoModelo(' + id + ')">' +
+      gridImgTag(img, nombre, 'card', 400) +
+    '</div>' +
+    '<div class="product-body">' +
+      '<span class="badge-lote-inline">LOTE</span>' +
+      '<div class="product-name">' + nombre + '</div>' +
+      '<div class="product-price-wrap" style="margin-top:4px">' + unitHTML + '</div>' + ahorroHTML + infoHTML +
+    '</div>' +
+    '<div class="precio-lista"><div class="product-price-wrap">' + unitHTML + '</div>' + ahorroHTML + infoHTML + '</div>' +
+    '<div class="vcard-variants">' + rows + '</div>' +
+    pedir +
+  '</div>';
+}
 function tarjetaLote(p) {
   const id = p.id || p.product_id;
   const l = loteDe(id);
+  if (l && l.porLote) return tarjetaLoteArmado(p);
   const vars = variantesDeLote(p);
   if (!l || !vars.length) return '';
   const nombre = p.name || p.nombre || p.product_name || 'Sin nombre';
@@ -2350,7 +2449,7 @@ function tarjetaLote(p) {
   '</div>';
 }
 function cartelLotes() {
-  return '<div class="lote-expl"><b>Comprá el lote completo del diseño</b>: vienen fundas de distintos modelos, a mejor precio que sueltas.</div>';
+  return '<div class="lote-expl"><b>Comprá en lote</b>: vienen fundas de distintos modelos, a mejor precio que sueltas.</div>';
 }
 
 function renderCatPills() {
@@ -4484,9 +4583,12 @@ function renderCartItems() {
     // modelo por modelo; solo se quita completo. Al pedido llegan funda por funda.
     const esLote = !!loteDe(g.id);
     const fundasLote = g.variantes.reduce((s, v) => s + v.qty, 0);
+    const pLote = esLote && loteDe(g.id).porLote ? allProducts.find(x => (x.id || x.product_id) == g.id) : null;
+    const kLote = pLote ? lotesEnCarrito(pLote) : 0;
+    const textoLote = pLote ? kLote + (kLote === 1 ? ' lote' : ' lotes') + ' · ' + fundasLote + ' fundas' : 'Lote completo · ' + fundasLote + ' fundas';
     const varRows = esLote
       ? '<div class="cart-variant-row">' +
-          '<span class="cart-variant-name">Lote completo · ' + fundasLote + ' fundas</span>' +
+          '<span class="cart-variant-name">' + textoLote + '</span>' +
           '<span class="cart-variant-qty">' + formatPrecio(subtotal) + '</span>' +
           '<button class="cart-item-del" title="Quitar el lote" onclick="quitarLote(' + g.id + ')">×</button>' +
         '</div>'
