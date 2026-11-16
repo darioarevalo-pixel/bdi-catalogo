@@ -187,6 +187,7 @@
   .promo-busca-res div:hover { background: var(--bg); }
   /* Marketing › Lotes */
   .lote-tipo { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 10px; }
+  .lote-resto { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; font-size: 13px; font-weight: 600; }
   .lote-tipo button { font-family: inherit; font-size: 12px; border: 1px solid var(--border-strong); background: white; border-radius: 99px; padding: 5px 12px; cursor: pointer; }
   .lote-tipo button.on { background: var(--accent); border-color: var(--accent); color: white; }
   .lote-modelos { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -2327,7 +2328,8 @@ function tarjetaLoteAdmin(id) {
         ? '<br><strong>Vendidos ' + vendidos + ' de ' + nVenta + '</strong>' +
             ' <button class="btn-mini" onclick="corregirVendidos(\'' + id + '\',' + (vendidos - 1) + ')"' + (vendidos > 0 ? '' : ' disabled') + ' title="Pedido cancelado">− 1</button>' +
             (vendidos > 0 ? ' <button class="btn-mini" onclick="corregirVendidos(\'' + id + '\',0)">Volver a 0</button>' : '') +
-            '<br>En catálogo: <strong>' + pl(lotes, 'lote', 'lotes') + ' · ' + pl(sueltas, 'suelta', 'sueltas') + '</strong>' +
+            '<br>En catálogo: <strong>' + pl(lotes, 'lote', 'lotes') + (l.sinSueltas ? '' : ' · ' + pl(sueltas, 'suelta', 'sueltas')) + '</strong>' +
+            (l.sinSueltas && sueltas > 0 ? ' · resto ' + sueltas + ' (no se vende)' : '') +
             (quedan > alcanzan ? ' · <span style="color:var(--danger)">el stock alcanza para ' + pl(alcanzan, 'lote', 'lotes') + '</span>' : '')
         : '<br>En catálogo: <strong>' + pl(lotes, 'lote', 'lotes') + '</strong>' + (sueltas > 0 ? ' · sobran ' + sueltas + ' (no se venden)' : ''));
   } else {
@@ -2376,6 +2378,13 @@ function tarjetaLoteAdmin(id) {
     '<div class="promo-grid"><label>Precio por funda ($)<input type="number" min="0" step="10" value="' + escH(l.precio) + '" onchange="updLotePrecio(\'' + id + '\',this.value)" /></label>' +
       (armado ? '<label>Lotes a la venta<input type="number" min="0" step="1" value="' + (Math.floor(Number(l.lotes) || 0) || '') + '" placeholder="Todos" onchange="updLoteCantidad(\'' + id + '\',this.value)" /><span class="desc-hint" style="margin:2px 0 0">Vacío = todo en lote</span></label>' : '') +
     '</div>' +
+    // «El resto»: con N lotes a la venta, lo que sobra se vende suelto o no (Darío 16-nov).
+    (armado && Math.floor(Number(l.lotes) || 0) > 0
+      ? '<div class="lote-resto"><span>El resto</span><div class="lote-tipo" style="margin:0">' +
+          '<button class="' + (l.sinSueltas ? '' : 'on') + '" onclick="restoLote(\'' + id + '\',false)">Suelto</button>' +
+          '<button class="' + (l.sinSueltas ? 'on' : '') + '" onclick="restoLote(\'' + id + '\',true)">No se vende</button>' +
+        '</div></div>'
+      : '') +
     costoHTML +
     tabla +
     '<div class="promo-preview">' + resumen + '</div>' +
@@ -2397,7 +2406,7 @@ function sumarLote(pid) {
 }
 function tipoLote(id, armado) {
   const l = config.lotes.productos[id]; if (!l) return;
-  if (!armado) { delete l.porLote; delete l.lotes; }
+  if (!armado) { delete l.porLote; delete l.lotes; delete l.sinSueltas; }
   else if (!l.porLote) {
     const p = prodLoteAdmin(id);
     l.porLote = {};
@@ -2426,7 +2435,12 @@ async function corregirVendidos(id, valor) {
 function updLoteCantidad(id, v) {
   const l = config.lotes.productos[id]; if (!l) return;
   const n = Math.max(0, Math.floor(Number(v) || 0));
-  if (n > 0) l.lotes = n; else delete l.lotes;
+  if (n > 0) l.lotes = n; else { delete l.lotes; delete l.sinSueltas; }
+  renderLotesLista();
+}
+function restoLote(id, no) {
+  const l = config.lotes.productos[id]; if (!l) return;
+  if (no) l.sinSueltas = true; else delete l.sinSueltas;
   renderLotesLista();
 }
 function updLotePrecio(id, v) { const l = config.lotes.productos[id]; if (l) { l.precio = v === '' ? 0 : Number(v); renderLotesLista(); } }

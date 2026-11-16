@@ -1248,6 +1248,7 @@ function loteDe(id) {
 // no se vende suelto. Sin `porLote`, el lote es el diseño entero (10-nov).
 // Lote PARCIAL (Darío 16-nov-2026): con `lotes` (N) en un lote armado, se separan N
 // lotes y el resto del stock de esa funda se vende SUELTO, a su precio de siempre.
+// Con `sinSueltas`, el resto NO se vende en el mayorista (queda para minorista).
 // Sin `lotes`, todo va en lote (como el 16-nov). La cuenta es del catálogo: no
 // mueve stock en el sistema.
 function loteParcial(id) {
@@ -2677,6 +2678,10 @@ function ultimasTxt(n) { return n === 1 ? 'Última' : 'Últimas ' + n; }
 function getStockVariante(v) {
   const base = getStockVarianteBase(v);
   if (base === null) return null;
+  // Lote parcial con «El resto: no se vende» (Darío 16-nov): fuera de los lotes,
+  // esa funda no se vende en el mayorista (queda para minorista).
+  const lp = v._pid != null ? loteParcial(v._pid) : null;
+  if (lp && lp.sinSueltas) return 0;
   const r = reservaLotePorSize()[v.size_id] || 0;
   return r ? Math.max(0, base - r) : base;
 }
