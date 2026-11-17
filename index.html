@@ -227,6 +227,10 @@
   .lista-foto .badge-lote-inline, .lista-grid .badge-lote-inline { margin-bottom: 0; }
   .lote-card .product-price small.cu { font-size: 12px; font-weight: 500; color: var(--text-muted); }
   .lote-card .modal-variant-row { min-height: 26px; }
+  /* En la grilla de la compu: la lista de modelos arranca arriba (todas las tarjetas a la
+     misma altura) y el botón queda abajo de todo (Darío 17-nov: «está alineado para abajo»). */
+  .lote-card .product-body { flex: 0 0 auto; }
+  .lote-card .lote-btn { margin-top: auto; }
   .lote-cant { font-size: 13px; font-weight: 600; color: var(--text-muted); padding-right: 6px; font-variant-numeric: tabular-nums; }
   .lote-ahorro { margin-top: 4px; }
   .lista-foto .product-body .lote-ahorro { display: none; }
