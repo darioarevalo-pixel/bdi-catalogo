@@ -1280,7 +1280,7 @@ function lotesQueQuedan(id) {
 // La funda se vende SOLO en lote (diseño entero, o armado sin cantidad de lotes).
 function soloLote(id) { return !!loteDe(id) && !loteParcial(id); }
 // Cuántas fundas de cada variante quedan separadas para los lotes parciales:
-// { size_id: fundas }. Se recalcula cuando cambian los productos o la configuración.
+// { 'funda-size_id': fundas }. Se recalcula cuando cambian los productos o la configuración.
 let reservaLoteMemo = null;
 function reservaLotePorSize() {
   const firma = [allProducts, lotesPrecios, adminConfig];
@@ -1292,7 +1292,9 @@ function reservaLotePorSize() {
     const c = p && composicionLote(p);
     if (!c || !c.length) continue;
     const n = lotesDisponibles(p);
-    for (const x of c) if (x.v) mapa[x.v.size_id] = (mapa[x.v.size_id] || 0) + n * x.q;
+    // Por funda Y modelo: el size_id de los diseños viejos es el del modelo y lo comparten
+    // todos los diseños (el 11 de Dented y el 11 de Zebra tienen el mismo).
+    for (const x of c) if (x.v) { const k = id + '-' + x.v.size_id; mapa[k] = (mapa[k] || 0) + n * x.q; }
   }
   reservaLoteMemo = { firma, mapa };
   return mapa;
@@ -2699,7 +2701,7 @@ function getStockVariante(v) {
   // esa funda no se vende en el mayorista (queda para minorista).
   const lp = v._pid != null ? loteParcial(v._pid) : null;
   if (lp && lp.sinSueltas) return 0;
-  const r = reservaLotePorSize()[v.size_id] || 0;
+  const r = reservaLotePorSize()[v._pid + '-' + v.size_id] || 0;
   return r ? Math.max(0, base - r) : base;
 }
 function getStockVarianteBase(v) {
@@ -3202,6 +3204,9 @@ const STOCK_MINIMO_FUNDA = 15;
 // Fundas que Darío quiere arriba aunque estén casi agotadas (2-11-2026):
 // Bambi, Fly, Pretty y Cutie. Si se quedan sin NINGÚN modelo fuerte, bajan igual.
 const FUNDAS_SIEMPRE_ARRIBA = new Set(['1100562', '1154331', '1154322', '1138599']);
+// Al final de Fundas, abajo de todo: diseños con mucho stock que se ofrecen en lote
+// (Dented, 5 colores; Darío 17-nov-2026). Sueltos a su precio y con la franja del lote.
+const FUNDAS_AL_FINAL = new Set(['640926', '640927', '640928', '640929', '640930']);
 function bajarSinModelosFuertes(prods) {
   const arriba = [], abajo = [];
   prods.forEach(p => {
@@ -3215,7 +3220,8 @@ function bajarSinModelosFuertes(prods) {
       (fuertes < FUERTES_MINIMOS || getStockTotal(p) < STOCK_MINIMO_FUNDA);
     (porModelo && (fuertes === 0 || casiAgotada) ? abajo : arriba).push(p);
   });
-  return arriba.concat(abajo);
+  const fin = p => FUNDAS_AL_FINAL.has(String(p.id || p.product_id));
+  return arriba.filter(p => !fin(p)).concat(abajo.filter(p => !fin(p)), arriba.concat(abajo).filter(fin));
 }
 
 // Buscar dibuja el catálogo entero (cientos de productos). Si lo hiciéramos en
@@ -3295,7 +3301,8 @@ function dibujarProductos() {
   else if (sort === 'price-desc') prods.sort((a,b) => getPrecio(b) - getPrecio(a));
   else if (sort === 'name') prods.sort((a,b) => (a.name||'').localeCompare(b.name||''));
   if (sort === 'custom' || sort === 'default') prods = bajarSinModelosFuertes(prods);
-  if (!q) prods = prods.map(sinOfertaFundas).filter(Boolean);
+  // En «Lotes» van también los diseños en Ofertas: el lote es otra forma de venderlos (Darío 17-nov).
+  if (!q && categoria !== 'lotes') prods = prods.map(sinOfertaFundas).filter(Boolean);
 
   const grid = $('products-grid');
   if (viewMode === 'modelo') {
