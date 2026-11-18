@@ -2466,9 +2466,11 @@ function tarjetaLoteArmado(p) {
   return '<div class="product-card lote-card">' +
     '<div class="product-img-wrap" style="cursor:zoom-in" onclick="abrirFotoModelo(' + id + ')">' +
       gridImgTag(img, nombre, 'card', 400) +
+      nuevoBadge(id) +
     '</div>' +
     '<div class="product-body">' +
       '<span class="badge-lote-inline">PACK</span>' +
+      (nuevoBadge(id) ? '<span class="badge-nuevo-inline">NUEVO</span>' : '') +
       '<div class="product-name">' + nombre + '</div>' +
       '<div class="product-price-wrap" style="margin-top:4px">' + unitHTML + '</div>' + ahorroHTML + infoHTML +
     '</div>' +
@@ -2512,9 +2514,11 @@ function tarjetaLote(p) {
   return '<div class="product-card lote-card">' +
     '<div class="product-img-wrap" style="cursor:zoom-in" onclick="abrirFotoModelo(' + id + ')">' +
       gridImgTag(img, nombre, 'card', 400) +
+      nuevoBadge(id) +
     '</div>' +
     '<div class="product-body">' +
       '<span class="badge-lote-inline">PACK</span>' +
+      (nuevoBadge(id) ? '<span class="badge-nuevo-inline">NUEVO</span>' : '') +
       '<div class="product-name">' + nombre + '</div>' +
       '<div class="product-price-wrap" style="margin-top:4px">' + unitHTML + '</div>' + ahorroHTML +
     '</div>' +
