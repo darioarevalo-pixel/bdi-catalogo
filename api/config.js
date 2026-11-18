@@ -179,6 +179,27 @@ module.exports = async (req, res) => {
   }
 
   if (req.method === 'POST') {
+    // Packs vendidos desde el panel del Monitor (Darío 18-nov): el pedido mayorista que se arma en la hoja del pedido
+    // también descuenta de los packs a la venta. Lo llama el SERVIDOR del Monitor con la llave compartida
+    // PANEL_LLAVE_CATALOGO (la misma variable en los dos proyectos de Vercel). `delta` puede ser negativo (sacó packs).
+    if (req.query.accion === 'packs-panel') {
+      const llave = process.env.PANEL_LLAVE_CATALOGO || '';
+      const dada = String(req.headers['x-panel-llave'] || '');
+      const h = x => require('crypto').createHash('sha256').update(String(x)).digest();
+      if (!llave || !dada || !require('crypto').timingSafeEqual(h(llave), h(dada))) return res.status(401).json({ error: 'Llave incorrecta' });
+      const b = req.body || {};
+      const id = String(b.id || '');
+      const delta = Math.trunc(Number(b.delta) || 0);
+      if (!/^\d+$/.test(id) || !delta || Math.abs(delta) > 1000) return res.status(400).json({ error: 'Falta el producto o la cantidad' });
+      try {
+        const r = await kvCmd(['HINCRBY', 'lotes:vendidos', id, String(delta)]);
+        let valor = parseInt(r && r.result, 10) || 0;
+        if (valor < 0) { await kvCmd(['HSET', 'lotes:vendidos', id, '0']); valor = 0; }
+        return res.json({ ok: true, id, valor });
+      } catch (e) {
+        return res.status(500).json({ error: 'No se pudo anotar' });
+      }
+    }
     if (!(await passwordOk(req)))
       return res.status(401).json({ error: 'Contraseña incorrecta' });
     try {
