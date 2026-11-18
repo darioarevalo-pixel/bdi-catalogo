@@ -1354,7 +1354,7 @@ function ponerLotes(id, n) {
   updateCartUI();
   renderProductos();
 }
-const LOTES_NOMBRE = 'Lotes';
+const LOTES_NOMBRE = 'Packs';
 let cuponAplicado = null; // cupón aplicado en el carrito (objeto) o null
 
 // DESCUENTO POR MONTO (escala), igual para todos los clientes (Darío, 11-nov-2026).
@@ -2453,21 +2453,21 @@ function tarjetaLoteArmado(p) {
     '<span class="product-price">' + formatPrecio(l.precio) + '<small class="cu"> c/u</small></span>' +
     (pctAhorro > 0 ? '<span class="product-discount-badge">-' + pctAhorro + '%</span>' : '');
   const ahorroHTML = '';
-  const infoHTML = '<div class="lote-info">Lote de ' + tam + ' fundas · quedan ' + hay + (hay === 1 ? ' lote' : ' lotes') + '</div>';
+  const infoHTML = '<div class="lote-info">Pack de ' + tam + ' fundas · quedan ' + hay + (hay === 1 ? ' pack' : ' packs') + '</div>';
   const pedir = k > 0
-    ? '<div class="lote-pedir" onclick="event.stopPropagation()"><span>Lotes</span><div class="modal-vqty-wrap">' +
+    ? '<div class="lote-pedir" onclick="event.stopPropagation()"><span>Packs</span><div class="modal-vqty-wrap">' +
         '<button class="modal-vqty-btn minus" onclick="ponerLotes(' + id + ',' + (k - 1) + ');event.stopPropagation()">−</button>' +
         '<input class="modal-vqty-num" type="number" readonly value="' + k + '" />' +
         '<button class="modal-vqty-btn plus"' + (k >= hay ? ' disabled' : '') + ' onclick="ponerLotes(' + id + ',' + (k + 1) + ');event.stopPropagation()">+</button>' +
       '</div></div>' +
-      '<button class="lote-btn dentro" onclick="ponerLotes(' + id + ',0);event.stopPropagation()">✓ ' + k + (k === 1 ? ' lote' : ' lotes') + ' · ' + (k * tam) + ' fundas · ' + formatPrecio(l.precio * tam * k) + ' · Quitar</button>'
-    : '<button class="lote-btn" onclick="ponerLotes(' + id + ',1);event.stopPropagation()">Agregar 1 lote · ' + tam + ' fundas · ' + formatPrecio(l.precio * tam) + '</button>';
+      '<button class="lote-btn dentro" onclick="ponerLotes(' + id + ',0);event.stopPropagation()">✓ ' + k + (k === 1 ? ' pack' : ' packs') + ' · ' + (k * tam) + ' fundas · ' + formatPrecio(l.precio * tam * k) + ' · Quitar</button>'
+    : '<button class="lote-btn" onclick="ponerLotes(' + id + ',1);event.stopPropagation()">Agregar 1 pack · ' + tam + ' fundas · ' + formatPrecio(l.precio * tam) + '</button>';
   return '<div class="product-card lote-card">' +
     '<div class="product-img-wrap" style="cursor:zoom-in" onclick="abrirFotoModelo(' + id + ')">' +
       gridImgTag(img, nombre, 'card', 400) +
     '</div>' +
     '<div class="product-body">' +
-      '<span class="badge-lote-inline">LOTE</span>' +
+      '<span class="badge-lote-inline">PACK</span>' +
       '<div class="product-name">' + nombre + '</div>' +
       '<div class="product-price-wrap" style="margin-top:4px">' + unitHTML + '</div>' + ahorroHTML + infoHTML +
     '</div>' +
@@ -2513,19 +2513,19 @@ function tarjetaLote(p) {
       gridImgTag(img, nombre, 'card', 400) +
     '</div>' +
     '<div class="product-body">' +
-      '<span class="badge-lote-inline">LOTE</span>' +
+      '<span class="badge-lote-inline">PACK</span>' +
       '<div class="product-name">' + nombre + '</div>' +
       '<div class="product-price-wrap" style="margin-top:4px">' + unitHTML + '</div>' + ahorroHTML +
     '</div>' +
     '<div class="precio-lista"><div class="product-price-wrap">' + unitHTML + '</div>' + ahorroHTML + '</div>' +
     '<div class="vcard-variants">' + rows + '</div>' +
     (dentro
-      ? '<button class="lote-btn dentro" onclick="quitarLote(' + id + ');event.stopPropagation()">✓ Lote en tu pedido · Quitar</button>'
-      : '<button class="lote-btn" onclick="agregarLote(' + id + ');event.stopPropagation()">Agregar lote · ' + n + ' fundas · ' + formatPrecio(total) + '</button>') +
+      ? '<button class="lote-btn dentro" onclick="quitarLote(' + id + ');event.stopPropagation()">✓ Pack en tu pedido · Quitar</button>'
+      : '<button class="lote-btn" onclick="agregarLote(' + id + ');event.stopPropagation()">Agregar pack · ' + n + ' fundas · ' + formatPrecio(total) + '</button>') +
   '</div>';
 }
 function cartelLotes() {
-  return '<div class="lote-expl"><b>Comprá en lote</b>: vienen fundas de distintos modelos, a mejor precio que sueltas.</div>';
+  return '<div class="lote-expl"><b>Comprá en pack</b>: vienen fundas de distintos modelos, a mejor precio que sueltas.</div>';
 }
 
 function renderCatPills() {
@@ -4084,21 +4084,21 @@ function ofertaLoteEnSuelta(p) {
   const pct = Math.round((suelta - l.precio) / suelta * 100);
   const abierto = k > 0 || lotesAbiertos.has(String(id));
   const cab = '<button class="lote-oferta-btn" onclick="abrirLoteEnSuelta(' + id + ');event.stopPropagation()">' +
-    '<span class="badge-lote-inline">LOTE</span><span class="txt">' + tam + ' × ' + formatPrecio(l.precio) + '</span>' +
+    '<span class="badge-lote-inline">PACK</span><span class="txt">' + tam + ' × ' + formatPrecio(l.precio) + '</span>' +
     '<span class="product-discount-badge">-' + pct + '%</span><span class="flecha">' + (abierto ? '▴' : '▾') + '</span></button>';
   if (!abierto) return '<div class="lote-oferta">' + cab + '</div>';
   const modelos = c.map(x => '<span><b>' + modeloCorto(x.modelo, id) + '</b> ×' + x.q + '</span>').join('');
   const pedir = k > 0
-    ? '<div class="lote-pedir" style="margin:10px 0 0"><span>' + k + (k === 1 ? ' lote' : ' lotes') + ' · ' + formatPrecio(l.precio * tam * k) + '</span><div class="modal-vqty-wrap">' +
+    ? '<div class="lote-pedir" style="margin:10px 0 0"><span>' + k + (k === 1 ? ' pack' : ' packs') + ' · ' + formatPrecio(l.precio * tam * k) + '</span><div class="modal-vqty-wrap">' +
         '<button class="modal-vqty-btn minus" onclick="ponerLotes(' + id + ',' + (k - 1) + ');event.stopPropagation()">−</button>' +
         '<input class="modal-vqty-num" type="number" readonly value="' + k + '" />' +
         '<button class="modal-vqty-btn plus"' + (k >= hay ? ' disabled' : '') + ' onclick="ponerLotes(' + id + ',' + (k + 1) + ');event.stopPropagation()">+</button>' +
       '</div></div>' +
       '<button class="lote-oferta-quitar" onclick="ponerLotes(' + id + ',0);event.stopPropagation()">Quitar</button>'
-    : '<button class="lote-oferta-agregar" onclick="ponerLotes(' + id + ',1);event.stopPropagation()">Agregar 1 lote · ' + formatPrecio(l.precio * tam) + '</button>';
+    : '<button class="lote-oferta-agregar" onclick="ponerLotes(' + id + ',1);event.stopPropagation()">Agregar 1 pack · ' + formatPrecio(l.precio * tam) + '</button>';
   return '<div class="lote-oferta" onclick="event.stopPropagation()">' + cab +
     '<div class="lote-oferta-det">' +
-      '<div class="lote-oferta-precio">' + formatPrecio(l.precio) + ' c/u · quedan ' + hay + (hay === 1 ? ' lote' : ' lotes') + '</div>' +
+      '<div class="lote-oferta-precio">' + formatPrecio(l.precio) + ' c/u · quedan ' + hay + (hay === 1 ? ' pack' : ' packs') + '</div>' +
       '<div class="lote-oferta-modelos">' + modelos + '</div>' +
       pedir +
     '</div></div>';
@@ -4733,12 +4733,12 @@ function renderCartItems() {
     const fundasLote = g.variantes.reduce((s, v) => s + v.qty, 0);
     const pLote = esLote && loteDe(g.id).porLote ? allProducts.find(x => (x.id || x.product_id) == g.id) : null;
     const kLote = pLote ? lotesEnCarrito(pLote) : 0;
-    const textoLote = pLote ? kLote + (kLote === 1 ? ' lote' : ' lotes') + ' · ' + fundasLote + ' fundas' : 'Lote completo · ' + fundasLote + ' fundas';
+    const textoLote = pLote ? kLote + (kLote === 1 ? ' pack' : ' packs') + ' · ' + fundasLote + ' fundas' : 'Pack completo · ' + fundasLote + ' fundas';
     const varRows = esLote
       ? '<div class="cart-variant-row">' +
           '<span class="cart-variant-name">' + textoLote + '</span>' +
           '<span class="cart-variant-qty">' + formatPrecio(subtotal) + '</span>' +
-          '<button class="cart-item-del" title="Quitar el lote" onclick="quitarLote(' + g.id + ')">×</button>' +
+          '<button class="cart-item-del" title="Quitar el pack" onclick="quitarLote(' + g.id + ')">×</button>' +
         '</div>'
       : g.variantes.map(v => {
       const cartKey = Object.keys(cart).find(k => cart[k] === v) || (v.sizeId ? v.id + '-' + v.sizeId : String(v.id));
