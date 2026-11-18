@@ -3230,8 +3230,17 @@ function bajarSinModelosFuertes(prods) {
     (porModelo && (fuertes === 0 || casiAgotada) ? abajo : arriba).push(p);
   });
   const fin = p => FUNDAS_AL_FINAL.has(String(p.id || p.product_id));
-  return arriba.filter(p => !fin(p)).concat(abajo.filter(p => !fin(p)), arriba.concat(abajo).filter(fin));
+  const orden = arriba.filter(p => !fin(p)).concat(abajo.filter(p => !fin(p)), arriba.concat(abajo).filter(fin));
+  if (categoria !== 'lotes') return orden;
+  // En Packs: Zebra, Acid, Weave Black y Worn Black van después de los packs viejos
+  // (Apex, Dot, Melted, Ocean, Sweet) y antes de los Dented (Darío 18-nov-2026).
+  const antes = p => PACKS_ANTES_DE_DENTED.includes(String(p.id || p.product_id));
+  const resto = orden.filter(p => !antes(p));
+  const corte = resto.findIndex(fin);
+  const mover = PACKS_ANTES_DE_DENTED.map(id => orden.find(p => String(p.id || p.product_id) === id)).filter(Boolean);
+  return corte < 0 ? resto.concat(mover) : resto.slice(0, corte).concat(mover, resto.slice(corte));
 }
+const PACKS_ANTES_DE_DENTED = ['640932', '640931', '640921', '607139']; // Zebra, Acid, Weave Black, Worn Black
 
 // Buscar dibuja el catálogo entero (cientos de productos). Si lo hiciéramos en
 // cada tecla, tipear se sentiría trabado en celulares. Con debounce esperamos a
