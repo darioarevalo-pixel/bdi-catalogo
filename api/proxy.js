@@ -502,6 +502,28 @@ async function tomarTurno() {
   }
 }
 
+// ¿Este pedido ya se le mandó al ERP? Se anota la clave justo antes de mandarlo.
+// Si el cliente vuelve a confirmar el MISMO carrito (vio un error, pero el pedido
+// pudo haber entrado), se va directo al ERP sin volver a mirar el stock: el ERP lo
+// reconoce por la clave y devuelve el mismo número. Mirar el stock de nuevo era
+// el problema: las fundas ya estaban apartadas por ESE pedido y el cliente veía
+// "sin stock" (Fabio, #124 y #125, 20-nov). Si el KV falla, se sigue como antes.
+const PEDIDO_MANDADO_KEY = (clave) => 'catalogo-pedido-mandado:' + clave;
+const PEDIDO_MANDADO_SEG = 2 * 24 * 3600;
+const claveValida = (c) => typeof c === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(c);
+
+async function pedidoYaMandado(clave) {
+  if (!claveValida(clave)) return false;
+  try { const r = await kvCmd(['GET', PEDIDO_MANDADO_KEY(clave)]); return !!(r && r.result); }
+  catch (e) { return false; }
+}
+
+async function anotarPedidoMandado(clave) {
+  if (!claveValida(clave)) return;
+  try { await kvCmd(['SET', PEDIDO_MANDADO_KEY(clave), '1', 'EX', PEDIDO_MANDADO_SEG]); }
+  catch (e) { console.error('[pedido] no se pudo anotar la clave:', (e && e.message) || e); }
+}
+
 async function liberarTurno(mio) {
   if (!mio) return;
   try {
@@ -1347,12 +1369,15 @@ module.exports = async (req, res) => {
     : null;
 
   // Turno: de acá hasta el `finally`, este pedido es el único que confirma.
-  const turno = esConfirmarPedido ? await tomarTurno() : null;
+  // Reintento del mismo pedido: ni turno ni stock, directo al ERP (ver pedidoYaMandado).
+  const reintento = esConfirmarPedido && erpManda && await pedidoYaMandado(req.body?.erp?.clave);
+  if (reintento) { marcas.reintento = 1; console.log('[pedido] reintento de un pedido ya mandado: va directo al ERP'); }
+  const turno = (esConfirmarPedido && !reintento) ? await tomarTurno() : null;
   if (esConfirmarPedido) marcar('turno');
 
   try {
     // Verificación de stock server-side antes de crear la venta
-    if (esConfirmarPedido) {
+    if (esConfirmarPedido && !reintento) {
       const items = req.body?.items || [];
       const [pasaFreno, cfg, costos] = enParalelo ? await enParalelo : [true, {}, null];
       marcar('datos');
@@ -1423,9 +1448,13 @@ module.exports = async (req, res) => {
 
     // Desde el corte, el pedido nace en el ERP y GN ya no se entera.
     if (esConfirmarPedido && erpManda) {
-      const creado = await ERP_CORTE.crearPedido({ pedido: paraGN, datosErp: paraElERP(paraERP), esAdmin });
+      await anotarPedidoMandado(paraERP && paraERP.clave);
+      // Vercel corta a los 30 s: el ERP tiene el tiempo que queda, con 3 s de margen
+      // para contestarle al cliente con un aviso claro y no con un error mudo.
+      const creado = await ERP_CORTE.crearPedido({ pedido: paraGN, datosErp: paraElERP(paraERP), esAdmin, hasta: t0 + 27000 });
       marcar('crearVenta');
-      if (creado.status >= 200 && creado.status < 300) await anotarLotesVendidos(paraGN.items);
+      // Si el ERP dice que ya lo tenía (reintento), los lotes ya se contaron la primera vez.
+      if (creado.status >= 200 && creado.status < 300 && !creado.ya) await anotarLotesVendidos(paraGN.items);
       return res.status(creado.status).json(creado.cuerpo);
     }
 

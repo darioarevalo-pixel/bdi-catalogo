@@ -19,7 +19,7 @@ const ESPERA_CORTE_MS = 1500;
 const ESPERA_PEDIDO_MS = 15 * 1000;
 const CLAVE_KV = 'erp:catalogo-manda';
 
-const SIN_PERDER = 'Tu pedido NO se perdió: quedó guardado en el carrito. Esperá un minuto y tocá Confirmar de nuevo. Si vuelve a pasar, escribinos por WhatsApp.';
+const SIN_PERDER = 'Tu pedido NO se perdió: quedó guardado en el carrito. Tocá Confirmar de nuevo (no se va a duplicar). Si vuelve a pasar, escribinos por WhatsApp.';
 
 function crear({ fetch: pedir = (...a) => fetch(...a), env = process.env, kvCmd, ahora = Date.now } = {}) {
   const erpUrl = () => env.ERP_URL || 'https://erp.arebensrl.com';
@@ -61,7 +61,10 @@ function crear({ fetch: pedir = (...a) => fetch(...a), env = process.env, kvCmd,
 
   // Crea el pedido en el ERP y contesta como GN, porque de ahí leen el número las dos
   // pantallas. Reintentar es seguro: el ERP reconoce el pedido por su `clave`.
-  async function crearPedido({ pedido, datosErp, esAdmin }) {
+  // `hasta`: hora límite (ms) para no pasarse del corte de Vercel. Con un pedido muy
+  // grande y espera de turno, 15 s × 2 intentos podían pasar los 30 s: el pedido
+  // entraba y el cliente veía error.
+  async function crearPedido({ pedido, datosErp, esAdmin, hasta = Infinity }) {
     const clave = datosErp && datosErp.clave;
     if (!clave) return { status: 400, cuerpo: { error: 'Falta la clave del pedido', detalle: 'Recargá la página y volvé a confirmar.' } };
     const cuerpo = JSON.stringify({
@@ -71,17 +74,22 @@ function crear({ fetch: pedir = (...a) => fetch(...a), env = process.env, kvCmd,
     });
     let ultimo = 'sin respuesta';
     for (let intento = 1; intento <= 2; intento++) {
+      const queda = hasta - ahora();
+      if (queda < 2000) { if (intento === 1) ultimo = 'sin tiempo'; break; }
+      // El primer intento puede usar todo lo que queda: cortarlo a los 15 s mientras
+      // el ERP lo está guardando era peor (entraba igual y el cliente veía error).
+      const espera = intento === 1 ? Math.min(queda, 25 * 1000) : Math.min(queda, ESPERA_PEDIDO_MS);
       try {
         const r = await pedir(erpUrl() + '/api/pedido-mayorista', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-erp-llave': env.ERP_LLAVE_CATALOGO },
           body: cuerpo,
-          signal: AbortSignal.timeout(ESPERA_PEDIDO_MS),
+          signal: AbortSignal.timeout(espera),
         });
         const d = await r.json().catch(() => ({}));
         if (r.ok && d.numero) {
-          console.log(`[erp] pedido ${d.numero} creado en el ERP${d.entro ? ', reservado' : ` sin entrar (${d.motivo || '?'})`}`);
-          return { status: 200, cuerpo: { data: { id: d.numero, number: d.numero, erp: true } } };
+          console.log(`[erp] pedido ${d.numero} ${d.ya ? 'ya estaba en el ERP (reintento)' : 'creado en el ERP'}${d.entro ? ', reservado' : ` sin entrar (${d.motivo || '?'})`}`);
+          return { status: 200, ya: !!d.ya, cuerpo: { data: { id: d.numero, number: d.numero, erp: true } } };
         }
         ultimo = 'contestó ' + r.status;
         if (r.status < 500) break;

@@ -4880,10 +4880,30 @@ function validarTelefono() {
   }
 }
 
-// La clave con la que el ERP reconoce este pedido (la misma si el aviso se repite).
-function claveDePedido() {
+// La clave con la que el ERP reconoce este pedido. Es la MISMA mientras el carrito y
+// los datos no cambien: si el cliente vuelve a tocar Confirmar (porque vio un error
+// aunque el pedido sí había entrado), el ERP lo reconoce y no crea otro. Pasó con
+// Fabio el 20-nov: el #124 entró, él vio error, volvió a confirmar, el catálogo le
+// dijo "sin stock" (las fundas las tenía apartadas su propio #124) y entró el #125.
+// Se guarda en el navegador para que sirva también si recarga la página; se borra
+// cuando el pedido se confirma bien.
+const CLAVE_PEDIDO_KEY = 'bdi-pedido-clave';
+function claveNueva() {
   if (window.crypto && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
   return 'p-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
+}
+function claveDePedido(items, contacto) {
+  const firma = JSON.stringify({ items, contacto });
+  try {
+    const g = JSON.parse(localStorage.getItem(CLAVE_PEDIDO_KEY) || 'null');
+    if (g && g.firma === firma && g.clave) return g.clave;
+  } catch (e) { /* sin navegador que guarde: clave nueva */ }
+  const clave = claveNueva();
+  try { localStorage.setItem(CLAVE_PEDIDO_KEY, JSON.stringify({ firma, clave })); } catch (e) {}
+  return clave;
+}
+function olvidarClaveDePedido() {
+  try { localStorage.removeItem(CLAVE_PEDIDO_KEY); } catch (e) {}
 }
 
 async function confirmarPedido() {
@@ -4987,16 +5007,15 @@ async function confirmarPedido() {
       discount_inventory: true,
       comments: [clientName, contact, email, 'Pago: ' + payment, 'Entrega: ' + delivery, cuponNota, obs].filter(Boolean).join(' — '),
       items: items.map(i => ({ product_id: i.id, ...(i.sizeId ? { size_id: i.sizeId } : {}), quantity: i.qty, unit_price: precioRenglon(i) })),
-      // Para el ERP (el proxy lo saca antes de mandarle el pedido a GN): una clave
-      // nueva por confirmación y los datos del cliente, que a GN sólo le llegan
-      // como texto en `comments`.
-      erp: {
-        clave: claveDePedido(),
-        contacto: { nombre: clientName, telefono: phone, email: email, pago: payment, entrega: delivery, obs: obs, cupon: cuponNota },
-      },
     };
+    // Para el ERP (el proxy lo saca antes de mandarle el pedido a GN): la clave del
+    // pedido (la misma si se reintenta sin cambios) y los datos del cliente, que a
+    // GN sólo le llegan como texto en `comments`.
+    const contactoErp = { nombre: clientName, telefono: phone, email: email, pago: payment, entrega: delivery, obs: obs, cupon: cuponNota };
+    body.erp = { clave: claveDePedido(body.items, contactoErp), contacto: contactoErp };
 
     const data = await fetchProxy('/ventas', { method: 'POST', body });
+    olvidarClaveDePedido(); // entró: el próximo pedido lleva otra clave
     const pedidoId = (data.data && (data.data.number || data.data.id)) || data.id || data.number || null;
 
     const totalPedido = totalFinal;
