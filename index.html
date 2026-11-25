@@ -1028,6 +1028,17 @@
         <option value="Efectivo">Efectivo (solo válido para Rosario)</option>
         <option value="Transferencia bancaria">Transferencia bancaria</option>
       </select>
+      <script>
+        // Black Friday 3 cuotas (Darío 25-nov): la opción aparece solo mié 25, vie 27 y sáb 28 (hora de Argentina).
+        (function () {
+          const hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
+          if (!['2026-11-25', '2026-11-27', '2026-11-28'].includes(hoy)) return;
+          const op = document.createElement('option');
+          op.value = '3 cuotas sin interés (Black Friday)';
+          op.textContent = '💳 3 cuotas sin interés · Visa o Mastercard (Black Friday)';
+          document.getElementById('client-payment').appendChild(op);
+        })();
+      </script>
     </div>
     <div class="form-group">
       <label>Forma de entrega *</label>
