@@ -2089,8 +2089,11 @@ let bannerIdx = 0, bannerTimer = null;
 function renderBanners() {
   const section = $('banners-section');
   if (!section) return;
+  // Banners con fecha de fin: se dejan de mostrar solos (3 cuotas, Darío 25-nov).
+  const BANNER_HASTA = { 'banner-3-cuotas.jpg': '2026-11-29T00:00:00-03:00' };
+  const vencido = b => Object.keys(BANNER_HASTA).some(k => b.imagen.includes(k) && Date.now() >= Date.parse(BANNER_HASTA[k]));
   const banners = (adminConfig.banners || [])
-    .filter(b => b && b.activo !== false && b.imagen)
+    .filter(b => b && b.activo !== false && b.imagen && !vencido(b))
     .sort((a, b) => (a.orden || 0) - (b.orden || 0));
   // Mientras haya Cyber, su banner va primero y abre la sección acá mismo. Se
   // apaga solo cuando cyber.json queda sin productos (no hay que tocar el panel).
